@@ -1,14 +1,11 @@
 from decimal import Decimal
 
-from nautilus_mt5.common import CommissionReport
-from nautilus_mt5.symbol import Symbol
-from nautilus_mt5.execution import Execution
-from nautilus_mt5.order import Order as MT5Order
-from nautilus_mt5.order import OrderState as MT5OrderState
+from nautilus_mt5.data_types import CommissionReport, Execution, AccountOrderRef, MT5Symbol
+from nautilus_trader.model.identifiers import Symbol
+from nautilus_mt5.metatrader5.models import Order as MT5Order
+from nautilus_mt5.metatrader5.models import OrderState as MT5OrderState
 
-from nautilus_mt5.client.common import AccountOrderRef
-from nautilus_mt5.client.common import BaseMixin
-from nautilus_mt5.common import MT5Symbol
+from nautilus_mt5.common import BaseMixin
 
 from nautilus_trader.common.enums import LogColor
 

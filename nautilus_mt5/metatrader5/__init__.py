@@ -1,13 +1,10 @@
 import platform
-import sys
 import os
 from contextlib import suppress
 from nautilus_mt5.metatrader5.config import RpycConnectionConfig, EAConnectionConfig
 from nautilus_mt5.metatrader5.ea_client import EAClient
 from nautilus_mt5.metatrader5.ea_sockets import EASocketConnection
 from nautilus_mt5.metatrader5.errors import EA_ERROR_DICT
-from nautilus_mt5.metatrader5.models import *
-from nautilus_mt5.metatrader5.utils import *
 
 current_dir = os.path.dirname(__file__)
 
@@ -15,14 +12,12 @@ with suppress(ImportError):
     if platform.system() == "Windows":
         import MetaTrader5
     else:
-        sys.path.insert(0, current_dir)
-        try:
-            from .MetaTrader5 import MetaTrader5
-        finally:
-            sys.path.remove(current_dir)
+        from .MetaTrader5 import MetaTrader5
 
-if "MetaTrader5" not in sys.modules:
-    raise ImportError("MetaTrader5 is not available on this system.")
+try:
+    from .MetaTrader5 import MetaTrader5
+except ImportError:
+    pass
 
 __all__ = [
     "MetaTrader5",

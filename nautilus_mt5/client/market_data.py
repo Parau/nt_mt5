@@ -276,16 +276,8 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
             return
 
         # Check and download the gaps or approx 300 bars whichever is less
-        last_bar: Bar = self._cache.bar(bar_type)
-        if last_bar is None:
-            duration = pd.Timedelta(
-                bar_type.spec.timedelta.total_seconds() * 300, "sec"
-            )
-        else:
-            duration = pd.Timedelta(
-                self._clock.timestamp_ns() - last_bar.ts_event, "ns"
-            )
-        bar_size_setting: str = bar_spec_to_bar_size(bar_type.spec)
+        # last_bar: Bar = self._cache.bar(bar_type)
+
 
         # self._mt5Client.req_historical_data(
         #     req_id=subscription.req_id,

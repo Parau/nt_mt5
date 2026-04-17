@@ -5,14 +5,14 @@ from typing import Any
 
 import pandas as pd
 
-from nautilus_mt5.common import CommissionReport
-from nautilus_mt5.common import (
+from nautilus_mt5.data_types import CommissionReport
+from nautilus_mt5.constants import (
     UNSET_DECIMAL,
-    UNSET_DOUBLE,
-)  # TODO: remove dependency
-from nautilus_mt5.execution import Execution
-from nautilus_mt5.order import Order as MT5Order
-from nautilus_mt5.order import OrderState as MT5OrderState
+)
+from nautilus_mt5.metatrader5.models import UNSET_DOUBLE
+from nautilus_mt5.data_types import Execution
+from nautilus_mt5.metatrader5.models import Order as MT5Order
+from nautilus_mt5.metatrader5.models import OrderState as MT5OrderState
 
 from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock
@@ -61,10 +61,10 @@ from nautilus_trader.model.orders.stop_market import StopMarketOrder
 from nautilus_trader.model.orders.trailing_stop_limit import TrailingStopLimitOrder
 from nautilus_trader.model.orders.trailing_stop_market import TrailingStopMarketOrder
 
-from mt5 import MetaTrader5Ext as MetaTrader5Client
-from nautilus_mt5.client.common import MT5Position
-from nautilus_mt5.common import MT5_VENUE
-from nautilus_mt5.common import MT5OrderTags
+from nautilus_mt5.client.client import MetaTrader5Client
+from nautilus_mt5.data_types import MT5Position
+from nautilus_mt5.constants import MT5_VENUE
+from nautilus_mt5.data_types import MT5OrderTags
 from nautilus_mt5.config import MetaTrader5ExecClientConfig
 from nautilus_mt5.parsing.execution import MAP_ORDER_ACTION
 from nautilus_mt5.parsing.execution import MAP_ORDER_FIELDS
