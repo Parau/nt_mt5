@@ -37,7 +37,7 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
             order_id=order.orderRef.rsplit(":", 1)[0],
         )
         order.orderRef = f"{order.orderRef}:{order.order_id}"
-        self._mt5Client.placeOrder(order.order_id, order.symbol, order)
+        self._mt5_client['mt5'].placeOrder(order.order_id, order.symbol, order)
 
     def place_order_list(self, orders: list[MT5Order]) -> None:
         """
@@ -51,7 +51,7 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
         """
         for order in orders:
             order.orderRef = f"{order.orderRef}:{order.order_id}"
-            self._mt5Client.placeOrder(order.order_id, order.symbol, order)
+            self._mt5_client['mt5'].placeOrder(order.order_id, order.symbol, order)
 
     def cancel_order(self, order_id: int, manual_cancel_order_time: str = "") -> None:
         """
@@ -65,7 +65,7 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
             The timestamp indicating when the order was canceled manually.
 
         """
-        self._mt5Client.cancelOrder(order_id, manual_cancel_order_time)
+        self._mt5_client['mt5'].cancelOrder(order_id, manual_cancel_order_time)
 
     def cancel_all_orders(self) -> None:
         """
@@ -74,7 +74,7 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
         self._log.warning(
             "Canceling all open orders, regardless of how they were originally placed.",
         )
-        self._mt5Client.reqGlobalCancel()
+        self._mt5_client['mt5'].reqGlobalCancel()
 
     async def get_open_orders(self, account_id: str) -> list[MT5Order]:
         """
@@ -97,7 +97,7 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
             request = self._requests.add(
                 req_id=self._next_req_id(),
                 name=name,
-                handle=self._mt5Client.reqOpenOrders,
+                handle=self._mt5_client['mt5'].reqOpenOrders,
             )
             if not request:
                 return []
@@ -124,7 +124,7 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
         """
         order_id: int = self._next_valid_order_id
         self._next_valid_order_id += 1
-        self._mt5Client.req_ids()
+        self._mt5_client['mt5'].req_ids()
         return order_id
 
     async def process_next_valid_id(self, *, order_id: int) -> None:

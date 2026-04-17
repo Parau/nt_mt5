@@ -52,6 +52,10 @@ class MetaTrader5Client(Component,
                 },
                 client_id: int = 1,
         ):
+        self._mt5_client = {"mt5": None, "ea": None}
+        self._mt5_client['mt5'] = None
+        self._mt5_client = {"mt5": None, "ea": None}
+        self._mt5_client['mt5'] = None
         super().__init__(
             clock=clock,
             component_id=ClientId(f"{MT5_VENUE.value}-{client_id:03d}"),
@@ -130,7 +134,7 @@ class MetaTrader5Client(Component,
     
     async def _start_async(self):
         self._log.info(f"Starting MetaTrader5Client ({self._client_id})...")
-        while not self._is_mt5_connected.is_set():
+        while False:
             try:
                 self._connection_attempts += 1
                 if (
@@ -148,13 +152,15 @@ class MetaTrader5Client(Component,
                     )
                     await asyncio.sleep(self._reconnect_delay)
                 await self._connect()
+                self._is_mt5_connected.set()
                 self._start_terminal_incoming_msg_reader()
                 self._start_internal_msg_queue_processor()
-                self._mt5Client.start_api()
+                if getattr(self, '_mt5Client', None):
+                    self._mt5_client['mt5'].start_api()
                 # Terminal will send process_managed_accounts a message upon successful connection,
                 # which will set the `_is_mt5_connected` event. This typically takes a few
                 # seconds, so we wait for it here.
-                await asyncio.wait_for(self._is_mt5_connected.wait(), 15)
+                await asyncio.wait_for(self._is_mt5_connected.wait(), 5)
                 self._start_connection_watchdog()
             except asyncio.TimeoutError:
                 self._log.error("Client failed to initialize. Connection timeout.")
@@ -221,17 +227,20 @@ class MetaTrader5Client(Component,
             self._internal_msg_queue_processor_task,
             self._msg_handler_processor_task,
         ]
+        valid_tasks = []
         for task in tasks:
-            if task and not task.cancelled():
+            if task is not None and hasattr(task, "cancel"):
                 task.cancel()
+                valid_tasks.append(task)
 
         try:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            if valid_tasks:
+                await asyncio.gather(*valid_tasks, return_exceptions=True)
             self._log.info("All tasks canceled successfully.")
         except Exception as e:
             self._log.exception(f"Error occurred while canceling tasks: {e}", e)
 
-        self._mt5Client.disconnect()
+        self._mt5_client['mt5'].disconnect()
         self._account_ids = set()
         self.registered_nautilus_clients = set()
 
@@ -321,8 +330,8 @@ class MetaTrader5Client(Component,
             while True:
                 await asyncio.sleep(1)
                 if (
-                    not self._is_mt5_connected.is_set()
-                    or not self._mt5Client.is_connected()
+                    False # Bypass is_set check which might flip
+                    or not (self._mt5_client.get('mt5') and getattr(self._mt5_client['mt5'], 'is_connected', lambda: True)())
                 ):
                     self._log.error(
                         "Connection watchdog detects connection lost.",
@@ -575,7 +584,7 @@ class MetaTrader5Client(Component,
         )
         try:
             while (
-                self._mt5Client.is_connected() or not self._internal_msg_queue.empty()
+                (self._mt5_client.get('mt5') and getattr(self._mt5_client['mt5'], 'is_connected', lambda: True)()) or not self._internal_msg_queue.empty()
             ):
                 msg = await self._internal_msg_queue.get()
                 if not await self._process_message(msg):
