@@ -1,7 +1,8 @@
 # To store types 
 from dataclasses import dataclass
 from typing import Literal, Optional
-from .common import UNSET_DOUBLE  # TODO: remove ibapi dependency
+
+UNSET_DOUBLE = 1.7976931348623157E308
 
 
 

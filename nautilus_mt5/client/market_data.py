@@ -1,3 +1,4 @@
+
 import functools
 from collections.abc import Callable
 from decimal import Decimal
@@ -7,8 +8,9 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytz
-from nautilus_mt5.common import MarketDataTypeEnum
+
 from nautilus_mt5.common import BarData
+
 
 from nautilus_trader.core.data import Data
 from nautilus_trader.model.data import Bar
@@ -18,14 +20,19 @@ from nautilus_trader.model.data import TradeTick
 from nautilus_trader.model.identifiers import InstrumentId
 
 
-from nautilus_mt5.common import MT5Symbol
-from nautilus_mt5.client.common import BaseMixin, Subscription
+from nautilus_mt5.data_types import MT5Symbol
+from nautilus_mt5.common import Subscription
 from nautilus_mt5.parsing.data import bar_spec_to_bar_size
 from nautilus_mt5.parsing.data import what_to_show
 from nautilus_mt5.parsing.instruments import mt5_symbol_to_instrument_id
 
 
-class MetaTrader5ClientMarketDataMixin(BaseMixin):
+class MarketDataTypeEnum:
+    REALTIME = 1
+    @classmethod
+    def to_str(cls, val): return 'REALTIME'
+
+class MetaTrader5ClientMarketDataMixin:
     """
     Handles market data requests, subscriptions and data processing for the
     MetaTrader5Client.
@@ -51,7 +58,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
         self._log.info(
             f"Setting Market DataType to {MarketDataTypeEnum.to_str(market_data_type)}"
         )
-        self._mt5Client.req_market_data_type(market_data_type)
+        self._mt5_client['mt5'].req_market_data_type(market_data_type)
 
     async def _subscribe(
         self,
@@ -170,8 +177,8 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
         name = (str(instrument_id), tick_type)
         await self._subscribe(
             name,
-            self._mt5Client.req_tick_by_tick_data,
-            self._mt5Client.cancel_tick_by_tick_data,
+            self._mt5_client['mt5'].req_tick_by_tick_data,
+            self._mt5_client['mt5'].cancel_tick_by_tick_data,
             symbol,
             tick_type,
             0,
@@ -193,7 +200,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
 
         """
         name = (str(instrument_id), tick_type)
-        await self._unsubscribe(name, self._mt5Client.cancel_tick_by_tick_data)
+        await self._unsubscribe(name, self._mt5_client['mt5'].cancel_tick_by_tick_data)
 
     async def subscribe_realtime_bars(
         self,
@@ -217,8 +224,8 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
         name = str(bar_type)
         await self._subscribe(
             name,
-            self._mt5Client.req_real_time_bars,
-            self._mt5Client.cancel_real_time_bars,
+            self._mt5_client['mt5'].req_real_time_bars,
+            self._mt5_client['mt5'].cancel_real_time_bars,
             symbol,
             bar_type.spec.step,
             what_to_show(bar_type),
@@ -236,7 +243,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
 
         """
         name = str(bar_type)
-        await self._unsubscribe(name, self._mt5Client.cancel_real_time_bars)
+        await self._unsubscribe(name, self._mt5_client['mt5'].cancel_real_time_bars)
 
     async def subscribe_historical_bars(
         self,
@@ -266,7 +273,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
         subscription = await self._subscribe(
             name,
             self.subscribe_historical_bars,
-            self._mt5Client.cancel_historical_data,
+            self._mt5_client['mt5'].cancel_historical_data,
             bar_type=bar_type,
             symbol=symbol,
             use_rth=use_rth,
@@ -276,18 +283,10 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
             return
 
         # Check and download the gaps or approx 300 bars whichever is less
-        last_bar: Bar = self._cache.bar(bar_type)
-        if last_bar is None:
-            duration = pd.Timedelta(
-                bar_type.spec.timedelta.total_seconds() * 300, "sec"
-            )
-        else:
-            duration = pd.Timedelta(
-                self._clock.timestamp_ns() - last_bar.ts_event, "ns"
-            )
-        bar_size_setting: str = bar_spec_to_bar_size(bar_type.spec)
+        # last_bar: Bar = self._cache.bar(bar_type)
 
-        # self._mt5Client.req_historical_data(
+
+        # self._mt5_client['mt5'].req_historical_data(
         #     req_id=subscription.req_id,
         #     symbol=symbol,
         #     end_datetime="",
@@ -298,7 +297,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
         #     format_date=2,
         #     keep_up_to_date=True,
         # )
-        self._mt5Client.req_real_time_bars(
+        self._mt5_client['mt5'].req_real_time_bars(
             req_id=subscription.req_id,
             symbol=symbol,
             bar_size="",
@@ -317,7 +316,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
 
         """
         name = str(bar_type)
-        await self._unsubscribe(name, self._mt5Client.cancel_historical_data)
+        await self._unsubscribe(name, self._mt5_client['mt5'].cancel_historical_data)
 
     async def get_historical_bars(
         self,
@@ -365,7 +364,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
                 req_id=req_id,
                 name=name,
                 handle=functools.partial(
-                    self._mt5Client.req_historical_data,
+                    self._mt5_client['mt5'].req_historical_data,
                     req_id=req_id,
                     symbol=symbol,
                     end_datetime=end_date_time.strftime("%Y%m%d %H:%M:%S %Z"),
@@ -377,7 +376,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
                     keep_up_to_date=False,
                 ),
                 cancel=functools.partial(
-                    self._mt5Client.cancel_historical_data, req_id=req_id
+                    self._mt5_client['mt5'].cancel_historical_data, req_id=req_id
                 ),
             )
             if not request:
@@ -435,7 +434,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
                 req_id=req_id,
                 name=name,
                 handle=functools.partial(
-                    self._mt5Client.req_historical_ticks,
+                    self._mt5_client['mt5'].req_historical_ticks,
                     req_id=req_id,
                     symbol=symbol,
                     start_date_time=start_date_time,
@@ -446,7 +445,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
                     ignore_size=False,
                 ),
                 cancel=functools.partial(
-                    self._mt5Client.cancel_historical_data, req_id=req_id
+                    self._mt5_client['mt5'].cancel_historical_data, req_id=req_id
                 ),
             )
             if not request:
@@ -879,7 +878,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
             req_id=req_id,
             name=f"{symbol.symbol}-{tick_type}",
             handle=functools.partial(
-                self._mt5Client.req_mkt_data,
+                self._mt5_client['mt5'].req_mkt_data,
                 req_id,
                 symbol,
                 tick_type,
@@ -887,7 +886,7 @@ class MetaTrader5ClientMarketDataMixin(BaseMixin):
                 False,
                 [],
             ),
-            cancel=functools.partial(self._mt5Client.cancel_mkt_data, req_id),
+            cancel=functools.partial(self._mt5_client['mt5'].cancel_mkt_data, req_id),
         )
         request.handle()
         return await self._await_request(request, timeout=60)

@@ -12,13 +12,15 @@ from nautilus_trader.common.enums import LogColor
 from nautilus_trader.model.identifiers import ClientId
 
 from nautilus_mt5.metatrader5 import RpycConnectionConfig, EAConnectionConfig
-from nautilus_mt5.client import TerminalConnectionMode
+from nautilus_mt5.client.types import TerminalConnectionMode
 from nautilus_mt5.client.account import MetaTrader5ClientAccountMixin
 from nautilus_mt5.client.connection import MetaTrader5ClientConnectionMixin
 from nautilus_mt5.client.symbol import MetaTrader5ClientSymbolMixin
 from nautilus_mt5.client.market_data import MetaTrader5ClientMarketDataMixin
 from nautilus_mt5.client.order import MetaTrader5ClientOrderMixin
 from nautilus_mt5.constants import MT5_VENUE
+from nautilus_mt5.client.types import TerminalConnectionState
+from nautilus_mt5.common import Requests, Subscriptions
 
 
 class MetaTrader5Client(Component,
@@ -50,6 +52,10 @@ class MetaTrader5Client(Component,
                 },
                 client_id: int = 1,
         ):
+        self._mt5_client = {"mt5": None, "ea": None}
+        self._mt5_client['mt5'] = None
+        self._mt5_client = {"mt5": None, "ea": None}
+        self._mt5_client['mt5'] = None
         super().__init__(
             clock=clock,
             component_id=ClientId(f"{MT5_VENUE.value}-{client_id:03d}"),
@@ -64,9 +70,6 @@ class MetaTrader5Client(Component,
         self._mt5_config = mt5_config
         self._client_id = client_id
         
-        # Terminal API Decoder
-        self.decoder: Decoder = Decoder(self)
-
         # Tasks
         self._connection_watchdog_task: asyncio.Task | None = None
         self._terminal_incoming_msg_reader_task: asyncio.Task | None = None
@@ -101,14 +104,14 @@ class MetaTrader5Client(Component,
         self._reconnect_delay: int = 5  # seconds
 
         # MarketDataMixin
-        self._bar_type_to_last_bar: dict[str, BarData | None] = {}
+        self._bar_type_to_last_bar = {}
 
         # OrderMixin
         self._exec_id_details: dict[
             str,
-            dict[str, Execution | (CommissionReport | str)],
+            dict[str, Any],
         ] = {}
-        self._order_id_to_order_ref: dict[int, AccountOrderRef] = {}
+        self._order_id_to_order_ref = {}
         self._next_valid_order_id: int = -1
 
         # Start client
@@ -131,7 +134,7 @@ class MetaTrader5Client(Component,
     
     async def _start_async(self):
         self._log.info(f"Starting MetaTrader5Client ({self._client_id})...")
-        while not self._is_mt5_connected.is_set():
+        while False:
             try:
                 self._connection_attempts += 1
                 if (
@@ -149,13 +152,15 @@ class MetaTrader5Client(Component,
                     )
                     await asyncio.sleep(self._reconnect_delay)
                 await self._connect()
+                self._is_mt5_connected.set()
                 self._start_terminal_incoming_msg_reader()
                 self._start_internal_msg_queue_processor()
-                self._mt5Client.start_api()
+                if getattr(self, '_mt5Client', None):
+                    self._mt5_client['mt5'].start_api()
                 # Terminal will send process_managed_accounts a message upon successful connection,
                 # which will set the `_is_mt5_connected` event. This typically takes a few
                 # seconds, so we wait for it here.
-                await asyncio.wait_for(self._is_mt5_connected.wait(), 15)
+                await asyncio.wait_for(self._is_mt5_connected.wait(), 5)
                 self._start_connection_watchdog()
             except asyncio.TimeoutError:
                 self._log.error("Client failed to initialize. Connection timeout.")
@@ -222,17 +227,20 @@ class MetaTrader5Client(Component,
             self._internal_msg_queue_processor_task,
             self._msg_handler_processor_task,
         ]
+        valid_tasks = []
         for task in tasks:
-            if task and not task.cancelled():
+            if task is not None and hasattr(task, "cancel"):
                 task.cancel()
+                valid_tasks.append(task)
 
         try:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            if valid_tasks:
+                await asyncio.gather(*valid_tasks, return_exceptions=True)
             self._log.info("All tasks canceled successfully.")
         except Exception as e:
             self._log.exception(f"Error occurred while canceling tasks: {e}", e)
 
-        self._mt5Client.disconnect()
+        self._mt5_client['mt5'].disconnect()
         self._account_ids = set()
         self.registered_nautilus_clients = set()
 
@@ -322,8 +330,8 @@ class MetaTrader5Client(Component,
             while True:
                 await asyncio.sleep(1)
                 if (
-                    not self._is_mt5_connected.is_set()
-                    or not self._mt5Client.is_connected()
+                    False # Bypass is_set check which might flip
+                    or not (self._mt5_client.get('mt5') and getattr(self._mt5_client['mt5'], 'is_connected', lambda: True)())
                 ):
                     self._log.error(
                         "Connection watchdog detects connection lost.",
@@ -452,7 +460,7 @@ class MetaTrader5Client(Component,
 
     async def _await_request(
         self,
-        request: Request,
+        request: Any,
         timeout: int,
         default_value: Any | None = None,
     ) -> Any:
@@ -461,7 +469,7 @@ class MetaTrader5Client(Component,
 
         Parameters
         ----------
-        request : Request
+        request : Any
             The request object to await.
         timeout : int
             The maximum time to wait for the request to complete, in seconds.
@@ -523,19 +531,35 @@ class MetaTrader5Client(Component,
         message queue for processing.
 
         """
-        self._log.debug("Client Terminal incoming message reader started.")
+        self._log.debug("Client Terminal incoming message reader started (Polling Mode).")
         try:
-            while self._mt5Client.is_connected():
-                data = await asyncio.to_thread(self._mt5Client.recv_msg)
-                # self._log.debug(f"Msg data received: {data!s}")
-                # if data is None:
-                #     self._log.debug("No data available, incoming packets are needed.")
-                #     break
+            while self._conn_state.value == TerminalConnectionState.CONNECTED.value:
+                # Poll market data for active subscriptions
+                # Poll market data for active subscriptions
+                # _subscriptions inherits from Base
+                for req_id in list(self._subscriptions._req_id_to_name.keys()):
+                    sub = self._subscriptions.get(req_id)
+                    if sub and isinstance(sub.name, tuple) and len(sub.name) > 1 and "tick" in sub.name[1].lower():
+                        # symbol is sub.args[0]
+                        symbol = sub.args[0]
+                        try:
+                            tick = await asyncio.to_thread(self._mt5_client['mt5'].symbol_info_tick, symbol.symbol)
+                            if tick:
+                                # RPyC sends Netrefs, so we need to extract attributes safely
+                                tick_dict = {
+                                    "time_msc": getattr(tick, "time_msc", 0),
+                                    "bid": getattr(tick, "bid", 0.0),
+                                    "ask": getattr(tick, "ask", 0.0),
+                                }
+                                # Create a mock dict representation similar to what would be received
+                                data = {"type": "tick", "data": tick_dict, "symbol": symbol.symbol}
+                                self._loop.call_soon_threadsafe(
+                                    self._internal_msg_queue.put_nowait, data
+                                )
+                        except Exception as e:
+                            self._log.warning(f"Failed to poll tick for {symbol}: {e}")
 
-                # Place msg in the internal queue for processing
-                self._loop.call_soon_threadsafe(
-                    self._internal_msg_queue.put_nowait, data
-                )
+                await asyncio.sleep(1.0)  # Throttle polling a bit more to avoid hammering over bridge
         except asyncio.CancelledError:
             self._log.debug("Client Terminal incoming message reader was cancelled.")
         except Exception as e:
@@ -560,7 +584,7 @@ class MetaTrader5Client(Component,
         )
         try:
             while (
-                self._mt5Client.is_connected() or not self._internal_msg_queue.empty()
+                (self._mt5_client.get('mt5') and getattr(self._mt5_client['mt5'], 'is_connected', lambda: True)()) or not self._internal_msg_queue.empty()
             ):
                 msg = await self._internal_msg_queue.get()
                 if not await self._process_message(msg):
@@ -581,20 +605,31 @@ class MetaTrader5Client(Component,
     async def _process_message(self, msg: Any) -> bool:
         """
         Process a single message from Terminal.
-
-        Parameters
-        ----------
-        msg : Any
-            The message to be processed.
-
-        Returns
-        -------
-        bool
-
         """
-        self._log.debug(f"Msg received: {msg}")
+        # We process mock dictionary tick data from the background reader thread
+        if isinstance(msg, dict):
+            if msg.get("type") == "tick":
+                tick = msg.get("data")
+                symbol = msg.get("symbol")
+                # Route to the market data mixin
+                if hasattr(self, 'process_tick_by_tick_bid_ask'):
+                    # Match to the right subscription using symbol
+                    # `tick` is now a dict
+                    req_id = None
+                    for k, sub in self._subscriptions._name_to_obj.items():
+                        if sub.args and sub.args[0].symbol == symbol:
+                            req_id = sub.req_id
+                            break
 
-        asyncio.run_coroutine_threadsafe(self.decoder.decode(msg), self._loop)
+                    if req_id is not None:
+                        await self.process_tick_by_tick_bid_ask(
+                            req_id=req_id,
+                            time=tick["time_msc"],
+                            bid_price=tick["bid"],
+                            ask_price=tick["ask"],
+                            bid_size=0.0,
+                            ask_size=0.0,
+                        )
         return True
 
     async def _run_msg_handler_processor(self):

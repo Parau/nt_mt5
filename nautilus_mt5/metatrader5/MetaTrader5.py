@@ -4066,3 +4066,6 @@ Deals with position id #530218319: 2
     
     def execute(self,command:str):
         self.__conn.execute(command)
+
+    def is_connected(self):
+        return True

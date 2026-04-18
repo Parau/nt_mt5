@@ -2,7 +2,8 @@ from __future__ import annotations
 from typing import Optional
 from nautilus_trader.common.config import NonNegativeInt
 from nautilus_trader.config import InstrumentProviderConfig, LiveDataClientConfig, LiveExecClientConfig, NautilusConfig
-from nautilus_mt5.data_types import MarketDataSubscription, TerminalConnectionMode, MT5Symbol
+from nautilus_mt5.client.types import MarketDataSubscription, TerminalConnectionMode
+from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.metatrader5 import EAConnectionConfig, RpycConnectionConfig
 
 

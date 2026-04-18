@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Nautilus Trader MetaTrader5 Adapter"
 readme = "README.md"
 repository = "https://github.com/quantspub/nautilus_mt5"
-authors = ["Quants Pub <quantspub@gmail.com>"]
+authors = [{name = "Quants Pub", email = "quantspub@gmail.com"}]
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "docker>=7.1.0",
@@ -17,6 +17,7 @@ dependencies = [
     "rpyc>=6.0.1",
     "toml>=0.10.2",
     "metatrader5>=5.0.4874; sys_platform == \"win32\"",
+    "pytest-asyncio (==0.21.1)",
 ]
 
 [dependency-groups]

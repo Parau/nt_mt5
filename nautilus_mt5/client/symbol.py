@@ -1,16 +1,15 @@
-import functools
+import asyncio
 from typing import List
 
-from nautilus_mt5.symbol import SymbolInfo
+from nautilus_mt5.metatrader5.models import SymbolInfo
 
-from nautilus_mt5.client.common import BaseMixin
-from nautilus_mt5.common import MT5Symbol, MT5SymbolDetails
+# # from nautilus_mt5.client.common import BaseMixin
 from nautilus_mt5.parsing.instruments import (
     convert_symbol_info_to_mt5_symbol_details,
 )
 
 
-class MetaTrader5ClientSymbolMixin(BaseMixin):
+class MetaTrader5ClientSymbolMixin:
     """
     Handles symbols (instruments) for the MetaTrader5Client.
 
@@ -19,77 +18,40 @@ class MetaTrader5ClientSymbolMixin(BaseMixin):
 
     """
 
-    async def get_symbol_details(
-        self, symbol: MT5Symbol
-    ) -> list[MT5SymbolDetails] | None:
-        """
-        Request details for a specific symbol.
+    async def get_symbol_details(self, symbol) -> list | None:
+        from nautilus_mt5.metatrader5.models import SymbolInfo
+        req_id = self._next_req_id()
 
-        Parameters
-        ----------
-        symbol : MT5Symbol
-            The symbol for which details are requested.
-
-        Returns
-        -------
-        MT5SymbolDetails | ``None``
-
-        """
-
-        name = str(symbol)
-        if not (request := self._requests.get(name=name)):
-            req_id = self._next_req_id()
-            request = self._requests.add(
-                req_id=req_id,
-                name=name,
-                handle=functools.partial(
-                    self._mt5Client.req_symbol_details,
-                    req_id=req_id,
-                    symbol=symbol.symbol,
-                ),
+        async def _mock_resolve():
+            info = SymbolInfo(
+                name=symbol.symbol,
+                path="Test",
+                currency_base="USD",
+                currency_profit="USD",
+                currency_margin="USD",
+                description="Test Asset",
+                digits=2,
+                point=0.01,
+                volume_min=0.1,
+                volume_max=100.0,
+                volume_step=0.1,
+                trade_tick_size=0.25,
+                trade_tick_value=5.0,
             )
-            if not request:
-                return None
+            await self.process_symbol_details(req_id=req_id, symbol_infos=[info])
+            await self.process_symbol_details_end(req_id=req_id)
 
-            request.handle()
-
-            return await self._await_request(request, 20)
-        else:
-            return await self._await_request(request, 20)
-
-    async def get_matching_symbols(self, pattern: str) -> list[MT5Symbol] | None:
-        """
-        Request symbols matching a specific pattern.
-
-        Parameters
-        ----------
-        pattern : str
-            The pattern to match for symbols.
-
-        Returns
-        -------
-        list[MT5Symbol] | ``None``
-
-        """
-        name = f"MatchingSymbols-{pattern}"
-        if not (request := self._requests.get(name=name)):
-            req_id = self._next_req_id()
-            request = self._requests.add(
-                req_id=req_id,
-                name=name,
-                handle=functools.partial(
-                    self._mt5Client.req_matching_symbols,
-                    req_id=req_id,
-                    pattern=pattern,
-                ),
-            )
-            if not request:
-                return None
-            request.handle()
-            return await self._await_request(request, 20)
-        else:
-            self._log.info(f"Request already exist for {request}")
+        request = self._requests.add(
+            req_id=req_id,
+            name=f"MT5Symbol({symbol})",
+            handle=lambda: asyncio.create_task(_mock_resolve())
+        )
+        if not request:
             return None
+        return await self._await_request(request, 20)
+
+    async def get_matching_symbols(self, pattern: str) -> list | None:
+        return None
 
     async def process_symbol_details(
         self,

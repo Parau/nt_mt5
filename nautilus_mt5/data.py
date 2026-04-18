@@ -20,8 +20,9 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.instruments.currency_pair import CurrencyPair
 
-from metatrader5ext.api import MetaTrader5Client
-from nautilus_mt5.common import MT5_VENUE, MT5Symbol
+from nautilus_mt5.client.client import MetaTrader5Client
+from nautilus_mt5.constants import MT5_VENUE
+from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.config import MetaTrader5DataClientConfig
 from nautilus_mt5.parsing.data import timedelta_to_duration_str
 from nautilus_mt5.providers import MetaTrader5InstrumentProvider
@@ -80,7 +81,6 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         self._client = client
         self._handle_revised_bars = config.handle_revised_bars
         self._use_regular_trading_hours = config.use_regular_trading_hours
-        self._market_data_type = config.market_data_type
         self._ignore_quote_tick_size_updates = config.ignore_quote_tick_size_updates
 
     @property
@@ -89,11 +89,10 @@ class MetaTrader5DataClient(LiveMarketDataClient):
 
     async def _connect(self):
         # Connect client
-        await self._client.wait_until_ready()
+        await self._client._connect()
         self._client.registered_nautilus_clients.add(self.id)
 
-        # Set Market Data Type
-        await self._client.set_market_data_type(self._market_data_type)
+        # Start internal tasks if any
 
         # Load instruments based on config
         await self.instrument_provider.initialize()
@@ -101,12 +100,12 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             self._handle_data(instrument)
 
     async def _disconnect(self):
-        self._client.registered_nautilus_clients.remove(self.id)
+        self._client.registered_nautilus_clients.discard(self.id)
         if (
             self._client.is_running
-            and self._client.registered_nautilus_clients == set()
+            and not self._client.registered_nautilus_clients
         ):
-            self._client.stop()
+            await self._client._disconnect()
 
     async def _subscribe(self, data_type: DataType) -> None:
         raise NotImplementedError(  # pragma: no cover

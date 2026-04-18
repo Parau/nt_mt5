@@ -16,9 +16,8 @@ from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
 
 
-from nautilus_mt5.common import MT5Symbol
-from nautilus_mt5.common import MT5SymbolDetails
-from nautilus_mt5.symbol import SymbolInfo
+from nautilus_mt5.data_types import MT5Symbol, MT5SymbolDetails
+from nautilus_mt5.metatrader5.models import SymbolInfo
 
 
 VENUES_CASH = ["IDEALPRO"]

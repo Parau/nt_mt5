@@ -6,7 +6,7 @@ import functools
 from typing import Annotated, Any, Dict, Optional, Union
 import msgspec
 
-from nautilus_mt5.client import TerminalConnectionMode, TerminalPlatform
+from nautilus_mt5.client.types import TerminalConnectionMode, TerminalPlatform
 from nautilus_mt5.data_types import AccountOrderRef, BarData, CommissionReport, Execution
 from nautilus_mt5.metatrader5 import MetaTrader5, EAClient, RpycConnectionConfig, EAConnectionConfig
 from nautilus_trader.cache.cache import Cache
