@@ -3,7 +3,7 @@ from typing import List
 
 from nautilus_mt5.metatrader5.models import SymbolInfo
 
-# from nautilus_mt5.client.common import BaseMixin
+# # from nautilus_mt5.client.common import BaseMixin
 from nautilus_mt5.parsing.instruments import (
     convert_symbol_info_to_mt5_symbol_details,
 )
