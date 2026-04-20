@@ -38,7 +38,7 @@ class MetaTrader5InstrumentProvider(InstrumentProvider):
 
         # Settings
         self._load_symbols_on_start = (
-            set(config.load_symbols) if config.load_symbols is not None else None
+            set(config.load_symbols) if hasattr(config, "load_symbols") and config.load_symbols is not None else None
         )
         self._cache_validity_days = config.cache_validity_days
         # TODO: If cache_validity_days > 0 and Catalog is provided
@@ -78,7 +78,7 @@ class MetaTrader5InstrumentProvider(InstrumentProvider):
         # Load MT5Symbols
         if self._load_symbols_on_start:
             for symbol in [
-                (MT5Symbol(**c) if isinstance(c, dict) else c)
+                (MT5Symbol(**c) if isinstance(c, dict) else (MT5Symbol(**dict(getattr(c, '__dict__', {}))) if not isinstance(c, MT5Symbol) else c))
                 for c in self._load_symbols_on_start
             ]:
                 await self.load_async(symbol)

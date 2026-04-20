@@ -425,10 +425,7 @@ port: int
     default = 18812
         '''
         self.id = 1
-        self.__conn = rpyc.classic.connect(host, port, keepalive = keep_alive)
-        self.__conn._config['sync_request_timeout'] = 300 #5 min
-        self.__conn.execute('import MetaTrader5 as mt5')
-        self.__conn.execute('import datetime')
+        self.__conn = rpyc.connect(host, port, config={"allow_public_attrs": True, "sync_request_timeout": 300}, keepalive=keep_alive)
 
     def __del__(self):
         pass
@@ -1107,8 +1104,11 @@ terminal_info() as dataframe:
 
 
         '''
-        code=f'mt5.terminal_info(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        if hasattr(self.__conn, "eval"):
+            code=f'mt5.terminal_info(*{args},**{kwargs})'
+            return self.__conn.eval(code)
+        else:
+            return self.__conn.root.exposed_terminal_info()
 
     def symbols_total(self,*args,**kwargs):
         r'''
@@ -1276,8 +1276,11 @@ FOREX.CHF.M5 : SymbolInfo(custom=True, chart_mode=0, select=False, visible=False
 
 
         '''
-        code=f'mt5.symbols_get(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        if hasattr(self.__conn, "eval"):
+            code=f'mt5.symbols_get(*{args},**{kwargs})'
+            return self.__conn.eval(code)
+        else:
+            return self.__conn.root.exposed_symbols_get(*args,**kwargs)
 
     def symbol_info(self,*args,**kwargs):
         r'''
@@ -1451,8 +1454,11 @@ Show symbol_info()._asdict():
 
 
         '''
-        code=f'mt5.symbol_info(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        if hasattr(self.__conn, "eval"):
+            code=f'mt5.symbol_info(*{args},**{kwargs})'
+            return self.__conn.eval(code)
+        else:
+            return self.__conn.root.exposed_symbol_info(*args,**kwargs)
 
     def symbol_info_tick(self,*args,**kwargs):
         r'''
@@ -4062,10 +4068,16 @@ Deals with position id #530218319: 2
         return response
 
     def eval(self,command:str):
-        return self.__conn.eval(command)
+        if hasattr(self.__conn, "eval"):
+            return self.__conn.eval(command)
+        else:
+            return self.__conn.root.eval(command)
     
     def execute(self,command:str):
-        self.__conn.execute(command)
+        if hasattr(self.__conn, "execute"):
+            self.__conn.execute(command)
+        else:
+            self.__conn.root.execute(command)
 
     def is_connected(self):
         return True
