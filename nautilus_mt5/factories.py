@@ -10,7 +10,8 @@ from nautilus_trader.live.factories import LiveDataClientFactory
 from nautilus_trader.live.factories import LiveExecClientFactory
 from nautilus_trader.model.identifiers import AccountId
 
-from nautilus_mt5.client import MetaTrader5Client, TerminalConnectionMode
+from nautilus_mt5.client import MetaTrader5Client
+from nautilus_mt5.client.types import TerminalConnectionMode
 from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.config import (
     DockerizedMT5TerminalConfig,
@@ -242,7 +243,7 @@ class MT5LiveDataClientFactory(LiveDataClientFactory):
             msgbus=msgbus,
             cache=cache,
             clock=clock,
-            mode=config.mode,
+            connection_mode=config.mode,
             rpyc_config=config.rpyc_config,
             ea_config=config.ea_config,
             client_id=config.client_id,
@@ -262,7 +263,7 @@ class MT5LiveDataClientFactory(LiveDataClientFactory):
             cache=cache,
             clock=clock,
             instrument_provider=provider,
-            client_id=config.client_id,
+            mt5_client_id=config.client_id,
             config=config,
             name=name,
         )
@@ -311,7 +312,7 @@ class MT5LiveExecClientFactory(LiveExecClientFactory):
             msgbus=msgbus,
             cache=cache,
             clock=clock,
-            mode=config.mode,
+            connection_mode=config.mode,
             rpyc_config=config.rpyc_config,
             ea_config=config.ea_config,
             client_id=config.client_id,

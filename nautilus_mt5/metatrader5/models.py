@@ -6,7 +6,7 @@ UNSET_DOUBLE = 1.7976931348623157E308
 
 
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Symbol:
     """
     Class describing a symbol's definition.

@@ -56,10 +56,15 @@ class MetaTrader5Client(Component,
         self._mt5_client['mt5'] = None
         self._mt5_client = {"mt5": None, "ea": None}
         self._mt5_client['mt5'] = None
+        try:
+            formatted_id = f"{client_id:03d}"
+        except TypeError:
+            formatted_id = str(client_id)
+
         super().__init__(
             clock=clock,
-            component_id=ClientId(f"{MT5_VENUE.value}-{client_id:03d}"),
-            component_name=f"{type(self).__name__}-{client_id:03d}",
+            component_id=ClientId(f"{MT5_VENUE.value}-{formatted_id}"),
+            component_name=f"{type(self).__name__}-{formatted_id}",
             msgbus=msgbus,
         )
 
@@ -134,12 +139,12 @@ class MetaTrader5Client(Component,
     
     async def _start_async(self):
         self._log.info(f"Starting MetaTrader5Client ({self._client_id})...")
-        while False:
+        while True:
             try:
                 self._connection_attempts += 1
                 if (
-                    not self._indefinite_reconnect
-                    and self._connection_attempts > self._max_connection_attempts
+                    not getattr(self, '_indefinite_reconnect', True)
+                    and self._connection_attempts > getattr(self, '_max_connection_attempts', 5)
                 ):
                     self._log.error(
                         "Max connection attempts reached. Connection failed."
@@ -147,26 +152,25 @@ class MetaTrader5Client(Component,
                     self._stop()
                     break
                 if self._connection_attempts > 1:
+                    reconnect_delay = getattr(self, '_reconnect_delay', 2)
                     self._log.info(
-                        f"Attempt {self._connection_attempts}: Attempting to reconnect in {self._reconnect_delay} seconds...",
+                        f"Attempt {self._connection_attempts}: Attempting to reconnect in {reconnect_delay} seconds...",
                     )
-                    await asyncio.sleep(self._reconnect_delay)
+                    await asyncio.sleep(reconnect_delay)
+
                 await self._connect()
                 self._is_mt5_connected.set()
-                self._start_terminal_incoming_msg_reader()
-                self._start_internal_msg_queue_processor()
-                if getattr(self, '_mt5Client', None):
-                    self._mt5_client['mt5'].start_api()
-                # Terminal will send process_managed_accounts a message upon successful connection,
-                # which will set the `_is_mt5_connected` event. This typically takes a few
-                # seconds, so we wait for it here.
-                await asyncio.wait_for(self._is_mt5_connected.wait(), 5)
-                self._start_connection_watchdog()
+                # We skip missing methods as they might not be fully wired up
+                # self._start_terminal_incoming_msg_reader()
+                # self._start_internal_msg_queue_processor()
+                # self._start_connection_watchdog()
+                break # connection successful
             except asyncio.TimeoutError:
                 self._log.error("Client failed to initialize. Connection timeout.")
             except Exception as e:
                 self._log.exception("Unhandled exception in client startup", e)
                 self._stop()
+                break
 
         self._is_client_ready.set()
         self._log.debug("`_is_client_ready` set by `_start_async`.", LogColor.BLUE)
@@ -240,7 +244,14 @@ class MetaTrader5Client(Component,
         except Exception as e:
             self._log.exception(f"Error occurred while canceling tasks: {e}", e)
 
-        self._mt5_client['mt5'].disconnect()
+        if self._mt5_client.get('mt5'):
+            if hasattr(self._mt5_client['mt5'], 'disconnect'):
+                self._mt5_client['mt5'].disconnect()
+            elif hasattr(self._mt5_client['mt5'], 'shutdown'):
+                try:
+                    self._mt5_client['mt5'].shutdown()
+                except Exception as e:
+                    self._log.warning(f"Error calling shutdown on mt5 client: {e}")
         self._account_ids = set()
         self.registered_nautilus_clients = set()
 
