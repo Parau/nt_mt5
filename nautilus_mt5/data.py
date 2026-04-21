@@ -27,6 +27,30 @@ from nautilus_mt5.config import MetaTrader5DataClientConfig
 from nautilus_mt5.parsing.data import timedelta_to_duration_str
 from nautilus_mt5.providers import MetaTrader5InstrumentProvider
 
+from nautilus_trader.data.messages import SubscribeData
+from nautilus_trader.data.messages import SubscribeInstruments
+from nautilus_trader.data.messages import SubscribeInstrument
+from nautilus_trader.data.messages import SubscribeOrderBook
+from nautilus_trader.data.messages import SubscribeQuoteTicks
+from nautilus_trader.data.messages import SubscribeTradeTicks
+from nautilus_trader.data.messages import SubscribeBars
+from nautilus_trader.data.messages import UnsubscribeData
+from nautilus_trader.data.messages import UnsubscribeInstruments
+from nautilus_trader.data.messages import UnsubscribeInstrument
+from nautilus_trader.data.messages import UnsubscribeOrderBook
+from nautilus_trader.data.messages import UnsubscribeQuoteTicks
+from nautilus_trader.data.messages import UnsubscribeTradeTicks
+from nautilus_trader.data.messages import UnsubscribeBars
+from nautilus_trader.data.messages import UnsubscribeInstrumentStatus
+from nautilus_trader.data.messages import UnsubscribeInstrumentClose
+from nautilus_trader.data.messages import RequestData
+from nautilus_trader.data.messages import RequestInstrument
+from nautilus_trader.data.messages import RequestInstruments
+from nautilus_trader.data.messages import RequestQuoteTicks
+from nautilus_trader.data.messages import RequestTradeTicks
+from nautilus_trader.data.messages import RequestBars
+
+
 
 class MetaTrader5DataClient(LiveMarketDataClient):
     """
@@ -107,45 +131,23 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         ):
             await self._client._disconnect()
 
-    async def _subscribe(self, data_type: DataType) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe` coroutine",  # pragma: no cover
-        )
+    async def _subscribe(self, command: SubscribeData) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _subscribe.")
 
-    async def _subscribe_instruments(self) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_instruments` coroutine",  # pragma: no cover
-        )
+    async def _subscribe_instruments(self, command: SubscribeInstruments) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _subscribe_instruments.")
 
-    async def _subscribe_instrument(self, instrument_id: InstrumentId) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_instrument` coroutine",  # pragma: no cover
-        )
+    async def _subscribe_instrument(self, command: SubscribeInstrument) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _subscribe_instrument.")
 
-    async def _subscribe_order_book_deltas(
-        self,
-        instrument_id: InstrumentId,
-        book_type: BookType,
-        depth: int | None = None,
-        kwargs: dict[str, Any] | None = None,
-    ) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_order_book_deltas` coroutine",  # pragma: no cover
-        )
+    async def _subscribe_order_book_deltas(self, command: SubscribeOrderBook) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _subscribe_order_book_deltas.")
 
-    async def _subscribe_order_book_snapshots(
-        self,
-        instrument_id: InstrumentId,
-        book_type: BookType,
-        depth: int | None = None,
-        kwargs: dict[str, Any] | None = None,
-    ) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_order_book_snapshots` coroutine",  # pragma: no cover
-        )
+    async def _subscribe_order_book_snapshots(self, command: SubscribeOrderBook) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _subscribe_order_book_snapshots.")
 
-    async def _subscribe_quote_ticks(self, command) -> None:
-        instrument_id = command.instrument_id if hasattr(command, "instrument_id") else command
+    async def _subscribe_quote_ticks(self, command: SubscribeQuoteTicks) -> None:
+        instrument_id = command.instrument_id
         if not (instrument := self._cache.instrument(instrument_id)):
             self._log.error(
                 f"Cannot subscribe to QuoteTicks for {instrument_id}, Instrument not found.",
@@ -165,7 +167,8 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             ignore_size=self._ignore_quote_tick_size_updates,
         )
 
-    async def _subscribe_trade_ticks(self, instrument_id: InstrumentId) -> None:
+    async def _subscribe_trade_ticks(self, command: SubscribeTradeTicks) -> None:
+        instrument_id = command.instrument_id
         if not (instrument := self._cache.instrument(instrument_id)):
             self._log.error(
                 f"Cannot subscribe to TradeTicks for {instrument_id}, Instrument not found.",
@@ -179,7 +182,8 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             ignore_size=self._ignore_quote_tick_size_updates,
         )
 
-    async def _subscribe_bars(self, bar_type: BarType) -> None:
+    async def _subscribe_bars(self, command: SubscribeBars) -> None:
+        bar_type = command.bar_type
         if not (instrument := self._cache.instrument(bar_type.instrument_id)):
             self._log.error(f"Cannot subscribe to {bar_type}, Instrument not found.")
             return
@@ -198,69 +202,56 @@ class MetaTrader5DataClient(LiveMarketDataClient):
                 handle_revised_bars=self._handle_revised_bars,
             )
 
-    async def _subscribe_instrument_status(self, instrument_id: InstrumentId) -> None:
+    async def _subscribe_instrument_status(self, command: SubscribeInstrument) -> None:
         pass  # Subscribed as part of orderbook
 
-    async def _subscribe_instrument_close(self, instrument_id: InstrumentId) -> None:
+    async def _subscribe_instrument_close(self, command: SubscribeInstrument) -> None:
         pass  # Subscribed as part of orderbook
 
-    async def _unsubscribe(self, data_type: DataType) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe` coroutine",  # pragma: no cover
-        )
+    async def _unsubscribe(self, command: UnsubscribeData) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _unsubscribe.")
 
-    async def _unsubscribe_instruments(self) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_instruments` coroutine",  # pragma: no cover
-        )
+    async def _unsubscribe_instruments(self, command: UnsubscribeInstruments) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _unsubscribe_instruments.")
 
-    async def _unsubscribe_instrument(self, instrument_id: InstrumentId) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_instrument` coroutine",  # pragma: no cover
-        )
+    async def _unsubscribe_instrument(self, command: UnsubscribeInstrument) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _unsubscribe_instrument.")
 
-    async def _unsubscribe_order_book_deltas(self, instrument_id: InstrumentId) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_order_book_deltas` coroutine",  # pragma: no cover
-        )
+    async def _unsubscribe_order_book_deltas(self, command: UnsubscribeOrderBook) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _unsubscribe_order_book_deltas.")
 
-    async def _unsubscribe_order_book_snapshots(
-        self, instrument_id: InstrumentId
-    ) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_order_book_snapshots` coroutine",  # pragma: no cover
-        )
+    async def _unsubscribe_order_book_snapshots(self, command: UnsubscribeOrderBook) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _unsubscribe_order_book_snapshots.")
 
-    async def _unsubscribe_quote_ticks(self, instrument_id: InstrumentId) -> None:
+    async def _unsubscribe_quote_ticks(self, command: UnsubscribeQuoteTicks) -> None:
+        instrument_id = command.instrument_id
         await self._client.unsubscribe_ticks(instrument_id, "BidAsk")
 
-    async def _unsubscribe_trade_ticks(self, instrument_id: InstrumentId) -> None:
+    async def _unsubscribe_trade_ticks(self, command: UnsubscribeTradeTicks) -> None:
+        instrument_id = command.instrument_id
         await self._client.unsubscribe_ticks(instrument_id, "AllLast")
 
-    async def _unsubscribe_bars(self, bar_type: BarType) -> None:
-        if bar_type.spec.timedelta == 5:
+    async def _unsubscribe_bars(self, command: UnsubscribeBars) -> None:
+        bar_type = command.bar_type
+        if bar_type.spec.timedelta.total_seconds() == 5:
             await self._client.unsubscribe_realtime_bars(bar_type)
         else:
             await self._client.unsubscribe_historical_bars(bar_type)
 
-    async def _unsubscribe_instrument_status(self, instrument_id: InstrumentId) -> None:
+    async def _unsubscribe_instrument_status(self, command: UnsubscribeInstrumentStatus) -> None:
         pass  # Subscribed as part of orderbook
 
-    async def _unsubscribe_instrument_close(self, instrument_id: InstrumentId) -> None:
+    async def _unsubscribe_instrument_close(self, command: UnsubscribeInstrumentClose) -> None:
         pass  # Subscribed as part of orderbook
 
-    async def _request(self, data_type: DataType, correlation_id: UUID4) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_request` coroutine",  # pragma: no cover
-        )
+    async def _request(self, request: RequestData) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _request.")
 
-    async def _request_instrument(
-        self,
-        instrument_id: InstrumentId,
-        correlation_id: UUID4,
-        start: pd.Timestamp | None = None,
-        end: pd.Timestamp | None = None,
-    ) -> None:
+    async def _request_instrument(self, request: RequestInstrument) -> None:
+        instrument_id = request.instrument_id
+        correlation_id = request.correlation_id
+        start = request.start
+        end = request.end
         if start is not None:
             self._log.warning(
                 f"Requesting instrument {instrument_id} with specified `start` which has no effect.",
@@ -279,25 +270,15 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             return
         self._handle_instrument(instrument, correlation_id)
 
-    async def _request_instruments(
-        self,
-        venue: Venue,
-        correlation_id: UUID4,
-        start: pd.Timestamp | None = None,
-        end: pd.Timestamp | None = None,
-    ) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_request_instruments` coroutine",  # pragma: no cover
-        )
+    async def _request_instruments(self, request: RequestInstruments) -> None:
+        self._log.warning("MetaTrader5 adapter does not support _request_instruments.")
 
-    async def _request_quote_ticks(
-        self,
-        instrument_id: InstrumentId,
-        limit: int,
-        correlation_id: UUID4,
-        start: pd.Timestamp | None = None,
-        end: pd.Timestamp | None = None,
-    ) -> None:
+    async def _request_quote_ticks(self, request: RequestQuoteTicks) -> None:
+        instrument_id = request.instrument_id
+        limit = request.limit
+        correlation_id = request.correlation_id
+        start = request.start
+        end = request.end
         if not (instrument := self._cache.instrument(instrument_id)):
             self._log.error(
                 f"Cannot request QuoteTicks for {instrument_id}, Instrument not found.",
@@ -317,14 +298,12 @@ class MetaTrader5DataClient(LiveMarketDataClient):
 
         self._handle_quote_ticks(instrument_id, ticks, correlation_id)
 
-    async def _request_trade_ticks(
-        self,
-        instrument_id: InstrumentId,
-        limit: int,
-        correlation_id: UUID4,
-        start: pd.Timestamp | None = None,
-        end: pd.Timestamp | None = None,
-    ) -> None:
+    async def _request_trade_ticks(self, request: RequestTradeTicks) -> None:
+        instrument_id = request.instrument_id
+        limit = request.limit
+        correlation_id = request.correlation_id
+        start = request.start
+        end = request.end
         if not (instrument := self._cache.instrument(instrument_id)):
             self._log.error(
                 f"Cannot request TradeTicks for {instrument_id}, Instrument not found.",
@@ -383,14 +362,12 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         ticks.sort(key=lambda x: x.ts_init)
         return ticks
 
-    async def _request_bars(
-        self,
-        bar_type: BarType,
-        limit: int,
-        correlation_id: UUID4,
-        start: pd.Timestamp | None = None,
-        end: pd.Timestamp | None = None,
-    ) -> None:
+    async def _request_bars(self, request: RequestBars) -> None:
+        bar_type = request.bar_type
+        limit = request.limit
+        correlation_id = request.correlation_id
+        start = request.start
+        end = request.end
         if not (instrument := self._cache.instrument(bar_type.instrument_id)):
             self._log.error(
                 f"Cannot request {bar_type}, Instrument not found.",

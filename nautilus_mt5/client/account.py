@@ -81,7 +81,11 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
         name = "accountSummary"
         if subscription := self._subscriptions.get(name=name):
             self._subscriptions.remove(subscription.req_id)
-            self._mt5_client.cancel_account_summary(req_id=subscription.req_id)
+            cancel_func = getattr(self._mt5_client['mt5'], "cancel_account_summary", None)
+            if cancel_func:
+                cancel_func(req_id=subscription.req_id)
+            else:
+                self._log.warning("No method found to cancel account summary.")
             self._log.debug(f"Unsubscribed from {subscription}")
         else:
             self._log.debug(f"Subscription doesn't exist for {name}")

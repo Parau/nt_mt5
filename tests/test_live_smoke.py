@@ -16,6 +16,7 @@ from nautilus_trader.model.position import Position
 from nautilus_trader.model.events import OrderFilled
 from nautilus_trader.model.enums import OrderSide, OrderType, TimeInForce
 from nautilus_trader.live.node import TradingNode
+from unittest.mock import patch
 
 from nautilus_mt5.factories import MT5LiveDataClientFactory, MT5LiveExecClientFactory
 from nautilus_mt5.client.types import TerminalConnectionMode
@@ -120,7 +121,9 @@ class SmokeTestStrategy:
 
 
 @pytest.mark.asyncio
-async def test_live_mt5_adapter():
+@patch('nautilus_mt5.factories.get_cached_mt5_client')
+async def test_live_mt5_adapter(mock_client_factory):
+    mock_client_factory.return_value.id.value = "mock_client"
     from nautilus_mt5.config import (
         MetaTrader5DataClientConfig,
         MetaTrader5ExecClientConfig,

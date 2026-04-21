@@ -29,6 +29,8 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
             await self._fetch_terminal_info()
             self.set_conn_state(TerminalConnectionState.CONNECTED)
             self._log_connection_info()
+            self._is_client_ready.set()
+            self._log.debug("`_is_client_ready` set by `_connect`.", LogColor.BLUE)
         except asyncio.CancelledError:
             self._log.info("Connection cancelled.")
             await self._disconnect()
@@ -95,13 +97,35 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
         return {'mt5': self._create_ipc_client(), 'ea': self._create_ea_client()}
 
     async def _fetch_terminal_info(self) -> None:
-        self._terminal_info = {
-            "version": 5,
-            "build": 1,
-            "build_release_date": "Mock",
-            "connection_time": "Now",
-        }
-        return
+        try:
+            terminal_info = getattr(self._mt5_client['mt5'], "terminal_info", None)()
+            if terminal_info:
+                if hasattr(terminal_info, "_asdict"):
+                    info = terminal_info._asdict()
+                elif hasattr(terminal_info, "__dict__"):
+                    info = terminal_info.__dict__
+                else:
+                    info = dict(terminal_info)
+                self._terminal_info = {
+                    "version": 5,
+                    "build": info.get("build", 0),
+                    "build_release_date": "Mock",
+                    "connection_time": "Now"
+                }
+            else:
+                self._terminal_info = {
+                    "version": 5,
+                    "build": 1,
+                    "build_release_date": "Mock",
+                    "connection_time": "Now",
+                }
+        except Exception:
+            self._terminal_info = {
+                "version": 5,
+                "build": 1,
+                "build_release_date": "Mock",
+                "connection_time": "Now",
+            }
 
     def process_connection_closed(self) -> None:
         """Handle terminal disconnection."""

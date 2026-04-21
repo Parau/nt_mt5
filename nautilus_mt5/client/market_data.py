@@ -501,8 +501,8 @@ class MetaTrader5ClientMarketDataMixin:
         """
         Convert the date from BarData to unix nanoseconds.
 
-        If the bar type's aggregation is 14, the bar date is always returned in the
-        YYYYMMDD format from IB. For all other aggregations, the bar date is returned
+        If the bar type's aggregation is 14, the bar.time is always returned in the
+        YYYYMMDD format from IB. For all other aggregations, the bar.time is returned
         in system time.
 
         Parameters
@@ -518,10 +518,10 @@ class MetaTrader5ClientMarketDataMixin:
 
         """
         if bar_type.spec.aggregation == 14:
-            # Day bars are always returned with bar date in YYYYMMDD format
-            ts = pd.to_datetime(bar.date, format="%Y%m%d", utc=True)
+            # Day bars are always returned with bar.time in YYYYMMDD format
+            ts = pd.to_datetime(bar.time, format="%Y%m%d", utc=True)
         else:
-            ts = pd.Timestamp.fromtimestamp(int(bar.date), tz=pytz.utc)
+            ts = pd.Timestamp.fromtimestamp(int(bar.time), tz=pytz.utc)
 
         return ts.value
 
@@ -640,8 +640,8 @@ class MetaTrader5ClientMarketDataMixin:
 
         """
         previous_bar = self._bar_type_to_last_bar.get(bar_type_str)
-        previous_ts = 0 if not previous_bar else int(previous_bar.date)
-        current_ts = int(bar.date)
+        previous_ts = 0 if not previous_bar else int(previous_bar.time)
+        current_ts = int(bar.time)
 
         if current_ts > previous_ts:
             is_new_bar = True

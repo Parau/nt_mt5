@@ -191,9 +191,8 @@ def instrument_id_to_mt5_symbol(
     strict_symbology: bool = False,
 ) -> MT5Symbol:
     PyCondition.type(instrument_id, InstrumentId, "InstrumentId")
-
     mt_symbol = instrument_id.symbol.value.replace("/", "")
-    return MT5Symbol(symbol=mt_symbol, broker="")
+    return MT5Symbol(symbol=mt_symbol, broker="METATRADER_5")
 
 
 def convert_symbol_info_to_mt5_symbol_details(

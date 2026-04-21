@@ -29,7 +29,6 @@ from nautilus_mt5.terminal import DockerizedMT5Terminal
 TERMINAL = None
 MT5_CLIENTS: dict[tuple, MetaTrader5Client] = {}
 
-@lru_cache(1)
 def get_cached_mt5_client(
     loop: asyncio.AbstractEventLoop,
     msgbus: MessageBus,
@@ -76,7 +75,12 @@ def get_cached_mt5_client(
         "Please provide the `mode` for the MT5 Terminal connection.",
     )
 
-    client_key: tuple = (connection_mode, client_id)
+    client_key = (
+        connection_mode,
+        client_id,
+        rpyc_config.host, rpyc_config.port,
+        ea_config.host, ea_config.rest_port, ea_config.stream_port
+    )
 
     if client_key not in MT5_CLIENTS:
         client = MetaTrader5Client(
@@ -147,16 +151,21 @@ def get_cached_mt5_client_with_dockerized_gateway(
         if TERMINAL is None:
             TERMINAL = DockerizedMT5Terminal(dockerized_gateway)
             TERMINAL.safe_start(wait=dockerized_gateway.timeout)
-            rpyc_config.port = TERMINAL.port
+            rpyc_config = RpycConnectionConfig(host=rpyc_config.host, port=TERMINAL.port, keep_alive=rpyc_config.keep_alive)
         else:
-            rpyc_config.port = TERMINAL.port
+            rpyc_config = RpycConnectionConfig(host=rpyc_config.host, port=TERMINAL.port, keep_alive=rpyc_config.keep_alive)
     else:
         PyCondition.not_none(
             connection_mode,
             "Please provide the `mode` for the MT5 Terminal connection.",
         )
 
-    client_key: tuple = (connection_mode, client_id)
+    client_key = (
+        connection_mode,
+        client_id,
+        rpyc_config.host, rpyc_config.port,
+        ea_config.host, ea_config.rest_port, ea_config.stream_port
+    )
 
     if client_key not in MT5_CLIENTS:
         client = MetaTrader5Client(
@@ -176,7 +185,6 @@ def get_cached_mt5_client_with_dockerized_gateway(
     return MT5_CLIENTS[client_key]
 
 
-@lru_cache(1)
 def get_cached_mt5_instrument_provider(
     client: MetaTrader5Client,
     config: MetaTrader5InstrumentProviderConfig,
@@ -238,7 +246,21 @@ class MT5LiveDataClientFactory(LiveDataClientFactory):
         MetaTrader5DataClient
 
         """
-        client = get_cached_mt5_client(
+        dockerized = getattr(config, "dockerized_gateway", None)
+        if dockerized:
+            client = get_cached_mt5_client_with_dockerized_gateway(
+                loop=loop,
+                msgbus=msgbus,
+                cache=cache,
+                clock=clock,
+                connection_mode=config.mode,
+                rpyc_config=config.rpyc_config,
+                ea_config=config.ea_config,
+                client_id=config.client_id,
+                dockerized_gateway=dockerized,
+            )
+        else:
+            client = get_cached_mt5_client(
             loop=loop,
             msgbus=msgbus,
             cache=cache,
@@ -307,7 +329,21 @@ class MT5LiveExecClientFactory(LiveExecClientFactory):
         MetaTrader5ExecutionClient
 
         """
-        client = get_cached_mt5_client(
+        dockerized = getattr(config, "dockerized_gateway", None)
+        if dockerized:
+            client = get_cached_mt5_client_with_dockerized_gateway(
+                loop=loop,
+                msgbus=msgbus,
+                cache=cache,
+                clock=clock,
+                connection_mode=config.mode,
+                rpyc_config=config.rpyc_config,
+                ea_config=config.ea_config,
+                client_id=config.client_id,
+                dockerized_gateway=dockerized,
+            )
+        else:
+            client = get_cached_mt5_client(
             loop=loop,
             msgbus=msgbus,
             cache=cache,

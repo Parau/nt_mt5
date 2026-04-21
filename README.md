@@ -25,7 +25,7 @@ To install the MetaTrader 5 Adapter, follow these steps:
 
 1. Clone the repository:
    ```sh
-   git clone https://github.com/quantspub/nautilus_mt5.git
+   git clone https://github.com/Parau/nt_mt5.git
    ```
 
 2. Navigate to the project directory:
