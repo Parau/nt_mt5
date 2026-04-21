@@ -24,55 +24,36 @@ class MetaTrader5ClientSymbolMixin:
 
         async def _real_resolve():
             try:
-                # Contorno: Injetar manualmente as propriedades vitais do USTEC
-                # Ver arquivo pendencias.md
-                info_dict = {
-                    'custom': False, 'chart_mode': 0, 'select': True, 'visible': True,
-                    'session_deals': 0, 'session_buy_orders': 0, 'session_sell_orders': 0,
-                    'volume': 0, 'volumehigh': 0, 'volumelow': 0, 'time': 1776711877,
-                    'digits': 2, 'spread': 64, 'spread_float': True, 'ticks_bookdepth': 0,
-                    'trade_calc_mode': 3, 'trade_mode': 4, 'start_time': 0, 'expiration_time': 0,
-                    'trade_stops_level': 0, 'trade_freeze_level': 0, 'trade_exemode': 2,
-                    'swap_mode': 3, 'swap_rollover3days': 5, 'margin_hedged_use_leg': False,
-                    'expiration_mode': 15, 'filling_mode': 2, 'order_mode': 127, 'order_gtc_mode': 0,
-                    'option_mode': 0, 'option_right': 0, 'bid': 26483.23, 'bidhigh': 26665.53,
-                    'bidlow': 26376.39, 'ask': 26483.87, 'askhigh': 26666.31, 'asklow': 26377.19,
-                    'last': 0.0, 'lasthigh': 0.0, 'lastlow': 0.0, 'volume_real': 0.0,
-                    'volumehigh_real': 0.0, 'volumelow_real': 0.0, 'option_strike': 0.0,
-                    'point': 0.01, 'trade_tick_value': 0.01, 'trade_tick_value_profit': 0.01,
-                    'trade_tick_value_loss': 0.01, 'trade_tick_size': 0.01, 'trade_contract_size': 1.0,
-                    'trade_accrued_interest': 0.0, 'trade_face_value': 0.0, 'trade_liquidity_rate': 0.0,
-                    'volume_min': 0.01, 'volume_max': 250.0, 'volume_step': 0.01, 'volume_limit': 0.0,
-                    'swap_long': -4.55, 'swap_short': 0.91, 'margin_initial': 0.0, 'margin_maintenance': 0.0,
-                    'session_volume': 0.0, 'session_turnover': 0.0, 'session_interest': 0.0,
-                    'session_buy_orders_volume': 0.0, 'session_sell_orders_volume': 0.0,
-                    'session_open': 26414.55, 'session_close': 26675.43, 'session_aw': 0.0,
-                    'session_price_settlement': 0.0, 'session_price_limit_min': 0.0,
-                    'session_price_limit_max': 0.0, 'margin_hedged': 0.0, 'price_change': -0.7205,
-                    'price_volatility': 0.0, 'price_theoretical': 0.0, 'price_greeks_delta': 0.0,
-                    'price_greeks_theta': 0.0, 'price_greeks_gamma': 0.0, 'price_greeks_vega': 0.0,
-                    'price_greeks_rho': 0.0, 'price_greeks_omega': 0.0, 'price_sensitivity': 0.0,
-                    'currency_base': 'USD', 'currency_profit': 'USD', 'currency_margin': 'USD',
-                    'bank': 'Tickmill', 'description': 'US Tech 100 Index', 'name': symbol.symbol,
-                    'path': 'CFD-2\\USTEC'
-                }
+                # Real implementation to get symbol info
+                info = getattr(self._mt5_client['mt5'], "symbol_info", None)(symbol.symbol)
+                if not info:
+                    self._log.error(f"Symbol {symbol.symbol} not found in MT5.")
+                    if getattr(self, "_requests", None):
+                        self._end_request(req_id, success=False)
+                    return None
 
-                valid_keys = SymbolInfo.__annotations__.keys() if hasattr(SymbolInfo, "__annotations__") else dir(SymbolInfo)
-                filtered_dict = {k: v for k, v in info_dict.items() if k in valid_keys or (hasattr(SymbolInfo, "__init__") and k in SymbolInfo.__init__.__code__.co_varnames)}
+                # Normalize RPyC netref to pure Python dictionary
+                if hasattr(info, "_asdict"):
+                    info_dict = info._asdict()
+                elif hasattr(info, "__dict__"):
+                    info_dict = info.__dict__.copy()
+                else:
+                    info_dict = dict(info)
 
-                class _MockInfo:
+                # Fix properties that netref might expose incorrectly or miss
+                if "name" not in info_dict:
+                    info_dict["name"] = symbol.symbol
+
+                class _NormalizedInfo:
                     def __init__(self, **kwargs):
                         self.__dict__.update(kwargs)
 
-                info = _MockInfo(**filtered_dict)
-                info.name = symbol.symbol
-                info.symbol = symbol.symbol  # Add symbol property to fix AttributeError
-                info.under_sec_type = "INDICES"
+                normalized_info = _NormalizedInfo(**info_dict)
 
                 if getattr(self, "_requests", None):
                     req = self._requests.get(req_id=req_id)
                     if req:
-                        new_list = [info]
+                        new_list = [normalized_info]
                         if hasattr(req, "future") and req.future is not None and not req.future.done():
                             req.future.set_result(new_list)
                         try:

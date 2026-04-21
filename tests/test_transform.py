@@ -12,8 +12,8 @@ class MockOrder:
         self.instrument_id = InstrumentId(Symbol("EURUSD"), Venue("METATRADER_5"))
         self.quantity = Quantity.from_int(100)
         self.client_order_id = ClientOrderId("client1")
-        self.order_side = OrderSide.BUY
-        self.order_type = OrderType.MARKET
+        self.side = OrderSide.BUY
+        self.type = OrderType.MARKET
         self.price = None
         self.time_in_force = TimeInForce.GTC
         self.is_post_only = False
@@ -38,13 +38,19 @@ def test_transform_market_order_mocked():
             return self.value
 
     exec_client._account_id = MockAccountId("12345")
+    exec_client.client_id = MockAccountId("12345")
     type(exec_client).account_id = property(lambda self: self._account_id)
 
 
 
-    mt5_order = exec_client._transform_order_to_mt5_order(order)
+    class MockInstrument:
+        def __init__(self):
+            self.info = {"symbol": {"symbol": "EURUSD", "broker": "METATRADER_5"}}
+
+    mock_instrument = MockInstrument()
+    mt5_order = exec_client._transform_order_to_mt5_order(order, mock_instrument)
 
     assert mt5_order.type == 0 # BUY
-    assert mt5_order.volume_initial == 100.0
+    assert mt5_order.volume == 100.0
     assert mt5_order.type_time == 0 # GTC
     assert mt5_order.account == "12345"

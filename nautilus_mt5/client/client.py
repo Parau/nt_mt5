@@ -172,8 +172,7 @@ class MetaTrader5Client(Component,
                 self._stop()
                 break
 
-        self._is_client_ready.set()
-        self._log.debug("`_is_client_ready` set by `_start_async`.", LogColor.BLUE)
+        # Client readiness is set inside _connect upon true successful initialization.
         self._connection_attempts = 0
 
     def _start_terminal_incoming_msg_reader(self) -> None:

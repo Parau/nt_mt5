@@ -30,6 +30,12 @@ from nautilus_trader.execution.reports import FillReport
 from nautilus_trader.execution.reports import OrderStatusReport
 from nautilus_trader.execution.reports import PositionStatusReport
 from nautilus_trader.live.execution_client import LiveExecutionClient
+
+from nautilus_trader.execution.messages import GenerateOrderStatusReport
+from nautilus_trader.execution.messages import GenerateOrderStatusReports
+from nautilus_trader.execution.messages import GenerateFillReports
+from nautilus_trader.execution.messages import GeneratePositionStatusReports
+
 from nautilus_trader.model.enums import AccountType
 from nautilus_trader.model.enums import LiquiditySide
 from nautilus_trader.model.enums import OmsType
@@ -44,7 +50,8 @@ from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import ClientOrderId
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TradeId
-from nautilus_trader.model.identifiers import VenueOrderId
+from nautilus_trader.model.identifiers import Venue
+from nautilus_trader.model.instruments.base import Instrument
 from nautilus_trader.model.objects import AccountBalance
 from nautilus_trader.model.objects import Currency
 from nautilus_trader.model.objects import MarginBalance
@@ -171,16 +178,26 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
         # Load account balance
         self._client.subscribe_account_summary()
-        # Hack for tests progression without full async deadlock on missing account data
-        import asyncio
-        try:
-            await asyncio.wait_for(self._account_summary_loaded.wait(), timeout=5.0)
-        except asyncio.TimeoutError:
-            self._log.warning("Timeout waiting for account summary, continuing connect without full state.")
+        # Synchronous account validation
+        account_info = await self._client.get_account_info()
+        if not account_info:
+            raise ConnectionError("Failed to retrieve account info from MT5 bridge.")
 
-        # Just log account associated, don't raise value error to prevent issues if accounts takes longer to load
+        expected_login = int(self.account_id.get_id())
+        actual_login = int(getattr(account_info, "login", 0))
+
+        if expected_login != actual_login:
+            raise ConnectionError(f"Account mismatch. Expected: {expected_login}, Actual logged in: {actual_login}")
+
+        # Load initial balances from the retrieved account_info
+        if hasattr(account_info, 'balance'):
+            # Convert to appropriate string format for _on_account_summary
+            self._log.debug(f"Initial balance: {account_info.balance}")
+            # Mock sending a summary event locally to initialize states
+            await self._on_account_summary({"balance": account_info.balance, "currency": account_info.currency})
+
         self._log.info(
-            f"Account `{self.account_id.get_id()}` associated with Terminal.",
+            f"Account `{self.account_id.get_id()}` validated and associated with Terminal.",
             LogColor.GREEN,
         )
         self._set_connected(True)
@@ -194,12 +211,10 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             self._client.stop()
         self._set_connected(False)
 
-    async def generate_order_status_report(
-        self,
-        instrument_id: InstrumentId,
-        client_order_id: ClientOrderId | None = None,
-        venue_order_id: VenueOrderId | None = None,
-    ) -> OrderStatusReport | None:
+    async def generate_order_status_report(self, command: GenerateOrderStatusReport) -> OrderStatusReport | None:
+        instrument_id = command.instrument_id
+        client_order_id = command.client_order_id
+        venue_order_id = command.venue_order_id
         """
         Generate an `OrderStatusReport` for the given order identifier parameter(s). If
         the order is not found, or an error occurs, then logs and returns ``None``.
@@ -259,7 +274,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
     ) -> OrderStatusReport:
         self._log.debug(f"Trying OrderStatusReport for {mt5_order.__dict__}")
         instrument = await self.instrument_provider.find_with_symbol_id(
-            mt5_order.contract.sym_id,
+            mt5_order.symbol,
         )
 
         total_qty = (
@@ -279,11 +294,11 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         ts_init = self._clock.timestamp_ns()
         price = (
             None
-            if mt5_order.lmtPrice == UNSET_DOUBLE
-            else instrument.make_price(mt5_order.lmtPrice)
+            if getattr(mt5_order, "price", 0.0) == 0.0
+            else instrument.make_price(getattr(mt5_order, "price", 0.0))
         )
         expire_time = (
-            timestring_to_timestamp(mt5_order.goodTillDate)
+            timestring_to_timestamp(getattr(mt5_order, "expire_time", ""))
             if mt5_order.tif == "GTD"
             else None
         )
@@ -315,7 +330,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             # contingency_type=,
             expire_time=expire_time,
             price=price,
-            trigger_price=instrument.make_price(mt5_order.auxPrice),
+            trigger_price=instrument.make_price(getattr(mt5_order, "trigger_price", 0.0)),
             trigger_type=TriggerType.BID_ASK,
             # limit_offset=,
             # trailing_offset=,
@@ -323,13 +338,11 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         self._log.debug(f"Received {order_status!r}")
         return order_status
 
-    async def generate_order_status_reports(
-        self,
-        instrument_id: InstrumentId | None = None,
-        start: pd.Timestamp | None = None,
-        end: pd.Timestamp | None = None,
-        open_only: bool = False,
-    ) -> list[OrderStatusReport]:
+    async def generate_order_status_reports(self, command: GenerateOrderStatusReports) -> list[OrderStatusReport]:
+        instrument_id = command.instrument_id
+        start = command.start
+        end = command.end
+        open_only = command.open_only
         """
         Generate a list of `OrderStatusReport`s with optional query filters. The
         returned list may be empty if no orders match the given parameters.
@@ -370,11 +383,11 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
                 continue  # Skip, IB may continue to display closed positions
 
             instrument = await self.instrument_provider.find_with_symbol_id(
-                position.contract.sym_id,
+                position.symbol.symbol,
             )
             if instrument is None:
                 self._log.error(
-                    f"Cannot generate report: instrument not found for contract ID {position.contract.sym_id}",
+                    f"Cannot generate report: instrument not found for contract ID {position.symbol.symbol}",
                 )
                 continue
 
@@ -411,13 +424,11 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             report.append(order_status)
         return report
 
-    async def generate_fill_reports(
-        self,
-        instrument_id: InstrumentId | None = None,
-        venue_order_id: VenueOrderId | None = None,
-        start: pd.Timestamp | None = None,
-        end: pd.Timestamp | None = None,
-    ) -> list[FillReport]:
+    async def generate_fill_reports(self, command: GenerateFillReports) -> list[FillReport]:
+        instrument_id = command.instrument_id
+        venue_order_id = command.venue_order_id
+        start = command.start
+        end = command.end
         """
         Generate a list of `FillReport`s with optional query filters. The returned list
         may be empty if no trades match the given parameters.
@@ -442,12 +453,10 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
         return []  # TODO: Implement
 
-    async def generate_position_status_reports(
-        self,
-        instrument_id: InstrumentId | None = None,
-        start: pd.Timestamp | None = None,
-        end: pd.Timestamp | None = None,
-    ) -> list[PositionStatusReport]:
+    async def generate_position_status_reports(self, command: GeneratePositionStatusReports) -> list[PositionStatusReport]:
+        instrument_id = command.instrument_id
+        start = command.start
+        end = command.end
         """
         Generate a list of `PositionStatusReport`s with optional query filters. The
         returned list may be empty if no positions match the given parameters.
@@ -474,7 +483,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             return []
         for position in positions:
             self._log.debug(
-                f"Trying PositionStatusReport for {position.contract.sym_id}"
+                f"Trying PositionStatusReport for {position.symbol.symbol}"
             )
             if position.quantity > 0:
                 side = PositionSide.LONG
@@ -484,11 +493,11 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
                 continue  # Skip, IB may continue to display closed positions
 
             instrument = await self.instrument_provider.find_with_symbol_id(
-                position.contract.sym_id,
+                position.symbol.symbol,
             )
             if instrument is None:
                 self._log.error(
-                    f"Cannot generate report: instrument not found for contract ID {position.contract.sym_id}",
+                    f"Cannot generate report: instrument not found for contract ID {position.symbol.symbol}",
                 )
                 continue
 
@@ -511,62 +520,40 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
 
     def _transform_order_to_mt5_order(
-        self, order: Order
+        self,
+        order: Order,
+        instrument: Instrument,
     ) -> MT5Order:
+        from nautilus_mt5.parsing.execution import map_order_type_and_action, map_filling_type
+
         mt5_order = MT5Order()
-
-        details = self.instrument_provider.symbol_details.get(order.instrument_id.value)
-        if not details:
-            raise ValueError(f"Instrument {order.instrument_id.value} not found in provider.")
-
-        mt5_order.symbol = details.symbol.symbol if details.symbol else order.instrument_id.symbol.value
-        mt5_order.volume_initial = float(order.quantity.as_double())
-        mt5_order.account = self.account_id.get_id()
         mt5_order.orderRef = order.client_order_id.value
+        mt5_order.account = self.client_id.value
+        mt5_order.symbol = instrument.info["symbol"]["symbol"]
+        mt5_order.volume = float(order.quantity.as_double())
 
-        if order.order_side == OrderSide.BUY:
-            if order.order_type == OrderType.MARKET:
-                mt5_order.type = 0 # ORDER_TYPE_BUY
-            elif order.order_type == OrderType.LIMIT:
-                mt5_order.type = 2 # ORDER_TYPE_BUY_LIMIT
-            elif order.order_type == OrderType.STOP_MARKET:
-                mt5_order.type = 4 # ORDER_TYPE_BUY_STOP
-            elif order.order_type == OrderType.STOP_LIMIT:
-                mt5_order.type = 6 # ORDER_TYPE_BUY_STOP_LIMIT
+        action, mt5_type = map_order_type_and_action(order.type, order.side)
+        mt5_order.action = action
+        mt5_order.type = mt5_type
+
+        if order.price:
+            mt5_order.price = float(order.price.as_double())
         else:
-            if order.order_type == OrderType.MARKET:
-                mt5_order.type = 1 # ORDER_TYPE_SELL
-            elif order.order_type == OrderType.LIMIT:
-                mt5_order.type = 3 # ORDER_TYPE_SELL_LIMIT
-            elif order.order_type == OrderType.STOP_MARKET:
-                mt5_order.type = 5 # ORDER_TYPE_SELL_STOP
-            elif order.order_type == OrderType.STOP_LIMIT:
-                mt5_order.type = 7 # ORDER_TYPE_SELL_STOP_LIMIT
+            mt5_order.price = 0.0
 
-        if getattr(order, "price", None):
-            mt5_order.price_open = float(order.price.as_double())
+        mt5_order.type_filling = map_filling_type(order.time_in_force)
+        mt5_order.type_time = 0 # ORDER_TIME_GTC default
+        mt5_order.magic = 0
+        mt5_order.comment = "NautilusOrder"
 
-        if getattr(order, "trigger_price", None):
-            mt5_order.price_stoplimit = float(order.trigger_price.as_double())
-
-        # mapping time in force
-        if order.time_in_force == TimeInForce.GTC:
-            mt5_order.type_time = 0 # ORDER_TIME_GTC
-        elif order.time_in_force == TimeInForce.DAY:
-            mt5_order.type_time = 1 # ORDER_TIME_DAY
-        elif order.time_in_force == TimeInForce.FOK:
-            mt5_order.type_filling = 0 # ORDER_FILLING_FOK
-        elif order.time_in_force == TimeInForce.IOC:
-            mt5_order.type_filling = 1 # ORDER_FILLING_IOC
-
-        # Add basic action for compatibility with some downstream code logic although bridge translates it
         return mt5_order
 
     async def _submit_order(self, command: SubmitOrder) -> None:
 
         PyCondition.type(command, SubmitOrder, "command")
         try:
-            mt5_order: MT5Order = self._transform_order_to_mt5_order(command.order)
+            instrument = self._cache.instrument(command.order.instrument_id)
+            mt5_order: MT5Order = self._transform_order_to_mt5_order(command.order, instrument)
             mt5_order.order_id = self._client.next_order_id()
             self._client.place_order(mt5_order)
             self._handle_order_event(status=OrderStatus.SUBMITTED, order=command.order)
@@ -590,7 +577,8 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             client_id_to_orders[order.client_order_id.value] = order
 
             try:
-                mt5_order = self._transform_order_to_mt5_order(order)
+                instrument = self._cache.instrument(order.instrument_id)
+                mt5_order = self._transform_order_to_mt5_order(order, instrument)
                 mt5_order.transmit = False
                 mt5_order.order_id = order_id_map[order.client_order_id.value]
                 mt5_orders.append(mt5_order)
@@ -654,15 +642,15 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         if command.quantity and command.quantity != mt5_order.totalQuantity:
             mt5_order.totalQuantity = command.quantity.as_double()
         if command.price and command.price.as_double() != getattr(
-            mt5_order, "lmtPrice", None
+            mt5_order, "price", None
         ):
-            mt5_order.lmtPrice = command.price.as_double()
+            mt5_order.price = command.price.as_double()
         if command.trigger_price and command.trigger_price.as_double() != getattr(
             mt5_order,
-            "auxPrice",
+            "trigger_price",
             None,
         ):
-            mt5_order.auxPrice = command.trigger_price.as_double()
+            mt5_order.trigger_price = command.trigger_price.as_double()
         self._log.info(f"Placing {mt5_order!r}")
         self._client.place_order(mt5_order)
 
@@ -837,13 +825,13 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             )
             price = (
                 None
-                if order.lmtPrice == UNSET_DOUBLE
-                else instrument.make_price(order.lmtPrice)
+                if getattr(order, "price", 0.0) == 0.0
+                else instrument.make_price(getattr(order, "price", 0.0))
             )
             trigger_price = (
                 None
-                if order.auxPrice == UNSET_DOUBLE
-                else instrument.make_price(order.auxPrice)
+                if getattr(order, "trigger_price", 0.0) == 0.0
+                else instrument.make_price(getattr(order, "trigger_price", 0.0))
             )
             venue_order_id_modified = bool(
                 nautilus_order.venue_order_id is None
@@ -911,7 +899,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         execution: Execution,
         commission_report: CommissionReport,
     ) -> None:
-        if not execution.orderRef:
+        if not str(execution.order_id):
             self._log.warning(
                 f"ClientOrderId not available, order={execution.__dict__}"
             )
@@ -931,11 +919,11 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
                 client_order_id=nautilus_order.client_order_id,
                 venue_order_id=VenueOrderId(str(execution.order_id)),
                 venue_position_id=None,
-                trade_id=TradeId(execution.execId),
-                order_side=OrderSide[ORDER_SIDE_TO_ORDER_ACTION[execution.side]],
+                trade_id=TradeId(execution.exec_id),
+                order_side=OrderSide[ORDER_SIDE_TO_ORDER_ACTION[getattr(execution, "side", "BUY")]],
                 order_type=nautilus_order.order_type,
                 last_qty=Quantity(
-                    execution.shares, precision=instrument.size_precision
+                    execution.quantity, precision=instrument.size_precision
                 ),
                 last_px=Price(execution.price, precision=instrument.price_precision),
                 quote_currency=instrument.quote_currency,

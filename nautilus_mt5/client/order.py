@@ -39,7 +39,7 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
         if getattr(order, "orderRef", None):
             order.orderRef = f"{order.orderRef}:{order.order_id}"
 
-        send_method = getattr(self._mt5_client['mt5'], "placeOrder", None) or getattr(self._mt5_client['mt5'], "order_send", None)
+        send_method = getattr(self._mt5_client["mt5"], "order_send", None)
         if send_method:
             if send_method.__name__ == "order_send":
                 req = {
@@ -60,9 +60,9 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
                 self._log.info(f"MT5 order_send RESULT: {res}")
             else:
                 res = send_method(order.order_id, order.symbol, order)
-                self._log.info(f"MT5 placeOrder RESULT: {res}")
+                self._log.info(f"MT5 order_send RESULT: {res}")
         else:
-            self._log.warning("MT5Client has no method to send orders. (Missing order_send or placeOrder)")
+            self._log.warning("MT5Client has no method to send orders. (Missing order_send)")
 
     def place_order_list(self, orders: list[MT5Order]) -> None:
         """
@@ -76,21 +76,27 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
         """
         for order in orders:
             order.orderRef = f"{order.orderRef}:{order.order_id}"
-            self._mt5_client['mt5'].placeOrder(order.order_id, order.symbol, order)
+            self._mt5_client["mt5"].order_send(order)
 
     def cancel_order(self, order_id: int, manual_cancel_order_time: str = "") -> None:
         """
-        Cancel an order through the EClient.
+        Cancel an order through the MT5Client.
 
         Parameters
         ----------
         order_id : int
-            The unique identifier for the order to be canceled.
-        manual_cancel_order_time : str, optional
-            The timestamp indicating when the order was canceled manually.
-
+            The unique identifier for the order to be canceled (ticket).
         """
-        self._mt5_client['mt5'].cancelOrder(order_id, manual_cancel_order_time)
+        send_method = getattr(self._mt5_client['mt5'], "order_send", None)
+        if send_method:
+            req = {
+                "action": 8, # TRADE_ACTION_REMOVE
+                "order": int(order_id),
+            }
+            res = send_method(req)
+            self._log.info(f"MT5 order_send RESULT (CANCEL): {res}")
+        else:
+            self._log.warning("MT5Client has no method to send cancel orders. (Missing order_send)")
 
     def cancel_all_orders(self) -> None:
         """
@@ -99,7 +105,7 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
         self._log.warning(
             "Canceling all open orders, regardless of how they were originally placed.",
         )
-        self._mt5_client['mt5'].reqGlobalCancel()
+        self._log.warning("MT5 does not natively support reqGlobalCancel. You must iterate open positions/orders and cancel individually.")
 
     async def get_open_orders(self, account_id: str) -> list[MT5Order]:
         """
@@ -122,7 +128,7 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
             request = self._requests.add(
                 req_id=self._next_req_id(),
                 name=name,
-                handle=self._mt5_client['mt5'].reqOpenOrders,
+                handle=getattr(self._mt5_client["mt5"], "orders_get", None),
             )
             if not request:
                 return []
@@ -261,7 +267,7 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
             self._exec_id_details[execution.execId] = {}
             cache = self._exec_id_details[execution.execId]
         cache["execution"] = execution
-        cache["order_ref"] = execution.orderRef.rsplit(":", 1)[0]
+        cache["order_ref"] = str(execution.order_id).rsplit(":", 1)[0]
 
         name = f"execDetails-{execution.acctNumber}"
         if (handler := self._event_subscriptions.get(name, None)) and cache.get(
