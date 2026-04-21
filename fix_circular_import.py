@@ -1,4 +1,14 @@
-from decimal import Decimal
+import re
+
+with open("nautilus_mt5/constants.py", "r") as f:
+    content = f.read()
+
+# Remove ErrorInfo and MT5 stuff from constants to avoid circular import, since they depend on client/types and metatrader5
+# Wait, NO_VALID_ID and TERMINAL_CONNECT_FAIL are what connection.py wants.
+# Let's remove `from nautilus_mt5.client.types import ErrorInfo` and `from nautilus_mt5.metatrader5 import MetaTrader5` from constants.py.
+# And just hardcode them or use a generic tuple for ErrorInfo.
+
+new_constants = """from decimal import Decimal
 from typing import Final, NamedTuple
 from nautilus_trader.model.identifiers import Venue
 
@@ -24,3 +34,7 @@ SOCKET_EXCEPTION = ErrorInfo(509, "Exception caught while reading socket - ")
 FAIL_CREATE_SOCK = ErrorInfo(520, "Failed to create socket")
 SSL_FAIL = ErrorInfo(530, "SSL specific error: ")
 INVALID_SYMBOL = ErrorInfo(579, "Invalid symbol in string - ")
+"""
+
+with open("nautilus_mt5/constants.py", "w") as f:
+    f.write(new_constants)

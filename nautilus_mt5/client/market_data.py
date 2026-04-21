@@ -191,7 +191,7 @@ class MetaTrader5ClientMarketDataMixin:
                 ignore_size,
             )
         else:
-            self._log.warning(f"MT5 wrapper is missing tick streaming methods. Assuming polling is handled elsewhere.")
+            self._log.warning("MT5 wrapper is missing tick streaming methods. Assuming polling is handled elsewhere.")
 
     async def unsubscribe_ticks(
         self, instrument_id: InstrumentId, tick_type: str
