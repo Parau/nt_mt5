@@ -38,9 +38,7 @@ from nautilus_trader.model.enums import OrderStatus
 from nautilus_trader.model.enums import OrderType
 from nautilus_trader.model.enums import PositionSide
 from nautilus_trader.model.enums import TimeInForce
-from nautilus_trader.model.enums import TrailingOffsetType
 from nautilus_trader.model.enums import TriggerType
-from nautilus_trader.model.enums import trailing_offset_type_to_str
 from nautilus_trader.model.identifiers import AccountId
 from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import ClientOrderId
@@ -54,20 +52,12 @@ from nautilus_trader.model.objects import Money
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.model.orders.base import Order
-from nautilus_trader.model.orders.limit_if_touched import LimitIfTouchedOrder
-from nautilus_trader.model.orders.market_if_touched import MarketIfTouchedOrder
-from nautilus_trader.model.orders.stop_limit import StopLimitOrder
-from nautilus_trader.model.orders.stop_market import StopMarketOrder
-from nautilus_trader.model.orders.trailing_stop_limit import TrailingStopLimitOrder
-from nautilus_trader.model.orders.trailing_stop_market import TrailingStopMarketOrder
 
 from nautilus_mt5.client.client import MetaTrader5Client
 from nautilus_mt5.data_types import MT5Position
 from nautilus_mt5.constants import MT5_VENUE
-from nautilus_mt5.data_types import MT5OrderTags
 from nautilus_mt5.config import MetaTrader5ExecClientConfig
 from nautilus_mt5.parsing.execution import MAP_ORDER_ACTION
-from nautilus_mt5.parsing.execution import MAP_ORDER_FIELDS
 from nautilus_mt5.parsing.execution import MAP_ORDER_STATUS
 from nautilus_mt5.parsing.execution import MAP_ORDER_TYPE
 from nautilus_mt5.parsing.execution import MAP_TIME_IN_FORCE
@@ -519,73 +509,61 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
         return report
 
+
     def _transform_order_to_mt5_order(
         self, order: Order
-    ) -> MT5Order:  # noqa: C901 11 > 10
-        if order.is_post_only:
-            raise ValueError("`post_only` not supported by Interactive Brokers")
-
+    ) -> MT5Order:
         mt5_order = MT5Order()
-        time_in_force = order.time_in_force
-        for key, field, fn in MAP_ORDER_FIELDS:
-            if value := getattr(order, key, None):
-                if key == "order_type" and time_in_force == TimeInForce.AT_THE_CLOSE:
-                    setattr(mt5_order, field, fn((value, time_in_force)))
-                else:
-                    setattr(mt5_order, field, fn(value))
 
-        if self._cache.instrument(order.instrument_id).is_inverse:
-            mt5_order.cashQty = int(mt5_order.totalQuantity)
-            mt5_order.totalQuantity = 0
+        details = self.instrument_provider.symbol_details.get(order.instrument_id.value)
+        if not details:
+            raise ValueError(f"Instrument {order.instrument_id.value} not found in provider.")
 
-        if isinstance(order, TrailingStopLimitOrder | TrailingStopMarketOrder):
-            if order.trailing_offset_type != TrailingOffsetType.PRICE:
-                raise ValueError(
-                    f"`TrailingOffsetType` {trailing_offset_type_to_str(order.trailing_offset_type)} is not supported",
-                )
-
-            mt5_order.auxPrice = float(order.trailing_offset)
-            if order.trigger_price:
-                mt5_order.trailStopPrice = order.trigger_price.as_double()
-                mt5_order.triggerMethod = MAP_TRIGGER_METHOD[order.trigger_type]
-        elif (
-            isinstance(
-                order,
-                MarketIfTouchedOrder
-                | LimitIfTouchedOrder
-                | StopLimitOrder
-                | StopMarketOrder,
-            )
-        ) and order.trigger_price:
-            mt5_order.auxPrice = order.trigger_price.as_double()
-
-        details = self.instrument_provider.contract_details[order.instrument_id.value]
-        mt5_order.contract = details.contract
+        mt5_order.symbol = details.symbol.symbol if details.symbol else order.instrument_id.symbol.value
+        mt5_order.volume_initial = float(order.quantity.as_double())
         mt5_order.account = self.account_id.get_id()
-        mt5_order.clearingAccount = self.account_id.get_id()
+        mt5_order.orderRef = order.client_order_id.value
 
-        if order.tags:
-            return self._attach_order_tags(mt5_order, order)
+        if order.order_side == OrderSide.BUY:
+            if order.order_type == OrderType.MARKET:
+                mt5_order.type = 0 # ORDER_TYPE_BUY
+            elif order.order_type == OrderType.LIMIT:
+                mt5_order.type = 2 # ORDER_TYPE_BUY_LIMIT
+            elif order.order_type == OrderType.STOP_MARKET:
+                mt5_order.type = 4 # ORDER_TYPE_BUY_STOP
+            elif order.order_type == OrderType.STOP_LIMIT:
+                mt5_order.type = 6 # ORDER_TYPE_BUY_STOP_LIMIT
         else:
-            return mt5_order
+            if order.order_type == OrderType.MARKET:
+                mt5_order.type = 1 # ORDER_TYPE_SELL
+            elif order.order_type == OrderType.LIMIT:
+                mt5_order.type = 3 # ORDER_TYPE_SELL_LIMIT
+            elif order.order_type == OrderType.STOP_MARKET:
+                mt5_order.type = 5 # ORDER_TYPE_SELL_STOP
+            elif order.order_type == OrderType.STOP_LIMIT:
+                mt5_order.type = 7 # ORDER_TYPE_SELL_STOP_LIMIT
 
-    def _attach_order_tags(self, mt5_order: MT5Order, order: Order) -> MT5Order:
-        tags: dict = {}
-        for ot in order.tags:
-            if ot.startswith("MT5OrderTags:"):
-                tags = MT5OrderTags.parse(ot.replace("MT5OrderTags:", "")).dict()
-                break
+        if getattr(order, "price", None):
+            mt5_order.price_open = float(order.price.as_double())
 
-        for tag in tags:
-            if tag == "conditions":
-                for condition in tags[tag]:
-                    pass  # TODO:
-            else:
-                setattr(mt5_order, tag, tags[tag])
+        if getattr(order, "trigger_price", None):
+            mt5_order.price_stoplimit = float(order.trigger_price.as_double())
 
+        # mapping time in force
+        if order.time_in_force == TimeInForce.GTC:
+            mt5_order.type_time = 0 # ORDER_TIME_GTC
+        elif order.time_in_force == TimeInForce.DAY:
+            mt5_order.type_time = 1 # ORDER_TIME_DAY
+        elif order.time_in_force == TimeInForce.FOK:
+            mt5_order.type_filling = 0 # ORDER_FILLING_FOK
+        elif order.time_in_force == TimeInForce.IOC:
+            mt5_order.type_filling = 1 # ORDER_FILLING_IOC
+
+        # Add basic action for compatibility with some downstream code logic although bridge translates it
         return mt5_order
 
     async def _submit_order(self, command: SubmitOrder) -> None:
+
         PyCondition.type(command, SubmitOrder, "command")
         try:
             mt5_order: MT5Order = self._transform_order_to_mt5_order(command.order)

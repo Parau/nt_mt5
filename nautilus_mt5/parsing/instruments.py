@@ -175,17 +175,15 @@ def mt5_symbol_to_instrument_id_simplified_symbology(
 ) -> InstrumentId:
     if len(mt5_symbol.symbol) > 0:
         symbol = mt5_symbol.symbol
-        venue = mt5_symbol.broker
     else:
         symbol = None
-        venue = None
 
-    if not venue:
-        venue = "METATRADER_5"
+    venue = "METATRADER_5"
 
-    if symbol and venue:
+    if symbol:
         return InstrumentId(Symbol(symbol), Venue(venue))
-    raise ValueError(f"Unknown {symbol=} (broker={mt5_symbol.broker})")
+    raise ValueError(f"Unknown {symbol=}")
+
 
 
 def instrument_id_to_mt5_symbol(
@@ -194,13 +192,8 @@ def instrument_id_to_mt5_symbol(
 ) -> MT5Symbol:
     PyCondition.type(instrument_id, InstrumentId, "InstrumentId")
 
-    # if strict_symbology:
-    #     return instrument_id_to_ib_contract_strict_symbology(instrument_id)
-    # else:
-    #     return instrument_id_to_ib_contract_simplified_symbology(instrument_id)
     mt_symbol = instrument_id.symbol.value.replace("/", "")
-    mt_broker = instrument_id.venue.value.replace("/", ".")
-    return MT5Symbol(symbol=mt_symbol, broker=mt_broker)
+    return MT5Symbol(symbol=mt_symbol, broker="")
 
 
 def convert_symbol_info_to_mt5_symbol_details(

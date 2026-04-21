@@ -5,10 +5,10 @@ description = "Nautilus Trader MetaTrader5 Adapter"
 readme = "README.md"
 repository = "https://github.com/quantspub/nautilus_mt5"
 authors = [{name = "Quants Pub", email = "quantspub@gmail.com"}]
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "docker>=7.1.0",
-    "nautilus-trader>=1.212.0",
+    "nautilus-trader>=1.225.0",
     "numba>=0.61.0",
     "numpy>=1.21.6,<=1.26.4",
     "pandas>=2.2.3",
@@ -32,7 +32,7 @@ test = [
 ]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 100 
 
 exclude = [
