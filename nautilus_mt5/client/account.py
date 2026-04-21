@@ -106,7 +106,7 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
             async def _fetch():
                 import rpyc
                 try:
-                    res = await asyncio.to_thread(self._mt5_client['mt5'].positions_get)
+                    res = await asyncio.to_thread(self._mt5_client['mt5'].positions_get, group=f"*{account_id}*")
                     if res is None:
                         return []
                     # obtain local copy to avoid Netrefs
