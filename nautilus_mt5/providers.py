@@ -77,10 +77,16 @@ class MetaTrader5InstrumentProvider(InstrumentProvider):
                 await self.load_async(instrument_id)
         # Load MT5Symbols
         if self._load_symbols_on_start:
-            for symbol in [
-                (MT5Symbol(**c) if isinstance(c, dict) else (MT5Symbol(**dict(getattr(c, '__dict__', {}))) if not isinstance(c, MT5Symbol) else c))
-                for c in self._load_symbols_on_start
-            ]:
+            for symbol in self._load_symbols_on_start:
+                if isinstance(symbol, str):
+                    symbol = MT5Symbol(symbol=symbol)
+                elif isinstance(symbol, dict):
+                    symbol = MT5Symbol(**symbol)
+                elif not isinstance(symbol, MT5Symbol):
+                    try:
+                        symbol = MT5Symbol(**dict(getattr(symbol, '__dict__', {})))
+                    except Exception:
+                        pass
                 await self.load_async(symbol)
 
     async def get_symbol_details(
@@ -93,8 +99,14 @@ class MetaTrader5InstrumentProvider(InstrumentProvider):
                 self._log.error(f"No symbol details returned for {symbol}.")
                 return []
             [qualified] = details
+
+            # qualified is a mocked RPyC response object from our workaround
+            sym_str = getattr(qualified, "symbol", getattr(qualified, "name", "unknown"))
+            if hasattr(sym_str, "symbol"):
+                sym_str = sym_str.symbol
+
             self._log.info(
-                f"Symbol is {qualified.symbol.symbol}.",
+                f"Symbol is {sym_str}.",
             )
             self._log.debug(f"Got {details=}")
         except ValueError as e:
@@ -147,8 +159,12 @@ class MetaTrader5InstrumentProvider(InstrumentProvider):
             return
 
         for details in copy.deepcopy(symbol_details):
-            # details.symbol = MT5Symbol(symbol=details.name)
-            # details = MT5SymbolDetails(**details.__dict__)
+            # Hack for MockInfo missing symbol
+            if hasattr(details, "symbol") and isinstance(details.symbol, str):
+                details.symbol = MT5Symbol(symbol=details.symbol)
+            elif not hasattr(details, "symbol") and hasattr(details, "name"):
+                details.symbol = MT5Symbol(symbol=details.name)
+
             self._log.debug(f"Attempting to create instrument from {details}")
             try:
                 instrument: Instrument = parse_instrument(

@@ -34,10 +34,33 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
         """
         self._order_id_to_order_ref[order.order_id] = AccountOrderRef(
             account_id=order.account,
-            order_id=order.orderRef.rsplit(":", 1)[0],
+            order_id=order.orderRef.rsplit(":", 1)[0] if getattr(order, "orderRef", None) else str(order.order_id),
         )
-        order.orderRef = f"{order.orderRef}:{order.order_id}"
-        self._mt5_client['mt5'].placeOrder(order.order_id, order.symbol, order)
+        if getattr(order, "orderRef", None):
+            order.orderRef = f"{order.orderRef}:{order.order_id}"
+
+        send_method = getattr(self._mt5_client['mt5'], "placeOrder", None) or getattr(self._mt5_client['mt5'], "order_send", None)
+        if send_method:
+            if send_method.__name__ == "order_send":
+                req = {
+                    "action": getattr(order, "action", 1), # TRADE_ACTION_DEAL
+                    "symbol": getattr(order, "symbol", ""),
+                    "volume": float(getattr(order, "volume", 0.0)),
+                    "type": getattr(order, "type", 0), # ORDER_TYPE_BUY/SELL
+                    "price": getattr(order, "price", 0.0),
+                    "sl": getattr(order, "sl", 0.0),
+                    "tp": getattr(order, "tp", 0.0),
+                    "deviation": getattr(order, "deviation", 20),
+                    "magic": getattr(order, "magic", 234000),
+                    "comment": getattr(order, "comment", "python script open"),
+                    "type_time": getattr(order, "type_time", 0), # ORDER_TIME_GTC
+                    "type_filling": getattr(order, "type_filling", 2), # ORDER_FILLING_RETURN (Default)
+                }
+                send_method(req)
+            else:
+                send_method(order.order_id, order.symbol, order)
+        else:
+            self._log.warning("MT5Client has no method to send orders. (Missing order_send or placeOrder)")
 
     def place_order_list(self, orders: list[MT5Order]) -> None:
         """
