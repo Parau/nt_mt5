@@ -524,7 +524,7 @@ mt5.shutdown()
     `shutdown`, `terminal_info`, `version`
         '''
         code=f'mt5.initialize(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def login(self,*args,**kwargs):
         r'''
@@ -651,7 +651,7 @@ account properties:
     `initialize`, `shutdown`
         '''
         code=f'mt5.login(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def shutdown(self,*args,**kwargs):
         r'''
@@ -696,7 +696,7 @@ mt5.shutdown()
 
         '''
         code=f'mt5.shutdown(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def version(self,*args,**kwargs):
         r'''
@@ -791,7 +791,7 @@ terminal_info() as dataframe:
     `initialize`, `shutdown`, `terminal_info`
         '''
         code=f'mt5.version(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def last_error(self,*args,**kwargs):
         r'''
@@ -851,7 +851,7 @@ mt5.shutdown()
     `version`, `GetLastError`
         '''
         code=f'mt5.last_error(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def account_info(self,*args,**kwargs):
         r'''
@@ -985,7 +985,7 @@ account_info() as dataframe
 
         '''
         code=f'mt5.account_info(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def terminal_info(self,*args,**kwargs):
         r'''
@@ -1106,7 +1106,7 @@ terminal_info() as dataframe:
         '''
         if hasattr(self.__conn, "eval"):
             code=f'mt5.terminal_info(*{args},**{kwargs})'
-            return self.__conn.eval(code)
+            return self.__conn.root.exposed_positions_get(*args, **kwargs)
         else:
             return self.__conn.root.exposed_terminal_info()
 
@@ -1159,7 +1159,7 @@ mt5.shutdown()
 
         '''
         code=f'mt5.symbols_total(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_symbols_total(*args, **kwargs)
 
     def symbols_get(self,*args,**kwargs):
         r'''
@@ -1278,7 +1278,7 @@ FOREX.CHF.M5 : SymbolInfo(custom=True, chart_mode=0, select=False, visible=False
         '''
         if hasattr(self.__conn, "eval"):
             code=f'mt5.symbols_get(*{args},**{kwargs})'
-            return self.__conn.eval(code)
+            return self.__conn.root.exposed_positions_get(*args, **kwargs)
         else:
             return self.__conn.root.exposed_symbols_get(*args,**kwargs)
 
@@ -1456,7 +1456,7 @@ Show symbol_info()._asdict():
         '''
         if hasattr(self.__conn, "eval"):
             code=f'mt5.symbol_info(*{args},**{kwargs})'
-            return self.__conn.eval(code)
+            return self.__conn.root.exposed_symbol_info(*args, **kwargs)
         else:
             return self.__conn.root.exposed_symbol_info(*args,**kwargs)
 
@@ -1539,7 +1539,7 @@ Show symbol_info_tick._asdict():
     ``symbol_info`
         '''
         code=f'mt5.symbol_info_tick(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_symbol_info_tick(*args, **kwargs)
 
     def symbol_select(self,*args,**kwargs):
         r'''
@@ -1738,7 +1738,7 @@ symbol_info_dict() as dataframe:
     `symbol_info`
         '''
         code=f'mt5.symbol_select(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_symbol_select(*args, **kwargs)
 
     def market_book_add(self,*args,**kwargs):
         r'''
@@ -1771,7 +1771,7 @@ The function is similar to `MarketBookAdd`.
 
         '''
         code=f'mt5.market_book_add(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def market_book_get(self,*args,**kwargs):
         r'''
@@ -1911,7 +1911,7 @@ MetaTrader5 package version:  5.0.34
 
         '''
         code=f'mt5.market_book_get(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def market_book_release(self,symbol):
         r'''
@@ -1944,7 +1944,7 @@ The function is similar to `MarketBookRelease`.
 
         '''
         code='mt5.market_book_release(symbol)'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def copy_rates_from(self,symbol, timeframe, date_from, count):
         r'''
@@ -2700,7 +2700,7 @@ mt5.shutdown()
 
         '''
         code=f'mt5.orders_total(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def orders_get(self,*args,**kwargs):
         r'''
@@ -2830,7 +2830,7 @@ orders_get(group="*GBP*")=4
 
         '''
         code=f'mt5.orders_get(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def order_calc_margin(self,*args,**kwargs):
         r'''
@@ -2952,7 +2952,7 @@ Symbols to check margin: ('EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'EURJPY', 'GBP
 
         '''
         code=f'mt5.order_calc_margin(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def order_calc_profit(self,*args,**kwargs):
         r'''
@@ -3076,7 +3076,7 @@ Symbols to check margin: ('EURUSD', 'GBPUSD', 'USDJPY')
     `order_calc_margin`, `order_check`
         '''
         code=f'mt5.order_calc_profit(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def order_check(self,*args,**kwargs):
         r'''
@@ -3241,7 +3241,7 @@ Account сurrency: USD
 
         '''
         code=f'mt5.order_check(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def order_send(self,request):
         r'''
@@ -3450,7 +3450,7 @@ MetaTrader5 package version:  5.0.29
     `order_check`, `OrderSend`,Trading operation types, Trading request structure, Structure of the trading request check results, Structure of the trading request result
         '''
         code=f'mt5.order_send({request})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def positions_total(self,*args,**kwargs):
         r'''
@@ -3501,7 +3501,7 @@ mt5.shutdown()
 
         '''
         code=f'mt5.positions_total(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def positions_get(self,*args,**kwargs):
         r'''
@@ -3627,7 +3627,7 @@ positions_get(group="*USD*")=5
 
         '''
         code=f'mt5.positions_get(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def history_orders_total(self,date_from, date_to):
         r'''
@@ -3692,7 +3692,7 @@ mt5.shutdown()
     `history_orders_get`, `history_deals_total`
         '''
         code=f'mt5.history_orders_total({repr(date_from.astimezone())}, {repr(date_to.astimezone())})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def history_orders_get(self,*args,**kwargs):
         r'''
@@ -3832,7 +3832,7 @@ TradeOrder(ticket=535548147, time_setup=1583176242, time_setup_msc=1583176242265
 
         '''
         code=f'mt5.history_orders_get(*{args},**{kwargs})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def history_deals_total(self,date_from, date_to):
         r'''
@@ -3899,7 +3899,7 @@ mt5.shutdown()
 
         '''
         code=f'mt5.history_deals_total({repr(date_from.astimezone())}, {repr(date_to.astimezone())})'
-        return self.__conn.eval(code)
+        return self.__conn.root.exposed_positions_get(*args, **kwargs)
 
     def history_deals_get(self,*args,**kwargs):
         r'''

@@ -71,8 +71,15 @@ def parse_instrument(
 
 
 def symbol_details_to_dict(details: MT5SymbolDetails) -> dict:
-    dict_details = details.dict().copy()
-    dict_details["symbol"] = details.symbol.dict().copy()
+    if hasattr(details, "dict"):
+        dict_details = details.dict().copy()
+    else:
+        dict_details = dict(getattr(details, '__dict__', {}))
+
+    if hasattr(details.symbol, "dict"):
+        dict_details["symbol"] = details.symbol.dict().copy()
+    else:
+        dict_details["symbol"] = dict(getattr(details.symbol, '__dict__', {}))
     return dict_details
 
 
@@ -173,9 +180,12 @@ def mt5_symbol_to_instrument_id_simplified_symbology(
         symbol = None
         venue = None
 
+    if not venue:
+        venue = "METATRADER_5"
+
     if symbol and venue:
         return InstrumentId(Symbol(symbol), Venue(venue))
-    raise ValueError(f"Unknown {symbol=}")
+    raise ValueError(f"Unknown {symbol=} (broker={mt5_symbol.broker})")
 
 
 def instrument_id_to_mt5_symbol(

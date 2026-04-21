@@ -44,17 +44,22 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
         name = "accountSummary"
         if not (subscription := self._subscriptions.get(name=name)):
             req_id = self._next_req_id()
+
+            # Hack for missing real-time account stream method in MetaTrader5 client
+            req_func = getattr(self._mt5_client['mt5'], "req_account_summary", getattr(self._mt5_client['mt5'], "account_info", lambda *args, **kwargs: None))
+            cancel_func = getattr(self._mt5_client['mt5'], "cancel_account_summary", lambda *args, **kwargs: None)
+
             subscription = self._subscriptions.add(
                 req_id=req_id,
                 name=name,
                 handle=functools.partial(
-                    self._mt5_client.req_account_summary,
+                    req_func,
                     req_id=req_id,
-                ),
+                ) if "req_account_summary" in str(req_func) else req_func,
                 cancel=functools.partial(
-                    self._mt5_client.cancel_account_summary,
+                    cancel_func,
                     req_id=req_id,
-                ),
+                ) if "cancel_account_summary" in str(cancel_func) else cancel_func,
             )
 
         if not subscription:
@@ -100,7 +105,7 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
             request = self._requests.add(
                 req_id=self._next_req_id(),
                 name=name,
-                handle=self._mt5_client.req_positions,
+                handle=self._mt5_client['mt5'].positions_get,
             )
             if not request:
                 return None

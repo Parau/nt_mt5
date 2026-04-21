@@ -144,16 +144,23 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             "implement the `_subscribe_order_book_snapshots` coroutine",  # pragma: no cover
         )
 
-    async def _subscribe_quote_ticks(self, instrument_id: InstrumentId) -> None:
+    async def _subscribe_quote_ticks(self, command) -> None:
+        instrument_id = command.instrument_id if hasattr(command, "instrument_id") else command
         if not (instrument := self._cache.instrument(instrument_id)):
             self._log.error(
                 f"Cannot subscribe to QuoteTicks for {instrument_id}, Instrument not found.",
             )
             return
 
+        try:
+            sym_dict = instrument.info["symbol"]
+            sym = MT5Symbol(**sym_dict)
+        except Exception:
+            sym = MT5Symbol(symbol=instrument_id.symbol.value)
+
         await self._client.subscribe_ticks(
             instrument_id=instrument_id,
-            symbol=MT5Symbol(**instrument.info["symbol"]),
+            symbol=sym,
             tick_type="BidAsk",
             ignore_size=self._ignore_quote_tick_size_updates,
         )

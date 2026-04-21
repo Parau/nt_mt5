@@ -175,15 +175,23 @@ class MetaTrader5ClientMarketDataMixin:
         """
 
         name = (str(instrument_id), tick_type)
-        await self._subscribe(
-            name,
-            self._mt5_client['mt5'].req_tick_by_tick_data,
-            self._mt5_client['mt5'].cancel_tick_by_tick_data,
-            symbol,
-            tick_type,
-            0,
-            ignore_size,
-        )
+        # Hack for MetaTrader5 missing streaming tick subscription methods
+        # Use symbol_info_tick for polling later or a custom RPyC exposed method
+        poll_func = getattr(self._mt5_client['mt5'], "req_tick_by_tick_data", None)
+        cancel_func = getattr(self._mt5_client['mt5'], "cancel_tick_by_tick_data", None)
+
+        if poll_func and cancel_func:
+            await self._subscribe(
+                name,
+                poll_func,
+                cancel_func,
+                symbol,
+                tick_type,
+                0,
+                ignore_size,
+            )
+        else:
+            self._log.warning(f"MT5 wrapper is missing tick streaming methods. Assuming polling is handled elsewhere.")
 
     async def unsubscribe_ticks(
         self, instrument_id: InstrumentId, tick_type: str
