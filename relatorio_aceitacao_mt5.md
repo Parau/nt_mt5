@@ -2,7 +2,7 @@
 
 ## Resumo da Execução
 * **Data da execução**: 20/04/2026
-* **Ambiente de Teste (Target)**: `tcp://0.tcp.sa.ngrok.io:12325`
+* **Ambiente de Teste (Target)**: `tcp://localhost:18812` (Via Env Vars `MT5_HOST` e `MT5_PORT`)
 * **Account Type**: Demo
 * **Margin Mode**: ACCOUNT_MARGIN_MODE_RETAIL_HEDGING
 * **Símbolo Avaliado**: USTEC

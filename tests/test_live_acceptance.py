@@ -32,8 +32,8 @@ from nautilus_mt5.config import (
 
 # Constantes do Teste
 MT5_VENUE = Venue("METATRADER_5")
-HOST = os.environ.get("MT5_HOST", "0.tcp.sa.ngrok.io")
-PORT = int(os.environ.get("MT5_PORT", 12325))
+HOST = os.environ.get("MT5_HOST", "localhost")
+PORT = int(os.environ.get("MT5_PORT", "18812"))
 ACCOUNT_NUMBER = os.environ.get("MT5_ACCOUNT_NUMBER", "25306658")
 SYMBOL_STR = "USTEC"
 NATIVE_SYMBOL = Symbol(SYMBOL_STR)

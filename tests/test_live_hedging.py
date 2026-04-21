@@ -21,8 +21,8 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-HOST = os.getenv("MT5_HOST", "0.tcp.sa.ngrok.io")
-PORT = int(os.getenv("MT5_PORT", "12325"))
+HOST = os.getenv("MT5_HOST", "localhost")
+PORT = int(os.getenv("MT5_PORT", "18812"))
 CLIENT_ID = "ACCEPTANCE"
 ACCOUNT_NUMBER = "115371661"
 SYMBOL_STR = "USTEC"
