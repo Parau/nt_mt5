@@ -3,16 +3,10 @@ import json
 from decimal import Decimal
 from typing import Any
 
-import pandas as pd
 
 from nautilus_mt5.data_types import CommissionReport
-from nautilus_mt5.constants import (
-    UNSET_DECIMAL,
-)
-from nautilus_mt5.metatrader5.models import UNSET_DOUBLE
 from nautilus_mt5.data_types import Execution
 from nautilus_mt5.metatrader5.models import Order as MT5Order
-from nautilus_mt5.metatrader5.models import OrderState as MT5OrderState
 
 from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock
@@ -48,9 +42,8 @@ from nautilus_trader.model.enums import TriggerType
 from nautilus_trader.model.identifiers import AccountId
 from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import ClientOrderId
-from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TradeId
-from nautilus_trader.model.identifiers import Venue
+from nautilus_trader.model.identifiers import VenueOrderId
 from nautilus_trader.model.instruments.base import Instrument
 from nautilus_trader.model.objects import AccountBalance
 from nautilus_trader.model.objects import Currency
@@ -183,7 +176,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         if not account_info:
             raise ConnectionError("Failed to retrieve account info from MT5 bridge.")
 
-        expected_login = int(self.account_id.get_id())
+        expected_login = int(self.config.account_id)
         actual_login = int(getattr(account_info, "login", 0))
 
         if expected_login != actual_login:
@@ -191,16 +184,17 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
         # Load initial balances from the retrieved account_info
         if hasattr(account_info, 'balance'):
-            # Convert to appropriate string format for _on_account_summary
             self._log.debug(f"Initial balance: {account_info.balance}")
             # Mock sending a summary event locally to initialize states
-            await self._on_account_summary({"balance": account_info.balance, "currency": account_info.currency})
+            currency = getattr(account_info, 'currency', 'USD')
+            self._on_account_summary("FullInitMarginReq", str(getattr(account_info, 'margin_initial', 0.0)), currency)
+            self._on_account_summary("FullMaintMarginReq", str(getattr(account_info, 'margin_maintenance', 0.0)), currency)
+            self._on_account_summary("NetLiquidation", str(getattr(account_info, 'equity', account_info.balance)), currency)
 
         self._log.info(
             f"Account `{self.account_id.get_id()}` validated and associated with Terminal.",
             LogColor.GREEN,
         )
-        self._set_connected(True)
 
     async def _disconnect(self):
         self._client.registered_nautilus_clients.discard(self.id)
@@ -209,7 +203,6 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             and self._client.registered_nautilus_clients == set()
         ):
             self._client.stop()
-        self._set_connected(False)
 
     async def generate_order_status_report(self, command: GenerateOrderStatusReport) -> OrderStatusReport | None:
         instrument_id = command.instrument_id
@@ -279,18 +272,18 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
         total_qty = (
             Quantity.from_int(0)
-            if mt5_order.totalQuantity == UNSET_DECIMAL
-            else Quantity.from_str(str(mt5_order.totalQuantity))
+            if getattr(mt5_order, "volume", 0.0) == 0.0
+            else Quantity.from_str(str(mt5_order.volume))
         )
         filled_qty = (
             Quantity.from_int(0)
-            if mt5_order.filledQuantity == UNSET_DECIMAL
-            else Quantity.from_str(str(mt5_order.filledQuantity))
+            if getattr(mt5_order, "volume_filled", 0.0) == 0.0
+            else Quantity.from_str(str(mt5_order.volume_filled))
         )
         if total_qty.as_double() > filled_qty.as_double() > 0:
             order_status = OrderStatus.PARTIALLY_FILLED
         else:
-            order_status = MAP_ORDER_STATUS[mt5_order.order_state.status]
+            order_status = MAP_ORDER_STATUS.get(getattr(mt5_order, "state", 0), OrderStatus.SUBMITTED)
         ts_init = self._clock.timestamp_ns()
         price = (
             None
@@ -299,16 +292,23 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         )
         expire_time = (
             timestring_to_timestamp(getattr(mt5_order, "expire_time", ""))
-            if mt5_order.tif == "GTD"
+            if getattr(mt5_order, "type_time", 0) == 1 # ORDER_TIME_SPECIFIED
+            and getattr(mt5_order, "expire_time", "")
             else None
         )
 
-        mapped_order_type_info = mt5_to_nautilus_order_type[mt5_order.orderType]
+        mapped_order_type_info = mt5_to_nautilus_order_type.get(getattr(mt5_order, "type", 0), OrderType.MARKET)
         if isinstance(mapped_order_type_info, tuple):
             order_type, time_in_force = mapped_order_type_info
         else:
             order_type = mapped_order_type_info
-            time_in_force = mt5_to_nautilus_time_in_force[mt5_order.tif]
+            time_in_force = TimeInForce.GTC # fallback
+            # We map filling type back to TimeInForce if possible
+            filling_type = getattr(mt5_order, "type_filling", 2)
+            if filling_type == 0:
+                time_in_force = TimeInForce.FOK
+            elif filling_type == 1:
+                time_in_force = TimeInForce.IOC
 
         order_status = OrderStatusReport(
             account_id=self.account_id,
@@ -373,7 +373,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         ts_init = self._clock.timestamp_ns()
         for position in positions:
             self._log.debug(
-                f"Infer OrderStatusReport from open position {position.contract.__dict__}",
+                f"Infer OrderStatusReport from open position {position.symbol.__dict__}",
             )
             if position.quantity > 0:
                 order_side = OrderSide.BUY
@@ -387,7 +387,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             )
             if instrument is None:
                 self._log.error(
-                    f"Cannot generate report: instrument not found for contract ID {position.symbol.symbol}",
+                    f"Cannot generate report: instrument not found for symbol {position.symbol.symbol}",
                 )
                 continue
 
@@ -497,7 +497,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             )
             if instrument is None:
                 self._log.error(
-                    f"Cannot generate report: instrument not found for contract ID {position.symbol.symbol}",
+                    f"Cannot generate report: instrument not found for symbol {position.symbol.symbol}",
                 )
                 continue
 
@@ -623,7 +623,8 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         nautilus_order: Order = self._cache.order(command.client_order_id)
         self._log.info(f"Nautilus order status is {nautilus_order.status_string()}")
         try:
-            mt5_order: MT5Order = self._transform_order_to_mt5_order(nautilus_order)
+            instrument = self._cache.instrument(nautilus_order.instrument_id)
+            mt5_order: MT5Order = self._transform_order_to_mt5_order(nautilus_order, instrument)
         except ValueError as e:
             self._handle_order_event(
                 status=OrderStatus.REJECTED,
@@ -639,8 +640,8 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
                 mt5_order.parentId = int(parent_nautilus_order.venue_order_id.value)
             else:
                 mt5_order.parentId = 0
-        if command.quantity and command.quantity != mt5_order.totalQuantity:
-            mt5_order.totalQuantity = command.quantity.as_double()
+        if command.quantity and command.quantity.as_double() != getattr(mt5_order, "volume", 0.0):
+            mt5_order.volume = command.quantity.as_double()
         if command.price and command.price.as_double() != getattr(
             mt5_order, "price", None
         ):
@@ -792,36 +793,23 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         self._send_order_status_report(report)
 
     def _on_open_order(
-        self, order_ref: str, order: MT5Order, order_state: MT5OrderState
+        self, order_ref: str, order: MT5Order
     ) -> None:
         if not order.orderRef:
             self._log.warning(
-                f"ClientOrderId not available, order={order.__dict__}, state={order_state.__dict__}",
+                f"ClientOrderId not available, order={order.__dict__}",
             )
             return
         if not (nautilus_order := self._cache.order(ClientOrderId(order_ref))):
             self.create_task(self.handle_order_status_report(order))
             return
 
-        if order.whatIf and order_state.status == "PreSubmitted":
-            # TODO: Is there more better approach for this use case?
-            # This tells the details about Pre and Post margin changes, user can request by setting whatIf flag
-            # order will not be placed by IB and instead returns simulation.
-            # example={'status': 'PreSubmitted', 'initMarginBefore': '52.88', 'maintMarginBefore': '52.88', 'equityWithLoanBefore': '23337.31', 'initMarginChange': '2517.5099999999998', 'maintMarginChange': '2517.5099999999998', 'equityWithLoanChange': '-0.6200000000026193', 'initMarginAfter': '2570.39', 'maintMarginAfter': '2570.39', 'equityWithLoanAfter': '23336.69', 'commission': 2.12362, 'minCommission': 1.7976931348623157e+308, 'maxCommission': 1.7976931348623157e+308, 'commissionCurrency': 'USD', 'warningText': '', 'completedTime': '', 'completedStatus': ''}  # noqa
-            self._handle_order_event(
-                status=OrderStatus.REJECTED,
-                order=nautilus_order,
-                reason=json.dumps({"whatIf": order_state.__dict__}),
-            )
-        elif order_state.status in [
-            "PreSubmitted",
-            "Submitted",
-        ]:
+        if getattr(order, "state", 0) in [0, 1]:  # ORDER_STATE_STARTED, ORDER_STATE_PLACED
             instrument = self.instrument_provider.find(nautilus_order.instrument_id)
             total_qty = (
                 Quantity.from_int(0)
-                if order.totalQuantity == UNSET_DECIMAL
-                else Quantity.from_str(str(order.totalQuantity))
+                if getattr(order, "volume", 0.0) == 0.0
+                else Quantity.from_str(str(order.volume))
             )
             price = (
                 None
