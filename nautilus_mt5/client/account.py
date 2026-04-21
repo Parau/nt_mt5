@@ -1,3 +1,4 @@
+import asyncio
 from decimal import Decimal
 import functools
 from typing import Tuple
@@ -102,14 +103,33 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
         self._log.debug(f"Requesting Open Positions for {account_id}")
         name = "OpenPositions"
         if not (request := self._requests.get(name=name)):
+            async def _fetch():
+                import rpyc
+                try:
+                    res = await asyncio.to_thread(self._mt5_client['mt5'].positions_get)
+                    if res is None:
+                        return []
+                    # obtain local copy to avoid Netrefs
+                    res_local = rpyc.classic.obtain(res)
+                    return res_local
+                except Exception as e:
+                    self._log.warning(f"Error fetching positions: {e}")
+                    return []
+
             request = self._requests.add(
                 req_id=self._next_req_id(),
                 name=name,
-                handle=self._mt5_client['mt5'].positions_get,
+                handle=lambda: asyncio.create_task(_fetch())
             )
             if not request:
                 return None
-            request.handle()
+
+            # Executa e assina no Future a saida da lambda async
+            task = request.handle()
+            task.add_done_callback(
+                lambda t: self._loop.call_soon_threadsafe(request.future.set_result, t.result() if not t.exception() else [])
+            )
+
             all_positions = await self._await_request(request, 30)
         else:
             all_positions = await self._await_request(request, 30)

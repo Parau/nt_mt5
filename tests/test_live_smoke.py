@@ -64,7 +64,9 @@ class SmokeTestStrategy:
             self.log.info(f"Received first quote: {tick}. Placing market order.")
             self.order_placed = True
 
-            instrument = self.engine.portfolio.instrument_provider.get_instrument(self.instrument_id)
+            provider = getattr(self.engine, "_portfolio", self.engine).instrument_provider if hasattr(getattr(self.engine, "_portfolio", self.engine), "instrument_provider") else self.engine.portfolio.instrument_provider if hasattr(self.engine, "portfolio") else getattr(self.engine, "cache", None).instrument_provider if getattr(self.engine, "cache", None) else None
+
+            instrument = provider.get_instrument(self.instrument_id)
             quantity = instrument.min_quantity
             current_price = tick.bid
 
@@ -212,7 +214,13 @@ async def test_live_mt5_adapter():
         node.trader._log.info("Clients connected.")
 
         # We need the instrument to be loaded in the portfolio
-        instrument = node.trader.portfolio.instrument_provider.get_instrument(INSTRUMENT_ID)
+        provider = getattr(node.trader, "_portfolio", node.trader).instrument_provider if hasattr(getattr(node.trader, "_portfolio", node.trader), "instrument_provider") else node.trader.portfolio.instrument_provider if hasattr(node.trader, "portfolio") else node.trader.cache.instrument_provider if hasattr(node.trader, "cache") else None
+
+        if provider:
+            instrument = provider.get_instrument(INSTRUMENT_ID)
+        else:
+            instrument = None
+
         if not instrument:
             node.trader._log.warning(f"Instrument {INSTRUMENT_ID} not loaded! Skipping test.")
         else:
