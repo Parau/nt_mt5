@@ -56,9 +56,11 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
                     "type_time": getattr(order, "type_time", 0), # ORDER_TIME_GTC
                     "type_filling": getattr(order, "type_filling", 2), # ORDER_FILLING_RETURN (Default)
                 }
-                send_method(req)
+                res = send_method(req)
+                self._log.info(f"MT5 order_send RESULT: {res}")
             else:
-                send_method(order.order_id, order.symbol, order)
+                res = send_method(order.order_id, order.symbol, order)
+                self._log.info(f"MT5 placeOrder RESULT: {res}")
         else:
             self._log.warning("MT5Client has no method to send orders. (Missing order_send or placeOrder)")
 

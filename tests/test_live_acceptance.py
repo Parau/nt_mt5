@@ -285,6 +285,7 @@ async def test_live_acceptance_suite():
             logger.info("Bloco C-01 PARTIAL (Ordem aceita, aguardando fill que pode depender de liquidez da demo)")
         else:
             logger.warning("Bloco C-01 PENDENTE/FALHA (Nenhum evento da ordem detectado)")
+            assert False, "C-01 FAILED: Order not filled/accepted by MT5"
 
         if strategy.c03_position_closed:
             logger.info("Bloco C-03 PASS (Posição fechada com sucesso)")
