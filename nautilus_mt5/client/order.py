@@ -1,9 +1,8 @@
 from decimal import Decimal
 
-from nautilus_mt5.data_types import CommissionReport, Execution, AccountOrderRef, MT5Symbol
+from nautilus_mt5.data_types import CommissionReport, Execution, AccountOrderRef
 from nautilus_trader.model.identifiers import Symbol
 from nautilus_mt5.metatrader5.models import Order as MT5Order
-from nautilus_mt5.metatrader5.models import OrderState as MT5OrderState
 
 from nautilus_mt5.common import BaseMixin
 
@@ -178,14 +177,12 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
         order_id: int,
         symbol: Symbol,
         order: MT5Order,
-        order_state: MT5OrderState,
     ) -> None:
         """
         Feed in currently open orders.
         """
-        order.symbol = MT5Symbol(**symbol.__dict__)
-        order.order_state = order_state
-        order.orderRef = order.orderRef.rsplit(":", 1)[0]
+        order.symbol = symbol.symbol if hasattr(symbol, "symbol") else str(symbol)
+        order.orderRef = order.orderRef.rsplit(":", 1)[0] if order.orderRef else str(order.order_id)
 
         # Handle response to on-demand request
         if request := self._requests.get(name="OpenOrders"):
@@ -213,7 +210,6 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
             handler(
                 order_ref=order.orderRef.rsplit(":", 1)[0],
                 order=order,
-                order_state=order_state,
             )
 
     async def process_open_order_end(self) -> None:

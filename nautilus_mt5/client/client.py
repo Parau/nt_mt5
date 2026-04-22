@@ -160,10 +160,16 @@ class MetaTrader5Client(Component,
 
                 await self._connect()
                 self._is_mt5_connected.set()
-                # We skip missing methods as they might not be fully wired up
-                # self._start_terminal_incoming_msg_reader()
-                # self._start_internal_msg_queue_processor()
-                # self._start_connection_watchdog()
+
+                # Start necessary tasks conditionally
+                self._start_connection_watchdog()
+
+                if self._terminal_connection_mode in (TerminalConnectionMode.IPC, TerminalConnectionMode.EA_IPC):
+                    self._start_terminal_incoming_msg_reader()
+                    self._start_internal_msg_queue_processor()
+
+                self._is_client_ready.set()
+                self._log.debug("`_is_client_ready` set by `_start_async` after tasks started.", LogColor.BLUE)
                 break # connection successful
             except asyncio.TimeoutError:
                 self._log.error("Client failed to initialize. Connection timeout.")
@@ -172,7 +178,6 @@ class MetaTrader5Client(Component,
                 self._stop()
                 break
 
-        # Client readiness is set inside _connect upon true successful initialization.
         self._connection_attempts = 0
 
     def _start_terminal_incoming_msg_reader(self) -> None:

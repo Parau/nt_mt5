@@ -1,6 +1,5 @@
 import asyncio
 import os
-from functools import lru_cache
 
 from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock

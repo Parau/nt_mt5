@@ -29,8 +29,6 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
             await self._fetch_terminal_info()
             self.set_conn_state(TerminalConnectionState.CONNECTED)
             self._log_connection_info()
-            self._is_client_ready.set()
-            self._log.debug("`_is_client_ready` set by `_connect`.", LogColor.BLUE)
         except asyncio.CancelledError:
             self._log.info("Connection cancelled.")
             await self._disconnect()
@@ -109,23 +107,14 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
                 self._terminal_info = {
                     "version": 5,
                     "build": info.get("build", 0),
-                    "build_release_date": "Mock",
-                    "connection_time": "Now"
+                    "build_release_date": "Unavailable",
+                    "connection_time": "Unavailable"
                 }
             else:
-                self._terminal_info = {
-                    "version": 5,
-                    "build": 1,
-                    "build_release_date": "Mock",
-                    "connection_time": "Now",
-                }
-        except Exception:
-            self._terminal_info = {
-                "version": 5,
-                "build": 1,
-                "build_release_date": "Mock",
-                "connection_time": "Now",
-            }
+                raise ConnectionError("Failed to fetch terminal info from MT5 bridge.")
+        except Exception as e:
+            self._log.error(f"Error fetching terminal info: {e}")
+            raise ConnectionError(f"Failed to fetch terminal info from MT5 bridge: {e}")
 
     def process_connection_closed(self) -> None:
         """Handle terminal disconnection."""

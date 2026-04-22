@@ -19,7 +19,6 @@ class MetaTrader5ClientSymbolMixin:
     """
 
     async def get_symbol_details(self, symbol) -> list | None:
-        from nautilus_mt5.metatrader5.models import SymbolInfo
         req_id = self._next_req_id()
 
         async def _real_resolve():

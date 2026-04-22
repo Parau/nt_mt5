@@ -239,36 +239,29 @@ class Execution:
     pass
 
 
-
 @dataclass
 class Order:
     """
-    Class describing an order's definition.
-
+    MT5 native order definition.
+    Contains the canonical state of an MT5 order from submission to completion.
     """
+    order_id: int = 0
+    symbol: str = ""
+    orderRef: str = ""
+    action: int = 0
+    type: int = 0
+    volume: float = 0.0
+    price: float = 0.0
+    trigger_price: float = 0.0
+    sl: float = 0.0
+    tp: float = 0.0
+    type_time: int = 0
+    expire_time: int = 0
+    type_filling: int = 0
+    magic: int = 0
+    comment: str = ""
+    position: int = 0
+    state: int = 0
+    volume_filled: float = 0.0
+    account: str = ""
 
-    pass
-
-
-# TODO: fix this dataclass
-class OrderState:
-    def __init__(self):
-        self.status = ""
-
-        self.initMarginBefore = ""
-        self.maintMarginBefore = ""
-        self.equityWithLoanBefore = ""
-        self.initMarginChange = ""
-        self.maintMarginChange = ""
-        self.equityWithLoanChange = ""
-        self.initMarginAfter = ""
-        self.maintMarginAfter = ""
-        self.equityWithLoanAfter = ""
-
-        self.commission = UNSET_DOUBLE  # type: float
-        self.minCommission = UNSET_DOUBLE  # type: float
-        self.maxCommission = UNSET_DOUBLE  # type: float
-        self.commissionCurrency = ""
-        self.warningText = ""
-        self.completedTime = ""
-        self.completedStatus = ""
