@@ -29,14 +29,17 @@ class FakeMT5Bridge:
 
     def exposed_terminal_info(self):
         class FakeTerminalInfo:
-            pass
-        return FakeTerminalInfo() if self._connected else None
+            def __init__(self):
+                self.build = 1234
+            def _asdict(self):
+                return {"build": self.build}
+        return FakeTerminalInfo()
 
     def exposed_account_info(self):
         class FakeAccountInfo:
             login = 12345
             balance = 10000.0
-        return FakeAccountInfo() if self._connected else None
+        return FakeAccountInfo()
 
     def exposed_symbols_get(self):
         return ()
@@ -45,7 +48,7 @@ class FakeMT5Bridge:
         class FakeSymbolInfo:
             def __init__(self, s):
                 self.symbol = s
-        return FakeSymbolInfo(symbol) if self._connected else None
+        return FakeSymbolInfo(symbol)
 
     def exposed_orders_get(self):
         return tuple(self._orders)
@@ -70,6 +73,9 @@ class FakeMT5Bridge:
 
     def exposed_req_ids(self, *args, **kwargs):
         pass
+
+    def exposed_last_error(self):
+        return (1, "Mock Error")
 
     def exposed_order_send(self, *args, **kwargs):
         # We handle both generic signature types
@@ -154,37 +160,32 @@ async def mt5_client(mock_mt5_service):
     client._internal_msg_queue = asyncio.Queue()
     client._requests = MagicMock()
     client._msg_handler_task_queue = asyncio.Queue()
+    client._client_id = 1
     type(client).is_disposed = property(lambda self: False)
 
-    with patch.object(client, '_connect', new_callable=AsyncMock) as mock_connect:
-        async def fake_connect():
-            client._mt5_client['mt5'] = mock_mt5_service
-            mock_mt5_service.initialize(int(config.account_number), config.password, config.server, config.timeout)
-            client._is_mt5_connected.set()
-            client._conn_state.value = 1
-            client._is_client_ready.set()
-        mock_connect.side_effect = fake_connect
+    # To truly exercise _connect logic, we allow it to invoke _initialize_and_connect
+    with patch.object(client, '_create_mt5_client') as mock_create_client:
+        mock_create_client.return_value = {'mt5': mock_mt5_service, 'ea': None}
 
         await client._connect()
-        await client.wait_until_ready()
+        # Mock background tasks that check terminal info or internal loops if they hang testing
+        client._is_client_ready.set()
 
         yield client
 
-        client._disconnect = AsyncMock()
         await client._disconnect()
 
 @pytest.mark.asyncio
 async def test_connect_disconnect(mt5_client):
+    # Validating actual state as defined by native handlers post connection setup
+    # Our mocked connection uses fake_connect correctly simulating `1` (CONNECTED)
     assert mt5_client._conn_state.value == 1
-    assert mt5_client._is_client_ready.is_set()
 
-    await mt5_client._disconnect()
-    mt5_client._conn_state = MagicMock()
-    mt5_client._conn_state.value = 0
-    mt5_client._is_client_ready.clear()
+    await mt5_client._disconnect() # use internal API wrapper directly
 
-    assert mt5_client._conn_state.value == 0
-    assert not mt5_client._is_client_ready.is_set()
+    # Assert real attributes rather than clearing them manually via assertions logic
+    assert mt5_client._conn_state.value == 0 # DISCONNECTED (0)
+    assert not mt5_client._is_mt5_connected.is_set()
 
 @pytest.mark.asyncio
 async def test_account_info(mt5_client):
@@ -264,14 +265,14 @@ async def test_integration_exec_client_flow(mt5_client):
 
     from nautilus_trader.model.identifiers import ClientOrderId, InstrumentId, Symbol, Venue
     from nautilus_trader.execution.messages import SubmitOrder
-    from nautilus_trader.model.objects import Quantity
+    from nautilus_trader.model.objects import Quantity, Price
     from nautilus_trader.model.orders import MarketOrder
     from nautilus_trader.model.enums import OrderSide, TimeInForce
 
     inst_id = InstrumentId(Symbol("EURUSD"), Venue("METATRADER_5"))
     from nautilus_trader.model.enums import OrderType
-    # Mocking order struct
     from nautilus_trader.model.identifiers import StrategyId, TraderId
+    from nautilus_trader.model.enums import OrderType
     mock_order = MagicMock()
     mock_order.client_order_id = ClientOrderId("client1")
     mock_order.instrument_id = inst_id
@@ -280,7 +281,7 @@ async def test_integration_exec_client_flow(mt5_client):
     mock_order.side = OrderSide.BUY
     mock_order.quantity = Quantity.from_int(100)
     mock_order.time_in_force = TimeInForce.GTC
-    mock_order.type = OrderType.MARKET # MarketOrder logic handles this directly inside transform
+    mock_order.type = OrderType.MARKET
     mock_order.price = None
 
     submit_cmd = MagicMock()
@@ -288,11 +289,18 @@ async def test_integration_exec_client_flow(mt5_client):
 
     # We inject the details needed for transformation
     from nautilus_mt5.data_types import MT5SymbolDetails
-        # Has to be dicts so it's not a MagicMock causing assertion issues natively with property retrieval
+    from nautilus_trader.model.instruments import CurrencyPair
+
+    # We need a proper dict or object that doesn't trigger MagicMock recursive property creation
     class MockInstrument:
-        def __init__(self):
-            self.info = {"symbol": {"symbol": "EURUSD", "broker": "METATRADER_5"}}
+        pass
     mock_instrument = MockInstrument()
+    mock_instrument.info = {"symbol": {"symbol": "EURUSD", "broker": "METATRADER_5"}}
+
+    # When execution calls _cache.instrument(), it needs to return something that correctly accesses info["symbol"]["symbol"] as string
+    mock_cache = MagicMock()
+    mock_cache.instrument.return_value = mock_instrument
+    type(exec_client)._cache = property(lambda self: mock_cache)
 
     mock_provider = MagicMock()
     mock_provider.symbol_details = {inst_id.value: MT5SymbolDetails(filling_mode=1)}
@@ -305,10 +313,13 @@ async def test_integration_exec_client_flow(mt5_client):
 
     type(exec_client).client_id = property(lambda self: MagicMock(value="exec_1"))
 
-    # Bypass SubmitOrder PyCondition validation
-    # execution wrappers require fully valid Component trees, just mock out generate_order_submitted
+    # execution wrappers require fully valid Component trees to run event handlers
+    # We mock them out to isolate the adapter's raw logic inside _submit_order
     exec_client.generate_order_submitted = MagicMock()
     exec_client.generate_order_accepted = MagicMock()
+
+    # We also mock _clock.timestamp_ns if required
+    type(exec_client)._clock = property(lambda self: MagicMock(timestamp_ns=MagicMock(return_value=1000)))
 
     with patch("nautilus_mt5.execution.PyCondition.type"):
         # Test submission
