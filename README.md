@@ -19,6 +19,13 @@ This extension supports two different client modes:
    - Enables external programs (Python, JavaScript, C++) to interact with MT5.
    - Supports real-time updates.
 
+## Nomenclature Clarity 📖
+
+To avoid confusion, please note the following nomenclature used throughout this project:
+- **Repository Name**: `nt_mt5` (e.g. `Parau/nt_mt5`)
+- **Distribution Name**: `nautilus-mt5` (the package name used in `pyproject.toml`)
+- **Python Import Name**: `nautilus_mt5` (used in Python code, e.g. `import nautilus_mt5`)
+
 ## Installation ⚙️
 
 To install the MetaTrader 5 Adapter, follow these steps:
@@ -30,17 +37,17 @@ To install the MetaTrader 5 Adapter, follow these steps:
 
 2. Navigate to the project directory:
    ```sh
-   cd /nautilus_mt5
+   cd nt_mt5
    ```
 
 3. Pull the Docker image:
    ```sh
-   docker pull docker.io/quantspub/metatrader5-terminal:latest
+   docker pull docker.io/fortesenselabs/metatrader5-terminal:latest
    ```
 
-4. Install the required Python packages:
+4. Install the required Python packages (we use `uv` but you can use `pip`):
    ```sh
-   poetry install
+   uv pip install -e .
    ```
 
 ## Usage 🖥️
@@ -64,9 +71,9 @@ python connect_with_dockerized_terminal.py
 ### Detailed Steps:
 
 1. Ensure Docker is installed and running on your machine.
-2. Clone the repository and navigate to the project directory.
+2. Clone the repository and navigate to the project directory (`nt_mt5`).
 3. Pull the Docker image for MetaTrader 5 Terminal.
-4. Install the required Python packages using Poetry.
+4. Install the required Python packages (`uv pip install -e .`).
 5. Navigate to the `examples` directory.
 6. Copy the `.env.example` file to `.env` and configure it with your MetaTrader 5 credentials.
 7. Run the `connect_with_dockerized_terminal.py` script to start the adapter.

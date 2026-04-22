@@ -28,7 +28,7 @@ class DockerizedMT5TerminalConfig(NautilusConfig, frozen=True):
         return (
             f"DockerizedMT5TerminalConfig(account_number={masked_account_number}, "
             f"password={masked_password}, server={self.server}, "
-            f"read_only_api={self.read_only_api}, timeout={self.timeout})"
+            f"timeout={self.timeout})"
         )
 
     @staticmethod
