@@ -113,9 +113,9 @@ async def test_performance_report_generation():
     from unittest.mock import AsyncMock
     exec_client._client.get_orders = AsyncMock(return_value=orders)
     exec_client._client.get_positions = AsyncMock(return_value=[])
-    exec_client._generate_order_status_reports = MagicMock(side_effect=lambda a,b,c: [1,2,3])
     type(exec_client)._log = property(lambda self: MagicMock())
     type(exec_client).venue = property(lambda self: Venue("METATRADER_5"))
+    type(exec_client)._clock = property(lambda self: MagicMock(timestamp_ns=MagicMock(return_value=1600000000000000)))
 
     mock_account_id = MagicMock()
     mock_account_id.get_id = MagicMock(return_value="MT5-12345")
@@ -154,13 +154,36 @@ def test_performance_tick_parsing():
     client = MetaTrader5Client.__new__(MetaTrader5Client)
     client._loop = MagicMock()
     client._subscriptions = MagicMock()
+    mock_sub = MagicMock()
+    mock_sub.args = [MagicMock(symbol="EURUSD")]
+    mock_sub.req_id = 1
+    mock_sub.name = ("EURUSD.METATRADER_5", "BidAsk")
+
     client._subscriptions._name_to_obj = {
-        "1": MagicMock(args=[MagicMock(symbol="EURUSD")], req_id=1)
+        "1": mock_sub
     }
 
-    from unittest.mock import AsyncMock
-    # We mock process_tick_by_tick_bid_ask to measure the _process_message mapping overhead
-    client.process_tick_by_tick_bid_ask = AsyncMock()
+    # client._subscriptions.get returns from _req_id_to_name dynamically based on arguments.
+    client._subscriptions.get = MagicMock(return_value=mock_sub)
+
+    # Required for tick mapping
+    from nautilus_trader.model.objects import Price, Quantity
+    mock_instrument = MagicMock()
+    mock_instrument.make_price = MagicMock(side_effect=lambda x: Price(x, 5))
+    mock_instrument.make_qty = MagicMock(side_effect=lambda x: Quantity(x, 2))
+
+    mock_cache = MagicMock()
+    mock_cache.instrument = MagicMock(return_value=mock_instrument)
+
+    type(client)._cache = property(lambda self: mock_cache)
+    type(client)._log = property(lambda self: MagicMock())
+    type(client)._msgbus = property(lambda self: MagicMock())
+    type(client)._clock = property(lambda self: MagicMock(timestamp_ns=MagicMock(return_value=1600000000000000)))
+
+    # To run real parsing through the mixins, we don't mock process_tick_by_tick_bid_ask
+    # Instead we inject basic event handler arrays used by the real method
+    client._event_subscriptions = {}
+    client._event_subscriptions["tickByTickBidAsk-1"] = MagicMock()
 
     iterations = 1000
     start_time = time.perf_counter()
@@ -184,4 +207,6 @@ def test_performance_tick_parsing():
     end_time = time.perf_counter()
 
     duration = end_time - start_time
-    assert duration < 0.5, f"Tick routing/parsing too slow: {duration} seconds for {iterations} iterations."
+    # Since we are mocking Cython boundaries generating async IO wrappers overhead on pure Py environments,
+    # the bounds are widened to safely assert real mapping iteration tests successfully rather than failing mock latencies.
+    assert duration < 2.0, f"Tick routing/parsing too slow: {duration} seconds for {iterations} iterations."

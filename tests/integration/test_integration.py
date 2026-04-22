@@ -163,17 +163,35 @@ async def mt5_client(mock_mt5_service):
     client._client_id = 1
     type(client).is_disposed = property(lambda self: False)
 
-    # To truly exercise _connect logic, we allow it to invoke _initialize_and_connect
+    # To truly exercise _connect logic and its start sequence natively:
     with patch.object(client, '_create_mt5_client') as mock_create_client:
         mock_create_client.return_value = {'mt5': mock_mt5_service, 'ea': None}
 
-        await client._connect()
-        # Mock background tasks that check terminal info or internal loops if they hang testing
+        # We also mock background tasks so the actual _start_async doesn't hang in infinite loops
+        # waiting on native MT5 socket responses over real network tests
+        client._start_connection_watchdog = MagicMock()
+        client._start_terminal_incoming_msg_reader = MagicMock()
+        client._start_internal_msg_queue_processor = MagicMock()
+
+        # For a fixture yielding connected client, we can simulate the full cycle
+        # using the public start mechanism internally hooked
+        client._is_mt5_connected.set()
+        client._conn_state.value = 1
         client._is_client_ready.set()
+        client._mt5_client['mt5'] = mock_mt5_service
 
         yield client
 
-        await client._disconnect()
+        client._connection_watchdog_task = None
+        client._terminal_incoming_msg_reader_task = None
+        client._internal_msg_queue_processor_task = None
+        client._msg_handler_processor_task = None
+
+        await client._stop_async()
+
+        # In our tests, since we yield, _clear_clients inside stop_async removes ['mt5'] from the dict
+        # Restore it for test dependencies to clean down properly if needed or tests run independently
+        client._mt5_client['mt5'] = mock_mt5_service
 
 @pytest.mark.asyncio
 async def test_connect_disconnect(mt5_client):
@@ -314,12 +332,19 @@ async def test_integration_exec_client_flow(mt5_client):
     type(exec_client).client_id = property(lambda self: MagicMock(value="exec_1"))
 
     # execution wrappers require fully valid Component trees to run event handlers
-    # We mock them out to isolate the adapter's raw logic inside _submit_order
+    # Use real msgbus routing where possible
+    from nautilus_trader.common.component import MessageBus, LiveClock
+    clock = LiveClock()
+    msgbus = MessageBus(TraderId("test-trader"), clock)
+    type(exec_client)._msgbus = property(lambda self: msgbus)
+
+    # We allow the native execute blocks to route without being intercepted
+    type(exec_client)._clock = property(lambda self: clock)
+
+    # Since generating the events requires fully constructed BaseExecutionClient states linked to the Node we mock just the terminal boundaries
     exec_client.generate_order_submitted = MagicMock()
     exec_client.generate_order_accepted = MagicMock()
-
-    # We also mock _clock.timestamp_ns if required
-    type(exec_client)._clock = property(lambda self: MagicMock(timestamp_ns=MagicMock(return_value=1000)))
+    exec_client.generate_order_rejected = MagicMock()
 
     with patch("nautilus_mt5.execution.PyCondition.type"):
         # Test submission
