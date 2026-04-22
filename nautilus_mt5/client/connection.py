@@ -151,7 +151,7 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
         if self._mt5_client['mt5']:
             code, msg = self._mt5_client['mt5'].last_error()
             error_info = TERMINAL_CONNECT_FAIL if code != MetaTrader5.RES_E_INTERNAL_FAIL_INIT else ErrorInfo(code, f"Terminal init failed: {msg}")
-            self._handle_error(NO_VALID_ID, error_info.code(), error_info.msg())
+            self._handle_error(NO_VALID_ID, error_info.code, error_info.msg)
 
     def _clear_clients(self) -> None:
         """Clear client references."""
