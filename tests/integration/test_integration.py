@@ -68,7 +68,24 @@ class FakeMT5Bridge:
     def exposed_cancel_real_time_bars(self, *args, **kwargs):
         pass
 
-    def exposed_order_send(self, request):
+    def exposed_req_ids(self, *args, **kwargs):
+        pass
+
+    def exposed_order_send(self, *args, **kwargs):
+        # We handle both generic signature types
+        if len(args) > 1:
+            request = args[2]
+            action = getattr(request, "action", 1)
+            symbol = getattr(request, "symbol", "")
+            volume = getattr(request, "volume", 0.0)
+            price = getattr(request, "price", 1.0)
+        else:
+            request = args[0]
+            action = request.get("action", 1)
+            symbol = request.get("symbol", "")
+            volume = request.get("volume", 0.0)
+            price = request.get("price", 1.0)
+
         class FakeOrderResult:
             def __init__(self, retcode, order, volume, price):
                 self.retcode = retcode
@@ -77,15 +94,15 @@ class FakeMT5Bridge:
                 self.price = price
                 self.comment = "Mock Executed"
 
-        if "action" in request and request["action"] == 1:
+        if action == 1:
             ticket = len(self._orders) + 1
             class FakeOrderInfo:
                 def __init__(self, t, s, v):
                     self.ticket = t
                     self.symbol = s
                     self.volume_initial = v
-            self._orders.append(FakeOrderInfo(ticket, request["symbol"], request["volume"]))
-            return FakeOrderResult(10009, ticket, request["volume"], request.get("price", 1.0))
+            self._orders.append(FakeOrderInfo(ticket, symbol, volume))
+            return FakeOrderResult(10009, ticket, volume, price)
 
         return FakeOrderResult(10004, 0, 0, 0)
 
@@ -128,6 +145,8 @@ async def mt5_client(mock_mt5_service):
     client._conn_state.value = 0
     client._is_mt5_connected = asyncio.Event()
     client._is_client_ready = asyncio.Event()
+    client._next_valid_order_id = 1
+    client._order_id_to_order_ref = {}
     client._subscriptions = MagicMock()
     client._subscriptions._instrument_id_to_sub = {}
     client._subscriptions._req_id_to_name = {}
@@ -226,33 +245,95 @@ async def test_integration_data_client_flow(mt5_client):
 
 @pytest.mark.asyncio
 async def test_integration_exec_client_flow(mt5_client):
+    # Test fully via ExecutionClient wrapper to test parsing & transformation
+    config = MetaTrader5ExecClientConfig(
+        client_id=2,
+        account_id="MT5-12345",
+        dockerized_gateway=DockerizedMT5TerminalConfig(account_number="12345", password="pwd", server="svr")
+    )
+
+    exec_client = MetaTrader5ExecutionClient.__new__(MetaTrader5ExecutionClient)
+    type(exec_client)._msgbus = property(lambda self: MagicMock())
+    type(exec_client)._cache = property(lambda self: MagicMock())
+    type(exec_client)._log = property(lambda self: MagicMock())
+    type(exec_client)._clock = property(lambda self: MagicMock())
+    exec_client._client = mt5_client
+
     orders = mt5_client._mt5_client['mt5'].orders_get()
     assert len(orders) == 0
 
-    req = {
-        "action": 1,
-        "symbol": "EURUSD",
-        "volume": 1.5,
-        "type": 0,
-        "price": 1.1000
-    }
+    from nautilus_trader.model.identifiers import ClientOrderId, InstrumentId, Symbol, Venue
+    from nautilus_trader.execution.messages import SubmitOrder
+    from nautilus_trader.model.objects import Quantity
+    from nautilus_trader.model.orders import MarketOrder
+    from nautilus_trader.model.enums import OrderSide, TimeInForce
 
-    result = mt5_client._mt5_client['mt5'].order_send(req)
+    inst_id = InstrumentId(Symbol("EURUSD"), Venue("METATRADER_5"))
+    from nautilus_trader.model.enums import OrderType
+    # Mocking order struct
+    from nautilus_trader.model.identifiers import StrategyId, TraderId
+    mock_order = MagicMock()
+    mock_order.client_order_id = ClientOrderId("client1")
+    mock_order.instrument_id = inst_id
+    mock_order.strategy_id = StrategyId("test-strategy")
+    mock_order.trader_id = TraderId("test-trader")
+    mock_order.side = OrderSide.BUY
+    mock_order.quantity = Quantity.from_int(100)
+    mock_order.time_in_force = TimeInForce.GTC
+    mock_order.type = OrderType.MARKET # MarketOrder logic handles this directly inside transform
+    mock_order.price = None
 
-    assert result.retcode == 10009
-    assert result.order == 1
+    submit_cmd = MagicMock()
+    submit_cmd.order = mock_order
+
+    # We inject the details needed for transformation
+    from nautilus_mt5.data_types import MT5SymbolDetails
+        # Has to be dicts so it's not a MagicMock causing assertion issues natively with property retrieval
+    class MockInstrument:
+        def __init__(self):
+            self.info = {"symbol": {"symbol": "EURUSD", "broker": "METATRADER_5"}}
+    mock_instrument = MockInstrument()
+
+    mock_provider = MagicMock()
+    mock_provider.symbol_details = {inst_id.value: MT5SymbolDetails(filling_mode=1)}
+    mock_provider.find.return_value = mock_instrument
+
+    exec_client._instrument_provider = mock_provider
+
+    # Override the find behaviour explicitly since _transform uses cache mostly in newer versions
+    type(exec_client._cache).instrument = MagicMock(return_value=mock_instrument)
+
+    type(exec_client).client_id = property(lambda self: MagicMock(value="exec_1"))
+
+    # Bypass SubmitOrder PyCondition validation
+    # execution wrappers require fully valid Component trees, just mock out generate_order_submitted
+    exec_client.generate_order_submitted = MagicMock()
+    exec_client.generate_order_accepted = MagicMock()
+
+    with patch("nautilus_mt5.execution.PyCondition.type"):
+        # Test submission
+        await exec_client._submit_order(submit_cmd)
 
     orders = mt5_client._mt5_client['mt5'].orders_get()
     assert len(orders) == 1
     assert orders[0].symbol == "EURUSD"
-    assert orders[0].volume_initial == 1.5
+    assert orders[0].volume_initial == 100.0
 
-    # Bootstrap positions
-    mt5_client._requests = MagicMock()
+    # Test Executing internal reports correctly rather than calling `get_positions` wrapper with unmocked asyncio futures
+    mt5_client._mt5_client['mt5']._bridge._positions.clear()
+    assert len(mt5_client._mt5_client['mt5'].positions_get()) == 0
 
-    from nautilus_mt5.data_types import MT5Position
+    class FakePositionInfo:
+        def __init__(self, ticket, symbol, position_type, volume, price_open):
+            self.ticket = ticket
+            self.symbol = symbol
+            self.type = position_type
+            self.volume = volume
+            self.price_open = price_open
+
     mt5_client._mt5_client['mt5']._bridge._positions.append(
-        MT5Position("12345", "EURUSD", 1.0, 1.1, 0.0)
+        FakePositionInfo(ticket=1, symbol="EURUSD", position_type=0, volume=1.0, price_open=1.1)
     )
-    positions = mt5_client._mt5_client['mt5'].positions_get()
-    assert len(positions) == 1
+
+    # We verify it's seen natively on the bridge which get_positions would wrap
+    assert len(mt5_client._mt5_client['mt5'].positions_get()) == 1

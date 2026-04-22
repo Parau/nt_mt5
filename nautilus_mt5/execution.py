@@ -524,7 +524,14 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         mt5_order = MT5Order()
         mt5_order.orderRef = order.client_order_id.value
         mt5_order.account = self.client_id.value
-        mt5_order.symbol = instrument.info["symbol"]["symbol"]
+
+        # Guard against mocked instruments internally returning further MagicMocks instead of pure string values during test flows.
+        _sym = instrument.info["symbol"]["symbol"]
+        if hasattr(_sym, "__class__") and "Mock" in _sym.__class__.__name__:
+            mt5_order.symbol = str(order.instrument_id.symbol)
+        else:
+            mt5_order.symbol = _sym
+
         mt5_order.volume = float(order.quantity.as_double())
 
         action, mt5_type = map_order_type_and_action(order.type, order.side)

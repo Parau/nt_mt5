@@ -60,30 +60,57 @@ async def test_memory_no_leak_on_connect_disconnect():
 async def test_memory_no_leak_on_subscriptions():
     """
     Ensure internal subscription mappings do not grow in an unbounded manner
-    when subscribing and unsubscribing repeatedly.
+    when subscribing and unsubscribing repeatedly. We'll use the raw adapter methods.
     """
-    from nautilus_mt5.client.market_data import MetaTrader5ClientMarketDataMixin
-
-    client = MetaTrader5ClientMarketDataMixin.__new__(MetaTrader5ClientMarketDataMixin)
+    client = MetaTrader5Client.__new__(MetaTrader5Client)
     client._event_subscriptions = {}
-    client._log = MagicMock()
+    type(client)._log = property(lambda self: MagicMock())
+    client._mt5_client = {"mt5": MagicMock()}
 
-    # We mock out the actual BaseMixin implementations
-    def mock_subscribe(name, callback):
-        client._event_subscriptions[name] = callback
+    from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
+    from nautilus_mt5.data_types import MT5Symbol
 
-    def mock_unsubscribe(name):
+    inst_id = InstrumentId(Symbol("EURUSD"), Venue("METATRADER_5"))
+    mt5_sym = MT5Symbol(symbol="EURUSD", broker="METATRADER_5")
+
+    # Override generic tracking methods
+    async def mock_subscribe(name, poll_func, cancel_func, *args, **kwargs):
+        client._event_subscriptions[name] = poll_func
+
+    async def mock_unsubscribe(name, cancel_func):
         client._event_subscriptions.pop(name, None)
 
-    client.subscribe_event = mock_subscribe
-    client.unsubscribe_event = mock_unsubscribe
+    client._subscribe = mock_subscribe
+    client._unsubscribe = mock_unsubscribe
+
+    for _ in range(100):
+        await client.subscribe_ticks(inst_id, mt5_sym, "BidAsk", False)
+
+    # We repeatedly resubscribed to the same instrument tick. It should NOT grow uncontrollably.
+    # We expect 1 key max since it just overrides the "BidAsk" tuple.
+    assert len(client._event_subscriptions) == 1
 
     for i in range(100):
-        client.subscribe_event(f"sub_{i}", lambda x: x)
-
-    assert len(client._event_subscriptions) == 100
-
-    for i in range(100):
-        client.unsubscribe_event(f"sub_{i}")
+        await client.unsubscribe_ticks(inst_id, "BidAsk")
 
     assert len(client._event_subscriptions) == 0
+
+    # Check what happens with multiple requests in internal requests tracker
+    from nautilus_mt5.common import Requests
+    client._requests = Requests()
+    client._next_valid_req_id = 0
+    def mock_next_req_id():
+        client._next_valid_req_id += 1
+        return client._next_valid_req_id
+    client._next_req_id = mock_next_req_id
+
+    for i in range(100):
+        req = client._requests.add(client._next_req_id(), f"test_req_{i}", MagicMock())
+        assert req is not None
+
+    assert len(client._requests._req_id_to_name) == 100
+
+    for i in range(1, 101):
+        client._requests.remove(req_id=i)
+
+    assert len(client._requests._req_id_to_name) == 0

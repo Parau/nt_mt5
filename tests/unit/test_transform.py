@@ -36,8 +36,8 @@ def test_transform_market_order_mocked():
             return self.value
 
     exec_client._account_id = MockAccountId("12345")
-    exec_client.client_id = MockAccountId("12345")
     type(exec_client).account_id = property(lambda self: self._account_id)
+    type(exec_client).client_id = property(lambda self: self._account_id)
 
     class MockInstrument:
         def __init__(self):
@@ -50,11 +50,8 @@ def test_transform_market_order_mocked():
     assert mt5_order.volume == 100.0
     assert mt5_order.type_time == 0 # GTC
 
-    # In MT5 mapping, if TIF=GTC (0), MT5 does not use TIF for FOK/IOC. However, the MT5 adapter maps TimeInForce to
-    # specific fill rules. If order is GTC, fallback is usually RETURN (2) instead of FOK (1).
-    # Since adapter falls back to IOC/RETURN when TimeInForce constraints clash with filling mode, we document it here:
-    # A Market order with TimeInForce.GTC defaults to IOC/RETURN depending on the allowed filling mode bits.
-    assert mt5_order.type_filling in (1, 2)
+    # The adapter explicitly maps TimeInForce.GTC to ORDER_FILLING_RETURN (2) as the fallback.
+    assert mt5_order.type_filling == 2 # RETURN
     assert mt5_order.account == "12345"
 
 def test_transform_limit_order_mocked():
@@ -78,8 +75,8 @@ def test_transform_limit_order_mocked():
             return self.value
 
     exec_client._account_id = MockAccountId("12345")
-    exec_client.client_id = MockAccountId("12345")
     type(exec_client).account_id = property(lambda self: self._account_id)
+    type(exec_client).client_id = property(lambda self: self._account_id)
 
     class MockInstrument:
         def __init__(self):
