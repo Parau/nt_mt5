@@ -57,12 +57,13 @@ from nautilus_mt5.client.client import MetaTrader5Client
 from nautilus_mt5.data_types import MT5Position
 from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.config import MetaTrader5ExecClientConfig
-from nautilus_mt5.parsing.execution import MAP_ORDER_ACTION
+from nautilus_mt5.parsing.execution import MT5_ORDER_TYPE_TO_ORDER_SIDE
+from nautilus_mt5.parsing.execution import MT5_ORDER_TYPE_TO_ORDER_TYPE
+from nautilus_mt5.parsing.execution import ORDER_TIME_SPECIFIED
+from nautilus_mt5.parsing.execution import ORDER_TIME_SPECIFIED_DAY
 from nautilus_mt5.parsing.execution import MAP_ORDER_STATUS
-from nautilus_mt5.parsing.execution import MAP_ORDER_TYPE
 from nautilus_mt5.parsing.execution import MAP_TIME_IN_FORCE
 from nautilus_mt5.parsing.execution import MAP_TRIGGER_METHOD
-from nautilus_mt5.parsing.execution import ORDER_SIDE_TO_ORDER_ACTION
 from nautilus_mt5.parsing.execution import timestring_to_timestamp
 from nautilus_mt5.providers import MetaTrader5InstrumentProvider
 
@@ -72,12 +73,6 @@ mt5_to_nautilus_trigger_method = dict(
 )
 mt5_to_nautilus_time_in_force = dict(
     zip(MAP_TIME_IN_FORCE.values(), MAP_TIME_IN_FORCE.keys(), strict=False),
-)
-mt5_to_nautilus_order_side = dict(
-    zip(MAP_ORDER_ACTION.values(), MAP_ORDER_ACTION.keys(), strict=False),
-)
-mt5_to_nautilus_order_type = dict(
-    zip(MAP_ORDER_TYPE.values(), MAP_ORDER_TYPE.keys(), strict=False)
 )
 
 
@@ -190,6 +185,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             self._on_account_summary("FullInitMarginReq", str(getattr(account_info, 'margin_initial', 0.0)), currency)
             self._on_account_summary("FullMaintMarginReq", str(getattr(account_info, 'margin_maintenance', 0.0)), currency)
             self._on_account_summary("NetLiquidation", str(getattr(account_info, 'equity', account_info.balance)), currency)
+            self._on_account_summary("FullAvailableFunds", str(getattr(account_info, 'margin_free', 0.0)), currency)
 
         self._log.info(
             f"Account `{self.account_id.get_id()}` validated and associated with Terminal.",
@@ -292,29 +288,28 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         )
         expire_time = (
             timestring_to_timestamp(getattr(mt5_order, "expire_time", ""))
-            if getattr(mt5_order, "type_time", 0) == 1 # ORDER_TIME_SPECIFIED
+            if getattr(mt5_order, "type_time", 0) in (ORDER_TIME_SPECIFIED, ORDER_TIME_SPECIFIED_DAY)
             and getattr(mt5_order, "expire_time", "")
             else None
         )
 
-        mapped_order_type_info = mt5_to_nautilus_order_type.get(getattr(mt5_order, "type", 0), OrderType.MARKET)
-        if isinstance(mapped_order_type_info, tuple):
-            order_type, time_in_force = mapped_order_type_info
-        else:
-            order_type = mapped_order_type_info
-            time_in_force = TimeInForce.GTC # fallback
-            # We map filling type back to TimeInForce if possible
-            filling_type = getattr(mt5_order, "type_filling", 2)
-            if filling_type == 0:
-                time_in_force = TimeInForce.FOK
-            elif filling_type == 1:
-                time_in_force = TimeInForce.IOC
+        mt5_type = getattr(mt5_order, "type", 0)
+        order_side = MT5_ORDER_TYPE_TO_ORDER_SIDE.get(mt5_type, OrderSide.BUY)
+        order_type = MT5_ORDER_TYPE_TO_ORDER_TYPE.get(mt5_type, OrderType.MARKET)
+
+        time_in_force = TimeInForce.GTC # fallback
+        # We map filling type back to TimeInForce if possible
+        filling_type = getattr(mt5_order, "type_filling", 2)
+        if filling_type == 0:
+            time_in_force = TimeInForce.FOK
+        elif filling_type == 1:
+            time_in_force = TimeInForce.IOC
 
         order_status = OrderStatusReport(
             account_id=self.account_id,
             instrument_id=instrument.id,
             venue_order_id=VenueOrderId(str(mt5_order.order_id)),
-            order_side=mt5_to_nautilus_order_side[mt5_order.action],
+            order_side=order_side,
             order_type=order_type,
             time_in_force=time_in_force,
             order_status=order_status,
@@ -901,6 +896,11 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         instrument = self.instrument_provider.find(nautilus_order.instrument_id)
 
         if instrument:
+            # We map DEAL_TYPE_BUY/SELL from MT5 execution report side
+            from nautilus_mt5.parsing.execution import DEAL_TYPE_BUY
+            side_int = getattr(execution, "side", DEAL_TYPE_BUY)
+            order_side = OrderSide.BUY if side_int == DEAL_TYPE_BUY else OrderSide.SELL
+
             self.generate_order_filled(
                 strategy_id=nautilus_order.strategy_id,
                 instrument_id=nautilus_order.instrument_id,
@@ -908,7 +908,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
                 venue_order_id=VenueOrderId(str(execution.order_id)),
                 venue_position_id=None,
                 trade_id=TradeId(execution.exec_id),
-                order_side=OrderSide[ORDER_SIDE_TO_ORDER_ACTION[getattr(execution, "side", "BUY")]],
+                order_side=order_side,
                 order_type=nautilus_order.order_type,
                 last_qty=Quantity(
                     execution.quantity, precision=instrument.size_precision

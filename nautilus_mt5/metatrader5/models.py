@@ -264,4 +264,6 @@ class Order:
     state: int = 0
     volume_filled: float = 0.0
     account: str = ""
+    parentId: int = 0
+    transmit: bool = True
 
