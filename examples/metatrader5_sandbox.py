@@ -17,7 +17,7 @@ from nautilus_trader.persistence.catalog import ParquetDataCatalog
 from nautilus_mt5.config import DockerizedMT5TerminalConfig
 from nautilus_mt5.config import MetaTrader5DataClientConfig
 from nautilus_mt5.config import MetaTrader5InstrumentProviderConfig
-from nautilus_mt5.factories import MetaTrader5LiveDataClientFactory
+from nautilus_mt5.factories import MT5LiveDataClientFactory
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -35,7 +35,6 @@ dockerized_gateway = DockerizedMT5TerminalConfig(
     account_number=os.environ["MT5_ACCOUNT_NUMBER"],
     password=os.environ["MT5_PASSWORD"],
     server=os.environ["MT5_SERVER"],
-    read_only_api=True,
 )
 
 instrument_provider = MetaTrader5InstrumentProviderConfig(
@@ -60,9 +59,7 @@ config_node = TradingNodeConfig(
     logging=LoggingConfig(log_level="INFO"),
     data_clients={
         "MT5": MetaTrader5DataClientConfig(
-            mt5_host="127.0.0.1",
-            mt5_port=None,
-            mt5_client_id=1,
+            client_id=1,
             use_regular_trading_hours=True,
             instrument_provider=instrument_provider,
             dockerized_gateway=dockerized_gateway,
@@ -107,7 +104,7 @@ for instrument in SANDBOX_INSTRUMENTS:
 
 # Register client factories with the node
 for data_client in config_node.data_clients:
-    node.add_data_client_factory(data_client, MetaTrader5LiveDataClientFactory)
+    node.add_data_client_factory(data_client, MT5LiveDataClientFactory)
 for exec_client in config_node.exec_clients:
     node.add_exec_client_factory(exec_client, SandboxLiveExecClientFactory)
 

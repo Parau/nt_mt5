@@ -63,7 +63,6 @@ class DockerizedMT5Terminal:
             self.log.error("`server` not set nor available in env `MT5_SERVER`")
             raise ValueError("`server` not set nor available in env `MT5_SERVER`")
 
-        self.read_only_api = config.read_only_api
         self.host = "127.0.0.1"
         self.port = self.PORTS["rpyc"]
         self.timeout = config.timeout

@@ -12,13 +12,13 @@ from nautilus_trader.model.book import OrderBook
 from nautilus_trader.model.data import QuoteTick, Bar, BarType, BarSpecification
 from nautilus_trader.model.enums import AggregationSource, BarAggregation, PriceType
 
-from nautilus_mt5.common import MT5_VENUE
-from nautilus_mt5.common import MT5Symbol
+from nautilus_mt5.constants import MT5_VENUE
+from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.config import DockerizedMT5TerminalConfig
 from nautilus_mt5.config import MetaTrader5DataClientConfig
 from nautilus_mt5.config import MetaTrader5ExecClientConfig
 from nautilus_mt5.config import MetaTrader5InstrumentProviderConfig
-from nautilus_mt5.factories import MetaTrader5LiveDataClientFactory
+from nautilus_mt5.factories import MT5LiveDataClientFactory
 
 from dotenv import load_dotenv
 
@@ -49,7 +49,6 @@ dockerized_gateway = DockerizedMT5TerminalConfig(
     account_number=os.environ["MT5_ACCOUNT_NUMBER"],
     password=os.environ["MT5_PASSWORD"],
     server=os.environ["MT5_SERVER"],
-    read_only_api=True,
 )
 
 instrument_provider = MetaTrader5InstrumentProviderConfig(
@@ -76,7 +75,7 @@ config_node = TradingNodeConfig(
     logging=LoggingConfig(log_level="INFO"),
     data_clients={
         "MT5": MetaTrader5DataClientConfig(
-            mt5_client_id=1,
+            client_id=1,
             handle_revised_bars=False,
             use_regular_trading_hours=True,
             # market_data_type=IBMarketDataTypeEnum.DELAYED_FROZEN,  # If unset default is REALTIME
@@ -86,7 +85,7 @@ config_node = TradingNodeConfig(
     },
     exec_clients={
         "MT5": MetaTrader5ExecClientConfig(
-            mt5_client_id=1,
+            client_id=1,
             account_id=os.environ["MT5_ACCOUNT_NUMBER"],
             dockerized_gateway=dockerized_gateway,
             instrument_provider=instrument_provider,
@@ -194,8 +193,8 @@ strategy = PSubscribeStrategy(config=strategy_config)
 node.trader.add_strategy(strategy)
 
 # Register your client factories with the node (can take user-defined factories)
-node.add_data_client_factory("MT5", MetaTrader5LiveDataClientFactory)
-# node.add_exec_client_factory("MT5", MetaTrader5LiveExecClientFactory)
+node.add_data_client_factory("MT5", MT5LiveDataClientFactory)
+# node.add_exec_client_factory("MT5", MT5LiveExecClientFactory)
 node.build()
 node.portfolio.set_specific_venue(MT5_VENUE)
 
