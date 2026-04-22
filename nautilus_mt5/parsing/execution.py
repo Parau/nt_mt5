@@ -14,6 +14,10 @@ TRADE_ACTION_MODIFY = 7
 TRADE_ACTION_REMOVE = 8
 TRADE_ACTION_CLOSE_BY = 10
 
+# MT5 Deal types
+DEAL_TYPE_BUY = 0
+DEAL_TYPE_SELL = 1
+
 # MT5 Order types
 ORDER_TYPE_BUY = 0
 ORDER_TYPE_SELL = 1
@@ -84,18 +88,6 @@ def timestring_to_timestamp(timestring: str) -> pd.Timestamp:
     dt, tz = timestring.rsplit(" ", 1)
     return pd.Timestamp(dt, tz=tz)
 
-MAP_ORDER_ACTION: dict[int, str] = {
-    OrderSide.BUY: "BUY",
-    OrderSide.SELL: "SELL",
-}
-
-MAP_ORDER_TYPE: dict[int | tuple[int, int], str] = {
-    OrderType.LIMIT: "LMT",
-    OrderType.MARKET: "MKT",
-    OrderType.STOP_LIMIT: "STP LMT",
-    OrderType.STOP_MARKET: "STP",
-}
-
 from nautilus_trader.model.enums import TriggerType
 
 MAP_TRIGGER_METHOD: dict[int, int] = {
@@ -104,7 +96,24 @@ MAP_TRIGGER_METHOD: dict[int, int] = {
     TriggerType.BID_ASK: 4,
 }
 
-ORDER_SIDE_TO_ORDER_ACTION: dict[str, str] = {
-    "BOT": "BUY",
-    "SLD": "SELL",
+MT5_ORDER_TYPE_TO_ORDER_SIDE: dict[int, OrderSide] = {
+    ORDER_TYPE_BUY: OrderSide.BUY,
+    ORDER_TYPE_BUY_LIMIT: OrderSide.BUY,
+    ORDER_TYPE_BUY_STOP: OrderSide.BUY,
+    ORDER_TYPE_BUY_STOP_LIMIT: OrderSide.BUY,
+    ORDER_TYPE_SELL: OrderSide.SELL,
+    ORDER_TYPE_SELL_LIMIT: OrderSide.SELL,
+    ORDER_TYPE_SELL_STOP: OrderSide.SELL,
+    ORDER_TYPE_SELL_STOP_LIMIT: OrderSide.SELL,
+}
+
+MT5_ORDER_TYPE_TO_ORDER_TYPE: dict[int, OrderType] = {
+    ORDER_TYPE_BUY: OrderType.MARKET,
+    ORDER_TYPE_SELL: OrderType.MARKET,
+    ORDER_TYPE_BUY_LIMIT: OrderType.LIMIT,
+    ORDER_TYPE_SELL_LIMIT: OrderType.LIMIT,
+    ORDER_TYPE_BUY_STOP: OrderType.STOP_MARKET,
+    ORDER_TYPE_SELL_STOP: OrderType.STOP_MARKET,
+    ORDER_TYPE_BUY_STOP_LIMIT: OrderType.STOP_LIMIT,
+    ORDER_TYPE_SELL_STOP_LIMIT: OrderType.STOP_LIMIT,
 }
