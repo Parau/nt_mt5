@@ -10,51 +10,89 @@ async def test_memory_no_leak_on_connect_disconnect():
     Ensure the internal structures of the MT5 Client do not grow
     after repeated cycles of connect and disconnect.
     """
-    mock_msgbus = MagicMock()
-    mock_cache = MagicMock()
-    mock_clock = MagicMock()
+    from nautilus_trader.common.component import LiveClock, MessageBus
+    from nautilus_trader.cache.cache import Cache
+    from nautilus_trader.model.identifiers import TraderId
+
+    clock = LiveClock()
+    msgbus = MessageBus(TraderId("TEST-MEM-1"), clock)
+    cache = Cache()
+
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
     client = MetaTrader5Client.__new__(MetaTrader5Client)
-    client._loop = asyncio.get_event_loop()
-    type(client)._msgbus = property(lambda self: mock_msgbus)
-    type(client)._cache = property(lambda self: mock_cache)
-    type(client)._clock = property(lambda self: mock_clock)
+    client._loop = loop
+    type(client)._msgbus = property(lambda self: msgbus)
+    type(client)._cache = property(lambda self: cache)
+    type(client)._clock = property(lambda self: clock)
     type(client)._log = property(lambda self: MagicMock())
-    client._mt5_client = {}
+
+    from nautilus_mt5.client.types import TerminalConnectionMode
+    client._terminal_connection_mode = TerminalConnectionMode.IPC
+    client._mt5_client = {'mt5': None, 'ea': None}
     client._conn_state = MagicMock()
     client._conn_state.value = 0
     client._is_mt5_connected = asyncio.Event()
     client._is_client_ready = asyncio.Event()
-    client._subscriptions = MagicMock()
-    client._subscriptions._instrument_id_to_sub = {}
-    client._subscriptions._req_id_to_name = {}
-    client._subscriptions._name_to_obj = {}
+
+    from nautilus_mt5.common import Subscriptions, Requests
+    client._subscriptions = Subscriptions()
     client._internal_msg_queue = asyncio.Queue()
-    client._requests = MagicMock()
-    client._requests.get_futures = MagicMock(return_value=[])
+    client._requests = Requests()
     client._msg_handler_task_queue = asyncio.Queue()
     type(client).is_disposed = property(lambda self: False)
+    client._config = MagicMock()
+    client._client_id = 1
 
-    with patch.object(client, '_connect', new_callable=AsyncMock) as mock_connect:
-        async def fake_connect():
-            client._mt5_client['mt5'] = MagicMock()
-            client._is_mt5_connected.set()
-            client._conn_state.value = 1 # CONNECTED
-            client._is_client_ready.set()
-        mock_connect.side_effect = fake_connect
+    # Override internal factories to return the Fake service without calling RPyC natively
+    mock_mt5 = MagicMock()
+    mock_mt5.last_error.return_value = (1, "Mock Error")
 
-        # We also mock disconnect cleanly
-        client._clear_clients = MagicMock()
+    async def fake_fetch_terminal_info():
+        client._terminal_info = {
+            "version": 5,
+            "build": 1234,
+            "build_release_date": "Unavailable",
+            "connection_time": "Unavailable"
+        }
+
+    with patch.object(client, '_create_ipc_client', return_value=mock_mt5), \
+         patch.object(client, '_create_ea_client', return_value=None), \
+         patch.object(client, '_start_connection_watchdog'), \
+         patch.object(client, '_start_terminal_incoming_msg_reader'), \
+         patch.object(client, '_start_internal_msg_queue_processor'), \
+         patch.object(client, '_fetch_terminal_info', new_callable=AsyncMock, side_effect=fake_fetch_terminal_info):
 
         for _ in range(10):
             await client._connect()
 
-            client._clear_clients()
-            client._conn_state.value = 0
-            client._is_mt5_connected.clear()
+            assert client._mt5_client['mt5'] is not None
+
+            await client._disconnect()
+
+            assert client._mt5_client['mt5'] is None
+            assert client._is_mt5_connected.is_set() is False
 
         # The core check here is that structures are reset or haven't accumulated mock connections
         assert client._is_mt5_connected.is_set() is False
+        assert client._internal_msg_queue.qsize() == 0
+        assert client._msg_handler_task_queue.qsize() == 0
+        assert len(client._requests.get_futures()) == 0
+
+        # Verify that all Subscriptions mappings are clean
+        assert len(client._subscriptions._req_id_to_name) == 0
+        assert len(client._subscriptions._req_id_to_handle) == 0
+        assert len(client._subscriptions._req_id_to_cancel) == 0
+        assert len(client._subscriptions._req_id_to_last) == 0
+
+        # Verify that all Requests mappings are clean
+        assert len(client._requests._req_id_to_name) == 0
+        assert len(client._requests._req_id_to_handle) == 0
+        assert len(client._requests._req_id_to_cancel) == 0
+        assert len(client._requests._req_id_to_future) == 0
+        assert len(client._requests._req_id_to_result) == 0
 
 @pytest.mark.asyncio
 async def test_memory_no_leak_on_subscriptions():
@@ -94,11 +132,19 @@ async def test_memory_no_leak_on_subscriptions():
         client._subscriptions.add(1, "BidAsk_2", MagicMock(), MagicMock())
     except KeyError:
         pass # Expected protection against duplicates internally
+
     assert len(client._subscriptions._req_id_to_name) == 1
+    assert len(client._subscriptions._req_id_to_handle) == 1
+    assert len(client._subscriptions._req_id_to_cancel) == 1
+    assert len(client._subscriptions._req_id_to_last) == 1
 
     # We remove
     client._subscriptions.remove(1)
+
     assert len(client._subscriptions._req_id_to_name) == 0
+    assert len(client._subscriptions._req_id_to_handle) == 0
+    assert len(client._subscriptions._req_id_to_cancel) == 0
+    assert len(client._subscriptions._req_id_to_last) == 0
 
     # Check what happens with multiple requests in internal requests tracker
     from nautilus_mt5.common import Requests
@@ -114,8 +160,16 @@ async def test_memory_no_leak_on_subscriptions():
         assert req is not None
 
     assert len(client._requests._req_id_to_name) == 100
+    assert len(client._requests._req_id_to_handle) == 100
+    assert len(client._requests._req_id_to_cancel) == 100
+    assert len(client._requests._req_id_to_future) == 100
+    assert len(client._requests._req_id_to_result) == 100
 
     for i in range(1, 101):
         client._requests.remove(req_id=i)
 
     assert len(client._requests._req_id_to_name) == 0
+    assert len(client._requests._req_id_to_handle) == 0
+    assert len(client._requests._req_id_to_cancel) == 0
+    assert len(client._requests._req_id_to_future) == 0
+    assert len(client._requests._req_id_to_result) == 0

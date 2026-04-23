@@ -127,71 +127,60 @@ def mock_mt5_service():
     service = MockMT5Service()
     return service
 
-@pytest_asyncio.fixture
-async def mt5_client(mock_mt5_service):
+@pytest.fixture
+def mt5_client(mock_mt5_service):
     config = DockerizedMT5TerminalConfig(
         account_number="12345",
         password="password",
         server="TestServer",
     )
 
-    mock_msgbus = MagicMock()
-    mock_cache = MagicMock()
-    mock_clock = MagicMock()
+    from nautilus_trader.common.component import LiveClock, MessageBus
+    from nautilus_trader.cache.cache import Cache
+    from nautilus_trader.model.identifiers import TraderId
+
+    clock = LiveClock()
+    msgbus = MessageBus(TraderId("TEST-1"), clock)
+    cache = Cache()
+
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
     client = MetaTrader5Client.__new__(MetaTrader5Client)
-    client._loop = asyncio.get_event_loop()
-    type(client)._msgbus = property(lambda self: mock_msgbus)
-    type(client)._cache = property(lambda self: mock_cache)
-    type(client)._clock = property(lambda self: mock_clock)
+    client._loop = loop
+    type(client)._msgbus = property(lambda self: msgbus)
+    type(client)._cache = property(lambda self: cache)
+    type(client)._clock = property(lambda self: clock)
     type(client)._log = property(lambda self: MagicMock())
     client._config = config
-    client._mt5_client = {}
-    client._conn_state = MagicMock()
-    client._conn_state.value = 0
+    client._mt5_client = {'mt5': mock_mt5_service, 'ea': None}
+
+    from nautilus_mt5.client.types import TerminalConnectionState
+    client._conn_state = TerminalConnectionState.CONNECTED
     client._is_mt5_connected = asyncio.Event()
+    client._is_mt5_connected.set()
     client._is_client_ready = asyncio.Event()
+    client._is_client_ready.set()
     client._next_valid_order_id = 1
     client._order_id_to_order_ref = {}
-    client._subscriptions = MagicMock()
-    client._subscriptions._instrument_id_to_sub = {}
-    client._subscriptions._req_id_to_name = {}
-    client._subscriptions._name_to_obj = {}
+
+    # We will still use real Subscriptions and Requests to make it robust
+    from nautilus_mt5.common import Subscriptions, Requests
+    client._subscriptions = Subscriptions()
     client._internal_msg_queue = asyncio.Queue()
-    client._requests = MagicMock()
+    client._requests = Requests()
     client._msg_handler_task_queue = asyncio.Queue()
     client._client_id = 1
+    client._request_id_seq = 1
     type(client).is_disposed = property(lambda self: False)
 
-    # To truly exercise _connect logic and its start sequence natively:
-    with patch.object(client, '_create_mt5_client') as mock_create_client:
-        mock_create_client.return_value = {'mt5': mock_mt5_service, 'ea': None}
+    # Instead of simulating full connection cycle with mocked components
+    # we initialize the component directly with mocked underlying bridge for robust tests
+    yield client
 
-        # We also mock background tasks so the actual _start_async doesn't hang in infinite loops
-        # waiting on native MT5 socket responses over real network tests
-        client._start_connection_watchdog = MagicMock()
-        client._start_terminal_incoming_msg_reader = MagicMock()
-        client._start_internal_msg_queue_processor = MagicMock()
-
-        # For a fixture yielding connected client, we can simulate the full cycle
-        # using the public start mechanism internally hooked
-        client._is_mt5_connected.set()
-        client._conn_state.value = 1
-        client._is_client_ready.set()
-        client._mt5_client['mt5'] = mock_mt5_service
-
-        yield client
-
-        client._connection_watchdog_task = None
-        client._terminal_incoming_msg_reader_task = None
-        client._internal_msg_queue_processor_task = None
-        client._msg_handler_processor_task = None
-
-        await client._stop_async()
-
-        # In our tests, since we yield, _clear_clients inside stop_async removes ['mt5'] from the dict
-        # Restore it for test dependencies to clean down properly if needed or tests run independently
-        client._mt5_client['mt5'] = mock_mt5_service
+    client._mt5_client = {'mt5': None, 'ea': None}
+    client._conn_state = TerminalConnectionState.DISCONNECTED
 
 @pytest.mark.asyncio
 async def test_connect_disconnect(mt5_client):
