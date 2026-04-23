@@ -2,19 +2,26 @@
 
 This adapter allows for seamless integration between the Nautilus Trader and MetaTrader 5, providing capabilities for market data retrieval, order execution, and account management through the MetaTrader 5 Terminal using either IPC for Windows, RPyC for Linux, or Sockets for EA (suitable for streaming).
 
-## Client Modes 🛠️
+## Terminal Access Modes 🛠️
 
-This extension supports two different client modes:
+This adapter supports two main modes for accessing the MetaTrader 5 Terminal:
 
-1. **IPC Mode** (Using the MetaTrader Python library) 📦
-   - Directly communicates with MetaTrader 5 via the official Python API which uses `IPC` (Inter-Process Communication).
-   - Best for local integration without additional network overhead but does not support real-time updates.
+1. **External RPyC Mode (`EXTERNAL_RPYC`)** 🌐
+   - Connects to an existing MT5 RPyC gateway.
+   - The adapter does not manage the lifecycle of the terminal (it assumes it's already running).
+   - Ideal for remote terminal access or when the terminal is managed by another process.
 
-   *For Linux systems* 🐧
-   - Uses `RPyC` (Remote Python Call) to bridge between a Linux environment and MT5 running inside Wine, it uses `IPC` under the hood.
-   - Ideal for automated trading setups on non-Windows environments.
+2. **Managed Terminal Mode (`MANAGED_TERMINAL`)** 📦
+   - The adapter is responsible for starting, supervising, and stopping the terminal.
+   - Supports different backends (e.g., `DOCKERIZED`).
+   - *Note: This mode is being transitioned to a more unified architecture.*
 
-2. **Socket Mode** (Using MetaTrader EA) 🌐
+## Communication Modes (Legacy) 📡
+
+Within the terminal access, the adapter can communicate via:
+
+- **IPC Mode**: Using the MetaTrader Python library (or RPyC bridge).
+- **Socket Mode** (Using MetaTrader EA):
    - Connects to the MetaTrader 5 Expert Advisor (EA) via a custom socket server.
    - Enables external programs (Python, JavaScript, C++) to interact with MT5.
    - Supports real-time updates.

@@ -1,10 +1,52 @@
 from __future__ import annotations
 from typing import Optional
 from nautilus_trader.common.config import NonNegativeInt
+from dataclasses import dataclass
 from nautilus_trader.config import InstrumentProviderConfig, LiveDataClientConfig, LiveExecClientConfig, NautilusConfig
-from nautilus_mt5.client.types import MarketDataSubscription, TerminalConnectionMode
+from nautilus_mt5.client.types import (
+    ManagedTerminalBackend,
+    MarketDataSubscription,
+    MT5TerminalAccessMode,
+    TerminalConnectionMode,
+)
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.metatrader5 import EAConnectionConfig, RpycConnectionConfig
+
+
+@dataclass(frozen=True)
+class ExternalRPyCTerminalConfig:
+    """
+    Configuration for external RPyC terminal access.
+
+    Attributes:
+        host (str): The host address of the RPyC gateway.
+        port (int): The port number of the RPyC gateway.
+        keep_alive (bool): Whether to keep the connection alive. Default is False.
+        timeout_secs (float | None): Timeout in seconds for the connection. Default is None.
+        label (str | None): An optional label for the connection. Default is None.
+    """
+    host: str
+    port: int
+    keep_alive: bool = False
+    timeout_secs: float | None = None
+    label: str | None = None
+
+
+@dataclass(frozen=True)
+class ManagedTerminalConfig:
+    """
+    Configuration for managed MT5 terminal.
+
+    Attributes:
+        backend (ManagedTerminalBackend): The backend strategy for managing the terminal.
+        startup_timeout_secs (float | None): Timeout for starting the terminal. Default is None.
+        shutdown_timeout_secs (float | None): Timeout for stopping the terminal. Default is None.
+        healthcheck_timeout_secs (float | None): Timeout for health checks. Default is None.
+    """
+    backend: ManagedTerminalBackend
+    startup_timeout_secs: float | None = None
+    shutdown_timeout_secs: float | None = None
+    healthcheck_timeout_secs: float | None = None
 
 
 class DockerizedMT5TerminalConfig(NautilusConfig, frozen=True):
@@ -82,6 +124,9 @@ class MetaTrader5DataClientConfig(LiveDataClientConfig, frozen=True):
         use_regular_trading_hours (bool): Whether to request data for Regular Trading Hours only. Default is True.
         market_data_subscription (MarketDataSubscription): The market data subscription type. Default is REALTIME.
         ignore_quote_tick_size_updates (bool): Whether to ignore quote tick size updates. Default is False.
+        terminal_access (MT5TerminalAccessMode): The terminal access mode. Default is EXTERNAL_RPYC.
+        external_rpyc (ExternalRPyCTerminalConfig | None): Configuration for external RPyC access. Default is None.
+        managed_terminal (ManagedTerminalConfig | None): Configuration for managed terminal. Default is None.
         mode (TerminalConnectionMode): The connection mode. Default is TerminalConnectionMode.IPC.
         dockerized_gateway (DockerizedMT5TerminalConfig | None): The client's terminal container configuration. Default is None.
         ea_config (Optional[EAConnectionConfig]): Configuration for EAClient. Default is None.
@@ -92,6 +137,9 @@ class MetaTrader5DataClientConfig(LiveDataClientConfig, frozen=True):
     use_regular_trading_hours: bool = True
     market_data_subscription: MarketDataSubscription = MarketDataSubscription.REALTIME
     ignore_quote_tick_size_updates: bool = False
+    terminal_access: MT5TerminalAccessMode = MT5TerminalAccessMode.EXTERNAL_RPYC
+    external_rpyc: ExternalRPyCTerminalConfig | None = None
+    managed_terminal: ManagedTerminalConfig | None = None
     mode: TerminalConnectionMode = TerminalConnectionMode.IPC
     dockerized_gateway: DockerizedMT5TerminalConfig | None = None
     ea_config: Optional[EAConnectionConfig] = None
@@ -108,6 +156,9 @@ class MetaTrader5ExecClientConfig(LiveExecClientConfig, frozen=True):
     Attributes:
         client_id (int): The client ID. Default is 1.
         account_id (str | None): The account ID for MetaTrader 5 instance. Default is None.
+        terminal_access (MT5TerminalAccessMode): The terminal access mode. Default is EXTERNAL_RPYC.
+        external_rpyc (ExternalRPyCTerminalConfig | None): Configuration for external RPyC access. Default is None.
+        managed_terminal (ManagedTerminalConfig | None): Configuration for managed terminal. Default is None.
         mode (TerminalConnectionMode): The connection mode. Default is TerminalConnectionMode.IPC.
         dockerized_gateway (DockerizedMT5TerminalConfig | None): The client's terminal container configuration. Default is None.
         ea_config (Optional[EAConnectionConfig]): Configuration for EAClient. Default is None.
@@ -117,6 +168,9 @@ class MetaTrader5ExecClientConfig(LiveExecClientConfig, frozen=True):
     """
     client_id: int = 1
     account_id: str | None = None
+    terminal_access: MT5TerminalAccessMode = MT5TerminalAccessMode.EXTERNAL_RPYC
+    external_rpyc: ExternalRPyCTerminalConfig | None = None
+    managed_terminal: ManagedTerminalConfig | None = None
     mode: TerminalConnectionMode = TerminalConnectionMode.IPC
     dockerized_gateway: DockerizedMT5TerminalConfig | None = None
     ea_config: Optional[EAConnectionConfig] = None

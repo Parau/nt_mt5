@@ -8,6 +8,7 @@ from nautilus_mt5.metatrader5 import MetaTrader5, EAClient
 from nautilus_mt5.common import BaseMixin
 from nautilus_mt5.client.types import (
     ErrorInfo,
+    MT5TerminalAccessMode,
     TerminalConnectionMode,
     TerminalConnectionState,
     TerminalPlatform,
@@ -77,6 +78,11 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
 
     def _create_ipc_client(self) -> MetaTrader5:
         """Create an IPC-based MetaTrader5 client."""
+        if self._terminal_access == MT5TerminalAccessMode.EXTERNAL_RPYC:
+            config = self._mt5_config['rpyc']
+            self._log.info(f"Connecting to External RPYC host: {config.host}, port: {config.port}")
+            return MetaTrader5(host=config.host, port=config.port, keep_alive=config.keep_alive)
+
         if self._terminal_platform != TerminalPlatform.WINDOWS:
             config = self._mt5_config['rpyc']
             self._log.info(f"Connecting to RPYC host: {config.host}, port: {config.port}")

@@ -66,6 +66,12 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - Examples must use the real public API exactly.
 - README, configs, factories, examples, and exported names must stay mutually consistent.
 
+### 10. Terminal Access Model
+- The adapter adopts `EXTERNAL_RPYC` and `MANAGED_TERMINAL` as public access modes.
+- `EXTERNAL_RPYC` is for existing/external terminals.
+- `MANAGED_TERMINAL` is for when the adapter controls the terminal lifecycle.
+- Internally, `DOCKERIZED` is a backend for `MANAGED_TERMINAL`, not a top-level access mode.
+
 ## How to use this file
 
 When changing the adapter, ask:
