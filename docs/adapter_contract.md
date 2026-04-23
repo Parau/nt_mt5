@@ -36,6 +36,11 @@ Follow NautilusTrader's layered adapter model:
 
 For this project, the MT5 bridge is the low-level venue-native layer.
 
+### Terminal Access Model
+The adapter distinguishes between two modes of terminal access:
+- **EXTERNAL_RPYC**: The adapter connects to an existing MT5 terminal/gateway. Lifecycle is external.
+- **MANAGED_TERMINAL**: The adapter is responsible for the terminal lifecycle (starting, healthchecking, stopping).
+
 ## Boundary rules
 
 - Keep the low-level bridge MT5-native.

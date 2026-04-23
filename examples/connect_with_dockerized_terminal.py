@@ -12,12 +12,15 @@ from nautilus_trader.model.book import OrderBook
 from nautilus_trader.model.data import QuoteTick, Bar, BarType, BarSpecification
 from nautilus_trader.model.enums import AggregationSource, BarAggregation, PriceType
 
+from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.data_types import MT5Symbol
-from nautilus_mt5.config import DockerizedMT5TerminalConfig
-from nautilus_mt5.config import MetaTrader5DataClientConfig
-from nautilus_mt5.config import MetaTrader5ExecClientConfig
-from nautilus_mt5.config import MetaTrader5InstrumentProviderConfig
+from nautilus_mt5.config import (
+    DockerizedMT5TerminalConfig,
+    MetaTrader5DataClientConfig,
+    MetaTrader5ExecClientConfig,
+    MetaTrader5InstrumentProviderConfig,
+)
 from nautilus_mt5.factories import MT5LiveDataClientFactory
 
 from dotenv import load_dotenv
@@ -78,6 +81,7 @@ config_node = TradingNodeConfig(
             client_id=1,
             handle_revised_bars=False,
             use_regular_trading_hours=True,
+            terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
             # market_data_type=IBMarketDataTypeEnum.DELAYED_FROZEN,  # If unset default is REALTIME
             instrument_provider=instrument_provider,
             dockerized_gateway=dockerized_gateway,
@@ -87,6 +91,7 @@ config_node = TradingNodeConfig(
         "MT5": MetaTrader5ExecClientConfig(
             client_id=1,
             account_id=os.environ["MT5_ACCOUNT_NUMBER"],
+            terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
             dockerized_gateway=dockerized_gateway,
             instrument_provider=instrument_provider,
             routing=RoutingConfig(

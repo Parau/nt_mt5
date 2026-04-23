@@ -12,7 +12,10 @@ from nautilus_trader.common.enums import LogColor
 from nautilus_trader.model.identifiers import ClientId
 
 from nautilus_mt5.metatrader5 import RpycConnectionConfig, EAConnectionConfig
-from nautilus_mt5.client.types import TerminalConnectionMode
+from nautilus_mt5.client.types import (
+    MT5TerminalAccessMode,
+    TerminalConnectionMode,
+)
 from nautilus_mt5.client.account import MetaTrader5ClientAccountMixin
 from nautilus_mt5.client.connection import MetaTrader5ClientConnectionMixin
 from nautilus_mt5.client.symbol import MetaTrader5ClientSymbolMixin
@@ -51,6 +54,7 @@ class MetaTrader5Client(Component,
                     "ea": EAConnectionConfig(),
                 },
                 client_id: int = 1,
+                terminal_access: MT5TerminalAccessMode = MT5TerminalAccessMode.EXTERNAL_RPYC,
         ):
         self._mt5_client = {"mt5": None, "ea": None}
         self._mt5_client['mt5'] = None
@@ -74,6 +78,7 @@ class MetaTrader5Client(Component,
         self._terminal_connection_mode = connection_mode
         self._mt5_config = mt5_config
         self._client_id = client_id
+        self._terminal_access = terminal_access
         
         # Tasks
         self._connection_watchdog_task: asyncio.Task | None = None

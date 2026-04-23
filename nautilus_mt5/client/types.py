@@ -58,7 +58,24 @@ class TerminalPlatform(Enum):
     def to_str(self) -> str:
         """Returns the string representation of the enum value."""
         return self.value
-    
+
+
+class MT5TerminalAccessMode(Enum):
+    """
+    MT5 Terminal Access Mode type.
+    """
+    EXTERNAL_RPYC = "external_rpyc"
+    MANAGED_TERMINAL = "managed_terminal"
+
+
+class ManagedTerminalBackend(Enum):
+    """
+    Managed Terminal Backend type.
+    """
+    LOCAL_PROCESS = "local_process"
+    DOCKERIZED = "dockerized"
+
+
 class ErrorInfo:
     """Class to represent an error with a code and message."""
     
