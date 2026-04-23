@@ -37,6 +37,7 @@
   - `docs/data_capability_matrix.md`
   - `docs/execution_capability_matrix.md`
   - `docs/decisions.md`
+  - `docs/terminal_access_contract.md`
 - Prefer deterministic fakes/stubs over heavy mocking.
 - Use mocks only where they keep the test focused; do not replace most of the adapter with mocks and still call it integration coverage.
 - Integration tests should pass through real adapter logic whenever practical.
@@ -59,6 +60,7 @@
   - `docs/data_capability_matrix.md`
   - `docs/execution_capability_matrix.md`
   - `docs/decisions.md`
+  - `docs/terminal_access_contract.md`
 
 ## 6) PR rules for coding agents
 - Stay inside the requested scope.
