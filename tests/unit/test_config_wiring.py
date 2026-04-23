@@ -9,8 +9,10 @@ from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
     ManagedTerminalConfig,
     ManagedTerminalBackend,
+    DockerizedMT5TerminalConfig,
+    RpycConnectionConfig,
 )
-from nautilus_mt5.factories import get_resolved_mt5_client, MT5_CLIENTS
+from nautilus_mt5.factories import get_resolved_mt5_client
 
 @pytest.fixture
 def mock_components():
@@ -21,10 +23,16 @@ def mock_components():
         "clock": MagicMock(spec=LiveClock),
     }
 
-def test_get_resolved_mt5_client_external_rpyc(mock_components):
-    # Clear cache
-    MT5_CLIENTS.clear()
+@pytest.fixture(autouse=True)
+def mock_mt5_clients_registry(monkeypatch):
+    """
+    Ensure MT5_CLIENTS registry is isolated for each test.
+    """
+    local_clients = {}
+    monkeypatch.setattr("nautilus_mt5.factories.MT5_CLIENTS", local_clients)
+    return local_clients
 
+def test_get_resolved_mt5_client_external_rpyc(mock_components, mock_mt5_clients_registry):
     config = MetaTrader5DataClientConfig(
         terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
         external_rpyc=ExternalRPyCTerminalConfig(host="1.2.3.4", port=12345),
@@ -44,16 +52,14 @@ def test_get_resolved_mt5_client_external_rpyc(mock_components):
             config=config,
         )
 
-        assert len(MT5_CLIENTS) == 1
+        assert len(mock_mt5_clients_registry) == 1
         mock_client_class.assert_called_once()
         args, kwargs = mock_client_class.call_args
         assert kwargs["terminal_access"] == MT5TerminalAccessMode.EXTERNAL_RPYC
         assert kwargs["mt5_config"]["rpyc"].host == "1.2.3.4"
         assert kwargs["mt5_config"]["rpyc"].port == 12345
 
-def test_get_resolved_mt5_client_caching(mock_components):
-    MT5_CLIENTS.clear()
-
+def test_get_resolved_mt5_client_caching(mock_components, mock_mt5_clients_registry):
     config1 = MetaTrader5DataClientConfig(
         terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
         external_rpyc=ExternalRPyCTerminalConfig(host="1.2.3.4", port=12345),
@@ -78,7 +84,7 @@ def test_get_resolved_mt5_client_caching(mock_components):
         )
 
         assert client1 is client2
-        assert len(MT5_CLIENTS) == 1
+        assert len(mock_mt5_clients_registry) == 1
         assert mock_client_class.call_count == 1
 
 def test_get_resolved_mt5_client_managed_terminal_not_implemented(mock_components):
@@ -98,6 +104,47 @@ def test_get_resolved_mt5_client_managed_terminal_not_implemented(mock_component
             mock_components["clock"],
             config,
         )
+
+def test_get_resolved_mt5_client_managed_terminal_with_legacy_gateway_fails(mock_components):
+    # Rule: MANAGED_TERMINAL must not silently fall back to legacy dockerized_gateway
+    config = MetaTrader5DataClientConfig(
+        terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
+        managed_terminal=None,
+        dockerized_gateway=DockerizedMT5TerminalConfig(),
+    )
+
+    with pytest.raises(ValueError, match="managed_terminal config is required for MANAGED_TERMINAL terminal access."):
+        get_resolved_mt5_client(
+            mock_components["loop"],
+            mock_components["msgbus"],
+            mock_components["cache"],
+            mock_components["clock"],
+            config,
+        )
+
+def test_get_resolved_mt5_client_external_rpyc_legacy_fallback(mock_components, mock_mt5_clients_registry):
+    # Rule: external_rpyc continues to work as before, including legacy rpyc_config fallback
+    config = MetaTrader5DataClientConfig(
+        terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
+        external_rpyc=None,
+        rpyc_config=RpycConnectionConfig(host="legacy.host", port=9999)
+    )
+
+    with pytest.MonkeyPatch.context() as mp:
+        mock_client_class = MagicMock()
+        mp.setattr("nautilus_mt5.factories.MetaTrader5Client", mock_client_class)
+
+        get_resolved_mt5_client(
+            mock_components["loop"],
+            mock_components["msgbus"],
+            mock_components["cache"],
+            mock_components["clock"],
+            config,
+        )
+
+        args, kwargs = mock_client_class.call_args
+        assert kwargs["mt5_config"]["rpyc"].host == "legacy.host"
+        assert kwargs["mt5_config"]["rpyc"].port == 9999
 
 def test_get_resolved_mt5_client_external_rpyc_with_managed_config_raises_error(mock_components):
     config = MetaTrader5DataClientConfig(
