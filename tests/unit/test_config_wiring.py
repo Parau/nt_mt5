@@ -99,6 +99,38 @@ def test_get_resolved_mt5_client_managed_terminal_not_implemented(mock_component
             config,
         )
 
+def test_get_resolved_mt5_client_external_rpyc_with_managed_config_raises_error(mock_components):
+    config = MetaTrader5DataClientConfig(
+        terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
+        external_rpyc=ExternalRPyCTerminalConfig(host="1.2.3.4", port=12345),
+        managed_terminal=ManagedTerminalConfig(backend=ManagedTerminalBackend.DOCKERIZED),
+    )
+
+    with pytest.raises(ValueError, match="managed_terminal config must be None for EXTERNAL_RPYC terminal access."):
+        get_resolved_mt5_client(
+            mock_components["loop"],
+            mock_components["msgbus"],
+            mock_components["cache"],
+            mock_components["clock"],
+            config,
+        )
+
+def test_get_resolved_mt5_client_managed_terminal_with_external_config_raises_error(mock_components):
+    config = MetaTrader5DataClientConfig(
+        terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
+        external_rpyc=ExternalRPyCTerminalConfig(host="1.2.3.4", port=12345),
+        managed_terminal=ManagedTerminalConfig(backend=ManagedTerminalBackend.DOCKERIZED),
+    )
+
+    with pytest.raises(ValueError, match="external_rpyc config must be None for MANAGED_TERMINAL terminal access."):
+        get_resolved_mt5_client(
+            mock_components["loop"],
+            mock_components["msgbus"],
+            mock_components["cache"],
+            mock_components["clock"],
+            config,
+        )
+
 def test_get_resolved_mt5_client_managed_terminal_dockerized(mock_components):
     config = MetaTrader5DataClientConfig(
         terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
