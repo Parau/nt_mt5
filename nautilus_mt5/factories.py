@@ -28,9 +28,7 @@ from nautilus_mt5.config import (
 from nautilus_mt5.data import MetaTrader5DataClient
 from nautilus_mt5.execution import MetaTrader5ExecutionClient
 from nautilus_mt5.providers import MetaTrader5InstrumentProvider
-from nautilus_mt5.terminal import DockerizedMT5Terminal
 
-TERMINAL = None
 MT5_CLIENTS: dict[tuple, MetaTrader5Client] = {}
 
 def get_resolved_mt5_client(
@@ -61,7 +59,6 @@ def get_resolved_mt5_client(
     MetaTrader5Client
 
     """
-    global TERMINAL
     terminal_access = config.terminal_access
     client_id = config.client_id
     connection_mode = config.mode
@@ -100,19 +97,9 @@ def get_resolved_mt5_client(
             )
         managed_terminal = config.managed_terminal
         if managed_terminal is None:
-            # Fallback for transition if old dockerized_gateway exists
-            if config.dockerized_gateway:
-                dockerized_gateway = config.dockerized_gateway
-                if TERMINAL is None:
-                    TERMINAL = DockerizedMT5Terminal(dockerized_gateway)
-                    TERMINAL.safe_start(wait=dockerized_gateway.timeout)
-                rpyc_host = "localhost" # Dockerized usually maps to localhost
-                rpyc_port = TERMINAL.port
-                managed_backend = "dockerized"
-            else:
-                raise ValueError(
-                    "managed_terminal config is required for MANAGED_TERMINAL terminal access."
-                )
+            raise ValueError(
+                "managed_terminal config is required for MANAGED_TERMINAL terminal access."
+            )
         else:
             # For now, we only have placeholder for managed terminal
             # If backend is DOCKERIZED, we could potentially use the old logic if available
