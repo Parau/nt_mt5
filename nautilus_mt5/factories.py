@@ -108,8 +108,8 @@ def get_resolved_mt5_client(
         else:
             # For now, we only have placeholder for managed terminal
             # If backend is DOCKERIZED, we could potentially use the old logic if available
-            raise NotImplementedError(
-                f"MANAGED_TERMINAL with backend {managed_terminal.backend} is not fully implemented yet."
+            raise RuntimeError(
+                f"MANAGED_TERMINAL access mode was recognized, but the backend '{managed_terminal.backend}' is not yet implemented in this phase."
             )
     else:
         # Legacy/Default handling if terminal_access is somehow not set

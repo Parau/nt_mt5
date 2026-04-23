@@ -87,7 +87,7 @@ def test_get_resolved_mt5_client_managed_terminal_not_implemented(mock_component
         managed_terminal=ManagedTerminalConfig(backend=ManagedTerminalBackend.LOCAL_PROCESS),
     )
 
-    with pytest.raises(NotImplementedError, match="MANAGED_TERMINAL with backend .* is not fully implemented yet"):
+    with pytest.raises(RuntimeError, match="MANAGED_TERMINAL access mode was recognized, but the backend .* is not yet implemented in this phase"):
         get_resolved_mt5_client(
             mock_components["loop"], mock_components["msgbus"], mock_components["cache"], mock_components["clock"], config
         )
