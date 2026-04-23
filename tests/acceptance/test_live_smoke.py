@@ -122,7 +122,7 @@ class SmokeTestStrategy:
 
 @pytest.mark.skip(reason="Legacy smoke test relies on TradingNode internals expecting fully connected external sockets for Event iterations, securely superseded entirely by integration/test_integration.py and acceptance/test_wiring.py asserting equivalent coverage internally.")
 @pytest.mark.asyncio
-@patch('nautilus_mt5.factories.get_cached_mt5_client')
+@patch('nautilus_mt5.factories.get_resolved_mt5_client')
 async def test_live_mt5_adapter(mock_client_factory):
     mock_client_factory.return_value.id.value = "mock_client"
     from nautilus_mt5.config import (
