@@ -39,11 +39,13 @@ class ManagedTerminalConfig:
 
     Attributes:
         backend (ManagedTerminalBackend): The backend strategy for managing the terminal.
+        dockerized (DockerizedMT5TerminalConfig | None): The configuration for Dockerized backend.
         startup_timeout_secs (float | None): Timeout for starting the terminal. Default is None.
         shutdown_timeout_secs (float | None): Timeout for stopping the terminal. Default is None.
         healthcheck_timeout_secs (float | None): Timeout for health checks. Default is None.
     """
     backend: ManagedTerminalBackend
+    dockerized: DockerizedMT5TerminalConfig | None = None
     startup_timeout_secs: float | None = None
     shutdown_timeout_secs: float | None = None
     healthcheck_timeout_secs: float | None = None
