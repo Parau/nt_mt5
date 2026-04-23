@@ -31,6 +31,12 @@
 
 ## 4) Testing rules
 - Follow NautilusTrader testing intent and Phase 7 expectations: maintain meaningful unit, integration, acceptance/smoke, performance, and memory-stability coverage.
+- Before changing supported/unsupported behavior or test scope, consult:
+  - `docs/adapter_contract.md`
+  - `docs/testing_contract.md`
+  - `docs/data_capability_matrix.md`
+  - `docs/execution_capability_matrix.md`
+  - `docs/decisions.md`
 - Prefer deterministic fakes/stubs over heavy mocking.
 - Use mocks only where they keep the test focused; do not replace most of the adapter with mocks and still call it integration coverage.
 - Integration tests should pass through real adapter logic whenever practical.
@@ -47,6 +53,12 @@
 - Keep docs concise, direct, and easy to maintain.
 - Document adapter-specific capability limits and behavior clearly, especially supported order types, time-in-force rules, historical/live data support, and unsupported features.
 - When compatibility choices are intentional, document them explicitly instead of leaving them implicit.
+- Keep these project docs aligned with implementation, tests, and documented support limits:
+  - `docs/adapter_contract.md`
+  - `docs/testing_contract.md`
+  - `docs/data_capability_matrix.md`
+  - `docs/execution_capability_matrix.md`
+  - `docs/decisions.md`
 
 ## 6) PR rules for coding agents
 - Stay inside the requested scope.
