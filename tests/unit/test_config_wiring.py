@@ -87,9 +87,34 @@ def test_get_resolved_mt5_client_managed_terminal_not_implemented(mock_component
         managed_terminal=ManagedTerminalConfig(backend=ManagedTerminalBackend.LOCAL_PROCESS),
     )
 
-    with pytest.raises(RuntimeError, match="MANAGED_TERMINAL access mode was recognized, but the backend .* is not yet implemented in this phase"):
+    with pytest.raises(
+        RuntimeError,
+        match="MANAGED_TERMINAL access mode was recognized, but the backend 'ManagedTerminalBackend.LOCAL_PROCESS' is not yet implemented in this phase.",
+    ):
         get_resolved_mt5_client(
-            mock_components["loop"], mock_components["msgbus"], mock_components["cache"], mock_components["clock"], config
+            mock_components["loop"],
+            mock_components["msgbus"],
+            mock_components["cache"],
+            mock_components["clock"],
+            config,
+        )
+
+def test_get_resolved_mt5_client_managed_terminal_dockerized(mock_components):
+    config = MetaTrader5DataClientConfig(
+        terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
+        managed_terminal=ManagedTerminalConfig(backend=ManagedTerminalBackend.DOCKERIZED),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="MANAGED_TERMINAL access mode was recognized, but the backend 'ManagedTerminalBackend.DOCKERIZED' is not yet implemented in this phase.",
+    ):
+        get_resolved_mt5_client(
+            mock_components["loop"],
+            mock_components["msgbus"],
+            mock_components["cache"],
+            mock_components["clock"],
+            config,
         )
 
 def test_get_resolved_mt5_client_missing_config_raises_error(mock_components):
@@ -101,4 +126,20 @@ def test_get_resolved_mt5_client_missing_config_raises_error(mock_components):
     with pytest.raises(ValueError, match="external_rpyc config is required"):
         get_resolved_mt5_client(
             mock_components["loop"], mock_components["msgbus"], mock_components["cache"], mock_components["clock"], config
+        )
+
+def test_get_resolved_mt5_client_managed_terminal_missing_config(mock_components):
+    config = MetaTrader5DataClientConfig(
+        terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
+        managed_terminal=None,
+        dockerized_gateway=None,
+    )
+
+    with pytest.raises(ValueError, match="managed_terminal config is required for MANAGED_TERMINAL terminal access."):
+        get_resolved_mt5_client(
+            mock_components["loop"],
+            mock_components["msgbus"],
+            mock_components["cache"],
+            mock_components["clock"],
+            config,
         )
