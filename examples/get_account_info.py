@@ -1,7 +1,7 @@
-from metatrader5ext import MetaTrader5Ext, MetaTrader5ExtConfig
+from nautilus_mt5.metatrader5 import MetaTrader5, RpycConnectionConfig
 
-config = MetaTrader5ExtConfig()
-client = MetaTrader5Ext(config=config)
+config = RpycConnectionConfig(host="localhost", port=18812)
+client = MetaTrader5(config=config)
 client.connect()
 print(client.is_connected())
 
