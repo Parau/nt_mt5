@@ -1,30 +1,29 @@
 # Nautilus MetaTrader 5 Adapter 🌟
 
-This adapter allows for seamless integration between the Nautilus Trader and MetaTrader 5, providing capabilities for market data retrieval, order execution, and account management through the MetaTrader 5 Terminal using either IPC for Windows, RPyC for Linux, or Sockets for EA (suitable for streaming).
+This adapter allows for seamless integration between NautilusTrader and MetaTrader 5, providing capabilities for market data retrieval, order execution, and account management. It supports remote terminal access through a dedicated RPyC bridge and high-speed data streaming via MetaTrader 5 Expert Advisors (EA).
 
 ## Terminal Access Modes 🛠️
 
-This adapter supports two main modes for accessing the MetaTrader 5 Terminal:
+The adapter architecture distinguishes between two main access modes:
 
-1. **External RPyC Mode (`EXTERNAL_RPYC`)** 🌐
-   - Connects to an existing MT5 RPyC gateway.
-   - The adapter does not manage the lifecycle of the terminal (it assumes it's already running).
-   - Ideal for remote terminal access or when the terminal is managed by another process.
+1. **External RPyC Mode (`EXTERNAL_RPYC`)** 🌐 — **Currently Supported**
+   - Connects to an existing MT5 RPyC bridge (e.g., running on a remote Windows machine or a separate container).
+   - The adapter does not manage the lifecycle of the terminal; it assumes the bridge is already operational.
+   - This is the recommended path for immediate use and remote terminal access.
 
-2. **Managed Terminal Mode (`MANAGED_TERMINAL`)** 📦
-   - The adapter is responsible for starting, supervising, and stopping the terminal.
-   - Supports different backends (e.g., `DOCKERIZED`).
-   - *Note: This mode is being transitioned to a more unified architecture.*
+2. **Managed Terminal Mode (`MANAGED_TERMINAL`)** 📦 — **Planned**
+   - Designed for scenarios where the adapter manages the terminal lifecycle (starting, health-checking, and stopping).
+   - Will support different backends, such as `DOCKERIZED` (internal strategy for running MT5 in a container).
+   - **Note:** This mode is currently under development and not yet operational.
 
-## Communication Modes (Legacy) 📡
+## Communication Modes 📡
 
-Within the terminal access, the adapter can communicate via:
+Within the chosen terminal access mode, the adapter uses different communication strategies:
 
-- **IPC Mode**: Using the MetaTrader Python library (or RPyC bridge).
-- **Socket Mode** (Using MetaTrader EA):
-   - Connects to the MetaTrader 5 Expert Advisor (EA) via a custom socket server.
-   - Enables external programs (Python, JavaScript, C++) to interact with MT5.
-   - Supports real-time updates.
+- **IPC Mode**: Standard MetaTrader 5 Python integration, leveraged via the RPyC bridge to support Linux and remote environments.
+- **Socket Mode (EA)**:
+   - Connects to a MetaTrader 5 Expert Advisor (EA) for low-latency streaming.
+   - Ideal for real-time market data updates and fast execution.
 
 ## Nomenclature Clarity 📖
 
@@ -37,53 +36,44 @@ To avoid confusion, please note the following nomenclature used throughout this 
 
 To install the MetaTrader 5 Adapter, follow these steps:
 
-1. Clone the repository:
+1. **Clone the repository:**
    ```sh
    git clone https://github.com/Parau/nt_mt5.git
    ```
 
-2. Navigate to the project directory:
+2. **Navigate to the project directory:**
    ```sh
    cd nt_mt5
    ```
 
-3. Pull the Docker image:
-   ```sh
-   docker pull docker.io/fortesenselabs/metatrader5-terminal:latest
-   ```
-
-4. Install the required Python packages (we use `uv` but you can use `pip`):
+3. **Install the required Python packages** (we use `uv` but you can use `pip`):
    ```sh
    uv pip install -e .
    ```
 
+> **Note:** Docker is not required for the default `EXTERNAL_RPYC` mode.
+
 ## Usage 🖥️
 
-To run the MetaTrader 5 Adapter, execute the following commands:
+The primary way to use the adapter is via the `EXTERNAL_RPYC` mode, connecting to an existing bridge.
 
 ```bash
 cd examples
-```
-
-```bash
 cp .env.example .env
+# Edit .env with your MT5 credentials and bridge host/port
+python connect_with_external_rpyc.py
 ```
 
-```bash
-python connect_with_dockerized_terminal.py
-```
-
-**NOTE:** Make sure to configure the `.env` file properly before running the script or the Docker image. ⚠️
+**NOTE:** Ensure you have a running MT5 RPyC bridge accessible at the host and port specified in your `.env` file. ⚠️
 
 ### Detailed Steps:
 
-1. Ensure Docker is installed and running on your machine.
-2. Clone the repository and navigate to the project directory (`nt_mt5`).
-3. Pull the Docker image for MetaTrader 5 Terminal.
-4. Install the required Python packages (`uv pip install -e .`).
-5. Navigate to the `examples` directory.
-6. Copy the `.env.example` file to `.env` and configure it with your MetaTrader 5 credentials.
-7. Run the `connect_with_dockerized_terminal.py` script to start the adapter.
+1. Clone the repository and navigate to the project directory (`nt_mt5`).
+2. Install the required Python packages (`uv pip install -e .`).
+3. Navigate to the `examples` directory.
+4. Copy the `.env.example` file to `.env` and configure it with your MetaTrader 5 credentials and bridge connection details.
+5. Ensure your MT5 RPyC bridge is running (typically on a Windows machine or a container).
+6. Run the `connect_with_external_rpyc.py` script to start the adapter.
 
 ## Project Structure 🗂️
 
@@ -92,15 +82,15 @@ The project structure is organized as follows:
 ```
 nautilus_mt5/
 ├── examples/
-│   ├── connect_with_dockerized_terminal.py
+│   ├── connect_with_external_rpyc.py
 │   ├── .env.example
 │   └── ...
 ├── nautilus_mt5/    # Source code for the adapter
 ├── tests/                   # Test cases
 ├── MQL5/                    # MQL5 scripts and EA module
 ├── docs/                    # Documentation files
-├── pyproject.toml           # Poetry configuration
-├── poetry.lock              # Dependency lock file
+├── pyproject.toml           # Project configuration
+├── uv.lock                  # Dependency lock file (using uv)
 ├── build.py                 # Build script
 ├── .gitignore               # Git ignore file
 ├── LICENSE                  # License file
