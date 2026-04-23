@@ -73,6 +73,10 @@ def get_resolved_mt5_client(
     managed_backend: str | None = None
 
     if terminal_access == MT5TerminalAccessMode.EXTERNAL_RPYC:
+        if config.managed_terminal is not None:
+            raise ValueError(
+                "managed_terminal config must be None for EXTERNAL_RPYC terminal access."
+            )
         external_rpyc = config.external_rpyc
         if external_rpyc is None:
             # Fallback for transition if old rpyc_config exists
@@ -90,6 +94,10 @@ def get_resolved_mt5_client(
             rpyc_keep_alive = external_rpyc.keep_alive
 
     elif terminal_access == MT5TerminalAccessMode.MANAGED_TERMINAL:
+        if config.external_rpyc is not None:
+            raise ValueError(
+                "external_rpyc config must be None for MANAGED_TERMINAL terminal access."
+            )
         managed_terminal = config.managed_terminal
         if managed_terminal is None:
             # Fallback for transition if old dockerized_gateway exists
