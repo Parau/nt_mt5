@@ -17,11 +17,13 @@ from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.config import (
     DockerizedMT5TerminalConfig,
+    ManagedTerminalConfig,
     MetaTrader5DataClientConfig,
     MetaTrader5ExecClientConfig,
     MetaTrader5InstrumentProviderConfig,
 )
-from nautilus_mt5.factories import MT5LiveDataClientFactory
+from nautilus_mt5.factories import MT5LiveDataClientFactory, MT5LiveExecClientFactory
+from nautilus_mt5.client.types import ManagedTerminalBackend
 
 from dotenv import load_dotenv
 
@@ -33,6 +35,9 @@ load_dotenv()
 
 # *** THIS INTEGRATION IS STILL UNDER CONSTRUCTION. ***
 # *** CONSIDER IT TO BE IN AN UNSTABLE BETA PHASE AND EXERCISE CAUTION. ***
+
+# NOTE: The MANAGED_TERMINAL mode with DOCKERIZED backend is currently a placeholder.
+# Running this example will raise a RuntimeError as implemented in nautilus_mt5/factories.py.
 
 BROKER_SERVER = os.environ["MT5_SERVER"]
 mt5_symbols = [
@@ -48,10 +53,13 @@ mt5_symbols = [
     # MT5Symbol(symbol="Boom 1000 Index", broker=BROKER_SERVER),
 ]
 
-dockerized_gateway = DockerizedMT5TerminalConfig(
-    account_number=os.environ["MT5_ACCOUNT_NUMBER"],
-    password=os.environ["MT5_PASSWORD"],
-    server=os.environ["MT5_SERVER"],
+managed_terminal = ManagedTerminalConfig(
+    backend=ManagedTerminalBackend.DOCKERIZED,
+    dockerized=DockerizedMT5TerminalConfig(
+        account_number=os.environ["MT5_ACCOUNT_NUMBER"],
+        password=os.environ["MT5_PASSWORD"],
+        server=os.environ["MT5_SERVER"],
+    ),
 )
 
 instrument_provider = MetaTrader5InstrumentProviderConfig(
@@ -82,9 +90,8 @@ config_node = TradingNodeConfig(
             handle_revised_bars=False,
             use_regular_trading_hours=True,
             terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
-            # market_data_type=IBMarketDataTypeEnum.DELAYED_FROZEN,  # If unset default is REALTIME
             instrument_provider=instrument_provider,
-            dockerized_gateway=dockerized_gateway,
+            managed_terminal=managed_terminal,
         ),
     },
     exec_clients={
@@ -92,7 +99,7 @@ config_node = TradingNodeConfig(
             client_id=1,
             account_id=os.environ["MT5_ACCOUNT_NUMBER"],
             terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
-            dockerized_gateway=dockerized_gateway,
+            managed_terminal=managed_terminal,
             instrument_provider=instrument_provider,
             routing=RoutingConfig(
                 default=True,
@@ -199,7 +206,7 @@ node.trader.add_strategy(strategy)
 
 # Register your client factories with the node (can take user-defined factories)
 node.add_data_client_factory("MT5", MT5LiveDataClientFactory)
-# node.add_exec_client_factory("MT5", MT5LiveExecClientFactory)
+node.add_exec_client_factory("MT5", MT5LiveExecClientFactory)
 node.build()
 node.portfolio.set_specific_venue(MT5_VENUE)
 

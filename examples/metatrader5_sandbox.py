@@ -14,10 +14,14 @@ from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.data import BarType
 from nautilus_trader.persistence.catalog import ParquetDataCatalog
 
-from nautilus_mt5.config import DockerizedMT5TerminalConfig
-from nautilus_mt5.config import MetaTrader5DataClientConfig
-from nautilus_mt5.config import MetaTrader5InstrumentProviderConfig
+from nautilus_mt5.config import (
+    DockerizedMT5TerminalConfig,
+    ManagedTerminalConfig,
+    MetaTrader5DataClientConfig,
+    MetaTrader5InstrumentProviderConfig,
+)
 from nautilus_mt5.factories import MT5LiveDataClientFactory
+from nautilus_mt5.client.types import MT5TerminalAccessMode, ManagedTerminalBackend
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -30,11 +34,16 @@ SANDBOX_INSTRUMENTS = catalog.instruments(
     instrument_ids=["EUR/USD.MetaQuotes-Demo"]
 )  # Step Index
 
-# Set up the MetaTrader 5 configuration, this is applicable only when using Docker.
-dockerized_gateway = DockerizedMT5TerminalConfig(
-    account_number=os.environ["MT5_ACCOUNT_NUMBER"],
-    password=os.environ["MT5_PASSWORD"],
-    server=os.environ["MT5_SERVER"],
+# Set up the MetaTrader 5 configuration.
+# NOTE: The MANAGED_TERMINAL mode with DOCKERIZED backend is currently a placeholder.
+# Running this example will raise a RuntimeError as implemented in nautilus_mt5/factories.py.
+managed_terminal = ManagedTerminalConfig(
+    backend=ManagedTerminalBackend.DOCKERIZED,
+    dockerized=DockerizedMT5TerminalConfig(
+        account_number=os.environ["MT5_ACCOUNT_NUMBER"],
+        password=os.environ["MT5_PASSWORD"],
+        server=os.environ["MT5_SERVER"],
+    ),
 )
 
 instrument_provider = MetaTrader5InstrumentProviderConfig(
@@ -61,8 +70,9 @@ config_node = TradingNodeConfig(
         "MT5": MetaTrader5DataClientConfig(
             client_id=1,
             use_regular_trading_hours=True,
+            terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
             instrument_provider=instrument_provider,
-            dockerized_gateway=dockerized_gateway,
+            managed_terminal=managed_terminal,
         ),
     },
     exec_clients=exec_clients,  # type: ignore

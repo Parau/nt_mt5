@@ -1,5 +1,5 @@
 import asyncio
-from nautilus_mt5.ea.client import EAClient
+from nautilus_mt5.metatrader5 import EAClient
 
 def handle_stream_data(data: str) -> None:
     """Callback function to handle received streaming data."""
