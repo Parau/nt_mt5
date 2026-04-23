@@ -7,8 +7,8 @@ on:
       - closed
 
 jobs:
+  # JOB 1: Aprova e faz o Merge (AQUI entra a limpeza da branch)
   auto-merge-jules:
-    # AJUSTE 1: Verifica o login OU a assinatura no texto do PR
     if: |
       github.event.action == 'opened' && 
       (github.event.pull_request.user.login == 'google-labs-jules' || 
@@ -20,17 +20,17 @@ jobs:
           GH_TOKEN: ${{ secrets.MEU_TOKEN_DE_ACESSO }}
         run: gh pr review ${{ github.event.pull_request.number }} --approve --repo ${{ github.repository }}
 
-      # AJUSTE 2: Pequeno fôlego para o GitHub processar a aprovação antes do merge
       - name: Wait for status
         run: sleep 5
 
-      - name: Executar Merge Automático
+      - name: Executar Merge Automático e Deletar Branch
         env:
           GH_TOKEN: ${{ secrets.MEU_TOKEN_DE_ACESSO }}
-        run: gh pr merge ${{ github.event.pull_request.number }} --merge --admin --repo ${{ github.repository }}
+        # Adicionei o --delete-branch aqui!
+        run: gh pr merge ${{ github.event.pull_request.number }} --merge --admin --delete-branch --repo ${{ github.repository }}
 
+  # JOB 2: Apenas decide qual é a próxima tarefa
   iniciar-proxima-tarefa:
-    # AJUSTE 3: Mesma verificação de segurança aqui
     if: |
       github.event.action == 'closed' && github.event.pull_request.merged == true && 
       (github.event.pull_request.user.login == 'google-labs-jules' || 
@@ -47,14 +47,15 @@ jobs:
           ISSUE_FECHADA=$(gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json closingIssuesReferences --jq '.closingIssuesReferences[0].number')
           
           if [ -z "$ISSUE_FECHADA" ] || [ "$ISSUE_FECHADA" == "null" ]; then
-            echo "Aviso: Nenhuma issue vinculada (Linked Issue) encontrada no PR."
+            echo "Aviso: Nenhuma issue vinculada encontrada no PR."
             exit 0
           fi
           
           PROXIMA_ISSUE=$(jq -r ".\"$ISSUE_FECHADA\"" fila_jules.json)
           
           if [ "$PROXIMA_ISSUE" != "null" ]; then
-            gh issue edit $PROXIMA_ISSUE --add-label "Jules" --repo ${{ github.repository }}
+            # ATENÇÃO: Use o nome exato da label que você criou (jules ou Jules)
+            gh issue edit $PROXIMA_ISSUE --add-label "jules" --repo ${{ github.repository }}
             echo "Sucesso: Issue #$PROXIMA_ISSUE ativada."
           else
             echo "Fim da sequência mapeada no JSON."
