@@ -1,7 +1,7 @@
 # Adapter Contract
 
 This document is the internal contract for the `nt_mt5` adapter.
-It is derived from the official NautilusTrader adapter documentation and should be read together with the upstream references below.
+It is derived from the official NautilusTrader adapter documentation and should be read together with the upstream references below and `docs/terminal_access_contract.md`.
 
 ## Source of truth
 
@@ -118,13 +118,15 @@ The adapter must clearly document:
 Use:
 - `docs/data_capability_matrix.md` as the local matrix for supported and unsupported data capabilities
 - `docs/execution_capability_matrix.md` as the local matrix for supported and unsupported execution capabilities
+- `docs/terminal_access_contract.md` as the local contract for terminal-access behavior and public terminal-access architecture
 
-These matrices are operational project documents derived from the NautilusTrader specs; the published upstream docs remain the final source of truth.
+These matrices and contracts are operational project documents derived from the NautilusTrader specs; the published upstream docs remain the final source of truth.
 
 ## Notes for contributors and coding agents
 
 Before changing behavior, check whether the change belongs to:
 - upstream NautilusTrader contract, or
-- a local project decision recorded in `docs/decisions.md`
+- a local project decision recorded in `docs/decisions.md`, or
+- the stable terminal-access model recorded in `docs/terminal_access_contract.md`
 
 Do not reopen settled architectural choices unless a real bug or upstream requirement forces the change.
