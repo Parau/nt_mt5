@@ -1,5 +1,5 @@
 import os
-from nautilus_mt5.common import MT5Symbol
+from nautilus_mt5.data_types import MT5Symbol
 from nautilus_trader.config import LiveDataEngineConfig
 from nautilus_trader.config import LoggingConfig
 from nautilus_trader.config import RoutingConfig
@@ -35,8 +35,8 @@ mt5_symbols = [
 ]
 
 external_rpyc = ExternalRPyCTerminalConfig(
-    host="127.0.0.1",
-    port=18812,
+    host=os.environ.get("MT5_HOST", "127.0.0.1"),
+    port=int(os.environ.get("MT5_PORT", 18812)),
 )
 
 instrument_provider = MetaTrader5InstrumentProviderConfig(

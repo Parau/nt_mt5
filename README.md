@@ -14,7 +14,7 @@ The adapter architecture distinguishes between two main access modes:
 2. **Managed Terminal Mode (`MANAGED_TERMINAL`)** 📦 — **Planned**
    - Designed for scenarios where the adapter manages the terminal lifecycle (starting, health-checking, and stopping).
    - Will support different backends, such as `DOCKERIZED` (internal strategy for running MT5 in a container).
-   - **Note:** This mode is currently under development and not yet operational.
+   - **Note:** This mode is currently under development and not yet operational (raises `RuntimeError`).
 
 ## Communication Modes 📡
 
@@ -61,7 +61,7 @@ The primary way to use the adapter is via the `EXTERNAL_RPYC` mode, connecting t
 cd examples
 cp .env.example .env
 # Edit .env with your MT5 credentials and bridge host/port
-python connect_with_external_rpyc.py
+uv run python connect_with_external_rpyc.py
 ```
 
 **NOTE:** Ensure you have a running MT5 RPyC bridge accessible at the host and port specified in your `.env` file. ⚠️
