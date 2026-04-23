@@ -57,9 +57,6 @@ class MetaTrader5Client(Component,
                 terminal_access: MT5TerminalAccessMode = MT5TerminalAccessMode.EXTERNAL_RPYC,
         ):
         self._mt5_client = {"mt5": None, "ea": None}
-        self._mt5_client['mt5'] = None
-        self._mt5_client = {"mt5": None, "ea": None}
-        self._mt5_client['mt5'] = None
         try:
             formatted_id = f"{client_id:03d}"
         except TypeError:

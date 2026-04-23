@@ -76,42 +76,34 @@ def get_resolved_mt5_client(
             )
         external_rpyc = config.external_rpyc
         if external_rpyc is None:
-            # Fallback for transition if old rpyc_config exists
-            if config.rpyc_config:
-                rpyc_host = config.rpyc_config.host
-                rpyc_port = config.rpyc_config.port
-                rpyc_keep_alive = config.rpyc_config.keep_alive
-            else:
-                raise ValueError(
-                    "external_rpyc config is required for EXTERNAL_RPYC terminal access."
-                )
-        else:
-            rpyc_host = external_rpyc.host
-            rpyc_port = external_rpyc.port
-            rpyc_keep_alive = external_rpyc.keep_alive
+            raise ValueError(
+                "external_rpyc config is required for EXTERNAL_RPYC terminal access."
+            )
+        rpyc_host = external_rpyc.host
+        rpyc_port = external_rpyc.port
+        rpyc_keep_alive = external_rpyc.keep_alive
 
     elif terminal_access == MT5TerminalAccessMode.MANAGED_TERMINAL:
         if config.external_rpyc is not None:
             raise ValueError(
                 "external_rpyc config must be None for MANAGED_TERMINAL terminal access."
             )
+        if config.dockerized_gateway is not None:
+            raise ValueError(
+                "dockerized_gateway config at top-level is legacy. Use managed_terminal.dockerized instead for MANAGED_TERMINAL access."
+            )
         managed_terminal = config.managed_terminal
         if managed_terminal is None:
             raise ValueError(
                 "managed_terminal config is required for MANAGED_TERMINAL terminal access."
             )
-        else:
-            # For now, we only have placeholder for managed terminal
-            # If backend is DOCKERIZED, we could potentially use the old logic if available
-            raise RuntimeError(
-                f"MANAGED_TERMINAL access mode was recognized, but the backend '{managed_terminal.backend}' is not yet implemented in this phase."
-            )
+        managed_backend = managed_terminal.backend.value
+        # For now, we only have placeholder for managed terminal
+        raise RuntimeError(
+            f"MANAGED_TERMINAL access mode was recognized, but the backend 'ManagedTerminalBackend.{managed_terminal.backend.name}' is not yet implemented in this phase."
+        )
     else:
-        # Legacy/Default handling if terminal_access is somehow not set
-        rpyc_config = config.rpyc_config or RpycConnectionConfig()
-        rpyc_host = rpyc_config.host
-        rpyc_port = rpyc_config.port
-        rpyc_keep_alive = rpyc_config.keep_alive
+        raise ValueError(f"Unsupported or missing terminal_access mode: {terminal_access}")
 
     # Re-wrap as RpycConnectionConfig for internal use
     resolved_rpyc_config = RpycConnectionConfig(
