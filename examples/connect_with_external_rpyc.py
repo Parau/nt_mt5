@@ -28,7 +28,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Use an already running gateway
-EXTERNAL_HOST = os.environ.get("MT5_HOST", "localhost")
+EXTERNAL_HOST = os.environ.get("MT5_HOST", "127.0.0.1")
 EXTERNAL_PORT = int(os.environ.get("MT5_PORT", 18812))
 
 external_rpyc = ExternalRPyCTerminalConfig(
