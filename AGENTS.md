@@ -11,7 +11,7 @@
   - low-level transport, networking, parsing, and bridge concerns in the client layer;
   - Python adapter layer for `DataClient`, `ExecutionClient`, provider, configs, and factories.
 - Keep the bridge MT5-native. Do not reintroduce Interactive Brokers semantics, naming, or event models.
-- Prefer direct MT5 concepts and APIs such as `account_info`, `terminal_info`, `symbol_info`, `symbols_get`, `symbol_info_tick`, `copy_ticks*`, `copy_rates*`, `orders_get`, `positions_get`, `history_orders_get`, `history_deals_get`, `order_check`, and `order_send`.
+- Prefer direct MT5 concepts and APIs only through the terminal-access architecture defined in `docs/terminal_access_contract.md`. Do not bypass `external_rpyc` or `managed_terminal` by introducing ad hoc direct transport paths.
 - Translate MT5 -> Nautilus at the adapter boundary. Do not leak bridge-specific, RPyC-specific, or mock-specific objects across the codebase.
 - `METATRADER_5` is the structural venue everywhere.
 - Broker/server/account details belong in instrument/account metadata, not in venue identity.
