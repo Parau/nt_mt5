@@ -107,7 +107,7 @@ config_node = TradingNodeConfig(
         ),
     },
     data_engine=LiveDataEngineConfig(
-        time_bars_timestamp_on_close=False,  # Will use opening time as `ts_event` (same like IB)
+        time_bars_timestamp_on_close=False,  # Will use opening time as `ts_event`
         validate_data_sequence=True,  # Will make sure DataEngine discards any Bars received out of sequence
     ),
     timeout_connection=90.0,

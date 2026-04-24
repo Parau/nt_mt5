@@ -502,7 +502,7 @@ class MetaTrader5ClientMarketDataMixin:
         Convert the date from BarData to unix nanoseconds.
 
         If the bar type's aggregation is 14, the bar.time is always returned in the
-        YYYYMMDD format from IB. For all other aggregations, the bar.time is returned
+        YYYYMMDD format. For all other aggregations, the bar.time is returned
         in system time.
 
         Parameters
@@ -628,7 +628,7 @@ class MetaTrader5ClientMarketDataMixin:
         bar_type_str : str
             The string representation of the bar type.
         bar : BarData
-            The bar data received from Interactive Brokers.
+            The bar data received from MetaTrader 5.
         handle_revised_bars : bool
             Indicates whether revised bars should be handled or not.
         historical : bool | None, optional
@@ -802,9 +802,8 @@ class MetaTrader5ClientMarketDataMixin:
         Receive bars in real-time if keepUpToDate is set as True in reqHistoricalData.
 
         Similar to realTimeBars function, except returned data is a composite of
-        historical data and real time data that is equivalent to TWS chart functionality
-        to keep charts up to date. Returned bars are successfully updated using real-
-        time data.
+        historical data and real time data to keep charts up to date. Returned bars are
+        successfully updated using real-time data.
 
         """
         if not (subscription := self._subscriptions.get(req_id=req_id)):
@@ -860,7 +859,7 @@ class MetaTrader5ClientMarketDataMixin:
         """
         Request market data for a specific symbol and tick type.
 
-        This method requests market data from Interactive Brokers for the given
+        This method requests market data from MetaTrader 5 for the given
         symbol and tick type, waits for the response, and returns the result.
 
         Parameters
