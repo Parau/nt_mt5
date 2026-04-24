@@ -3,7 +3,67 @@ Collection of misc tools
 """
 
 import sys
-from typing import Union, List
+from typing import Any, Union, List
+
+
+def normalize_rpyc_return(obj: Any) -> Any:
+    """
+    Recursively normalize RPyC netrefs and complex objects into pure Python structures.
+
+    This ensures that data coming from an external RPyC gateway is converted into
+    safe, local Python types (dict, list, tuple, etc.) before being used by the adapter.
+
+    Parameters
+    ----------
+    obj : Any
+        The object to normalize.
+
+    Returns
+    -------
+    Any
+        The normalized object.
+    """
+    import rpyc
+
+    # 1. Obtain local copy if it's a netref
+    try:
+        obj = rpyc.classic.obtain(obj)
+    except Exception:
+        pass
+
+    # 2. Handle None and scalars
+    if obj is None or isinstance(obj, (bool, int, float, str, bytes)):
+        return obj
+
+    # 3. Handle objects with _asdict (namedtuples)
+    if hasattr(obj, "_asdict") and callable(obj._asdict):
+        return normalize_rpyc_return(obj._asdict())
+
+    # 4. Handle list-like (list, tuple, set)
+    if isinstance(obj, (list, tuple, set)):
+        normalized_items = [normalize_rpyc_return(item) for item in obj]
+        if isinstance(obj, list):
+            return normalized_items
+        if isinstance(obj, tuple):
+            return tuple(normalized_items)
+        if isinstance(obj, set):
+            # Convert set to list for predictability
+            return list(normalized_items)
+
+    # 5. Handle dict-like
+    if isinstance(obj, dict):
+        return {k: normalize_rpyc_return(v) for k, v in obj.items()}
+
+    # 6. Handle custom objects with public attributes
+    if hasattr(obj, "__dict__") and not isinstance(obj, type):
+        # Filter out private attributes
+        return {
+            k: normalize_rpyc_return(v)
+            for k, v in obj.__dict__.items()
+            if not k.startswith("_")
+        }
+
+    return obj
 
 
 class BadMessage(Exception):

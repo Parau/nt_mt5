@@ -1,4 +1,5 @@
 import rpyc
+from nautilus_mt5.metatrader5.utils import normalize_rpyc_return
 
 """
 MetaTrader 5 for linux system
@@ -527,7 +528,7 @@ mt5.shutdown()
     `shutdown`, `terminal_info`, `version`
         '''
         try:
-            return self.__conn.root.exposed_initialize(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_initialize(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: initialize"
@@ -658,7 +659,7 @@ account properties:
     `initialize`, `shutdown`
         '''
         try:
-            return self.__conn.root.exposed_login(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_login(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: login"
@@ -707,7 +708,7 @@ mt5.shutdown()
 
         '''
         try:
-            return self.__conn.root.exposed_shutdown(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_shutdown(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: shutdown"
@@ -806,7 +807,7 @@ terminal_info() as dataframe:
     `initialize`, `shutdown`, `terminal_info`
         '''
         try:
-            return self.__conn.root.exposed_version(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_version(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: version"
@@ -870,7 +871,7 @@ mt5.shutdown()
     `version`, `GetLastError`
         '''
         try:
-            return self.__conn.root.exposed_last_error(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_last_error(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: last_error"
@@ -893,7 +894,7 @@ get_constant(
 The value of the constant.
         '''
         try:
-            return self.__conn.root.exposed_get_constant(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_get_constant(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: get_constant"
@@ -1031,7 +1032,7 @@ account_info() as dataframe
 
         '''
         try:
-            return self.__conn.root.exposed_account_info(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_account_info(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: account_info"
@@ -1155,7 +1156,7 @@ terminal_info() as dataframe:
 
         '''
         try:
-            return self.__conn.root.exposed_terminal_info(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_terminal_info(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: terminal_info"
@@ -1210,7 +1211,7 @@ mt5.shutdown()
 
         '''
         try:
-            return self.__conn.root.exposed_symbols_total(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_symbols_total(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: symbols_total"
@@ -1332,7 +1333,7 @@ FOREX.CHF.M5 : SymbolInfo(custom=True, chart_mode=0, select=False, visible=False
 
         '''
         try:
-            return self.__conn.root.exposed_symbols_get(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_symbols_get(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: symbols_get"
@@ -1511,7 +1512,7 @@ Show symbol_info()._asdict():
 
         '''
         try:
-            return self.__conn.root.exposed_symbol_info(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_symbol_info(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: symbol_info"
@@ -1596,7 +1597,7 @@ Show symbol_info_tick._asdict():
     ``symbol_info`
         '''
         try:
-            return self.__conn.root.exposed_symbol_info_tick(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_symbol_info_tick(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: symbol_info_tick"
@@ -1799,7 +1800,7 @@ symbol_info_dict() as dataframe:
     `symbol_info`
         '''
         try:
-            return self.__conn.root.exposed_symbol_select(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_symbol_select(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: symbol_select"
@@ -1836,7 +1837,7 @@ The function is similar to `MarketBookAdd`.
 
         '''
         try:
-            return self.__conn.root.exposed_market_book_add(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_market_book_add(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: market_book_add"
@@ -1980,7 +1981,7 @@ MetaTrader5 package version:  5.0.34
 
         '''
         try:
-            return self.__conn.root.exposed_market_book_get(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_market_book_get(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: market_book_get"
@@ -2017,7 +2018,7 @@ The function is similar to `MarketBookRelease`.
 
         '''
         try:
-            return self.__conn.root.exposed_market_book_release(symbol, *args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_market_book_release(symbol, *args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: market_book_release"
@@ -2180,7 +2181,7 @@ Display dataframe with data
         '''
         code=f'mt5.copy_rates_from("{symbol}", {timeframe}, {repr(date_from.astimezone())}, {count})'
         try:
-            return rpyc.classic.obtain(self.__conn.eval(code))
+            return normalize_rpyc_return(self.__conn.eval(code))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: eval (needed for copy_rates_from)"
@@ -2305,7 +2306,7 @@ Display dataframe with data
     `CopyRates`, `copy_rates_from`, `copy_rates_range`, `copy_ticks_from`, `copy_ticks_range`
         '''
         try:
-            return self.__conn.root.exposed_copy_rates_from_pos(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_copy_rates_from_pos(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: copy_rates_from_pos"
@@ -2446,7 +2447,7 @@ Display dataframe with data
         '''
         code=f'mt5.copy_rates_range("{symbol}", {timeframe}, {repr(date_from.astimezone())}, {repr(date_to.astimezone())})'
         try:
-            return rpyc.utils.classic.obtain(self.__conn.eval(code))
+            return normalize_rpyc_return(self.__conn.eval(code))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: eval (needed for copy_rates_range)"
@@ -2605,7 +2606,7 @@ Display dataframe with ticks
 
         '''
         try:
-            return self.__conn.root.exposed_copy_ticks_from(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_copy_ticks_from(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: copy_ticks_from"
@@ -2744,7 +2745,7 @@ Display dataframe with ticks
     `CopyRates`, `copy_rates_from_pos`, `copy_rates_range`, `copy_ticks_from`, `copy_ticks_range`
         '''
         try:
-            return self.__conn.root.exposed_copy_ticks_range(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_copy_ticks_range(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: copy_ticks_range"
@@ -2799,7 +2800,7 @@ mt5.shutdown()
 
         '''
         try:
-            return self.__conn.root.exposed_orders_total(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_orders_total(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: orders_total"
@@ -2933,7 +2934,7 @@ orders_get(group="*GBP*")=4
 
         '''
         try:
-            return self.__conn.root.exposed_orders_get(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_orders_get(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: orders_get"
@@ -3059,7 +3060,7 @@ Symbols to check margin: ('EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'EURJPY', 'GBP
 
         '''
         try:
-            return self.__conn.root.exposed_order_calc_margin(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_order_calc_margin(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: order_calc_margin"
@@ -3187,7 +3188,7 @@ Symbols to check margin: ('EURUSD', 'GBPUSD', 'USDJPY')
     `order_calc_margin`, `order_check`
         '''
         try:
-            return self.__conn.root.exposed_order_calc_profit(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_order_calc_profit(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: order_calc_profit"
@@ -3356,7 +3357,7 @@ Account сurrency: USD
 
         '''
         try:
-            return self.__conn.root.exposed_order_check(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_order_check(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: order_check"
@@ -3569,7 +3570,7 @@ MetaTrader5 package version:  5.0.29
     `order_check`, `OrderSend`,Trading operation types, Trading request structure, Structure of the trading request check results, Structure of the trading request result
         '''
         try:
-            return self.__conn.root.exposed_order_send(request, *args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_order_send(request, *args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: order_send"
@@ -3624,7 +3625,7 @@ mt5.shutdown()
 
         '''
         try:
-            return self.__conn.root.exposed_positions_total(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_positions_total(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: positions_total"
@@ -3754,7 +3755,7 @@ positions_get(group="*USD*")=5
 
         '''
         try:
-            return self.__conn.root.exposed_positions_get(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_positions_get(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: positions_get"
@@ -3823,7 +3824,7 @@ mt5.shutdown()
     `history_orders_get`, `history_deals_total`
         '''
         try:
-            return self.__conn.root.exposed_history_orders_total(date_from, date_to, *args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_history_orders_total(date_from, date_to, *args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: history_orders_total"
@@ -3969,7 +3970,7 @@ TradeOrder(ticket=535548147, time_setup=1583176242, time_setup_msc=1583176242265
 
         '''
         try:
-            return self.__conn.root.exposed_history_orders_get(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_history_orders_get(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: history_orders_get"
@@ -4040,7 +4041,7 @@ mt5.shutdown()
 
         '''
         try:
-            return self.__conn.root.exposed_history_deals_total(date_from, date_to, *args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_history_deals_total(date_from, date_to, *args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: history_deals_total"
@@ -4209,7 +4210,7 @@ Deals with position id #530218319: 2
     `history_deals_total`, `history_orders_get`
         '''
         try:
-            return self.__conn.root.exposed_history_deals_get(*args, **kwargs)
+            return normalize_rpyc_return(self.__conn.root.exposed_history_deals_get(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: history_deals_get"
