@@ -15,6 +15,7 @@ from nautilus_mt5.config import (
     DockerizedMT5TerminalConfig,
 )
 from nautilus_mt5.factories import MT5LiveDataClientFactory, MT5LiveExecClientFactory
+from nautilus_mt5.providers import MetaTrader5InstrumentProvider
 
 @pytest.fixture
 def mock_components():
@@ -66,6 +67,12 @@ def test_data_client_wiring_external_rpyc(mock_components):
             args, kwargs = mock_get_client.call_args
             assert kwargs["config"].terminal_access == MT5TerminalAccessMode.EXTERNAL_RPYC
 
+            # Verify InstrumentProvider wiring
+            mock_data_client_class.assert_called_once()
+            _, client_kwargs = mock_data_client_class.call_args
+            assert "instrument_provider" in client_kwargs
+            assert isinstance(client_kwargs["instrument_provider"], MetaTrader5InstrumentProvider)
+
 def test_exec_client_wiring_external_rpyc(mock_components):
     """
     Verify that MT5LiveExecClientFactory.create works correctly with EXTERNAL_RPYC.
@@ -95,6 +102,12 @@ def test_exec_client_wiring_external_rpyc(mock_components):
             mock_get_client.assert_called_once()
             args, kwargs = mock_get_client.call_args
             assert kwargs["config"].terminal_access == MT5TerminalAccessMode.EXTERNAL_RPYC
+
+            # Verify InstrumentProvider wiring
+            mock_exec_client_class.assert_called_once()
+            _, client_kwargs = mock_exec_client_class.call_args
+            assert "instrument_provider" in client_kwargs
+            assert isinstance(client_kwargs["instrument_provider"], MetaTrader5InstrumentProvider)
 
 def test_managed_terminal_wiring_distinct(mock_components):
     """

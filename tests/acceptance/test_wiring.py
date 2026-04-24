@@ -1,11 +1,14 @@
 import pytest
 
-from nautilus_mt5.config import DockerizedMT5TerminalConfig
-from nautilus_mt5.config import MetaTrader5DataClientConfig
-from nautilus_mt5.config import MetaTrader5ExecClientConfig
-from nautilus_mt5.config import MetaTrader5InstrumentProviderConfig
-from nautilus_mt5.factories import MT5LiveDataClientFactory
-from nautilus_mt5.factories import MT5LiveExecClientFactory
+from nautilus_mt5.client.types import MT5TerminalAccessMode, ManagedTerminalBackend
+from nautilus_mt5.config import (
+    DockerizedMT5TerminalConfig,
+    ManagedTerminalConfig,
+    MetaTrader5DataClientConfig,
+    MetaTrader5ExecClientConfig,
+    MetaTrader5InstrumentProviderConfig,
+)
+from nautilus_mt5.factories import MT5LiveDataClientFactory, MT5LiveExecClientFactory
 
 def test_dockerized_gateway_config():
     """
@@ -29,29 +32,37 @@ def test_dockerized_gateway_config():
 
 def test_client_configs():
     """
-    Ensure client configs use `client_id` and have correct defaults.
+    Ensure client configs use `client_id` and have correct nested managed_terminal defaults.
     """
     dockerized_gateway = DockerizedMT5TerminalConfig(
         account_number="123", password="abc", server="srv"
     )
+    managed_terminal = ManagedTerminalConfig(
+        backend=ManagedTerminalBackend.DOCKERIZED,
+        dockerized=dockerized_gateway,
+    )
 
     data_config = MetaTrader5DataClientConfig(
         client_id=1,
-        dockerized_gateway=dockerized_gateway
+        terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
+        managed_terminal=managed_terminal,
     )
 
     exec_config = MetaTrader5ExecClientConfig(
         client_id=1,
         account_id="123",
-        dockerized_gateway=dockerized_gateway
+        terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
+        managed_terminal=managed_terminal,
     )
 
     assert data_config.client_id == 1
-    assert data_config.dockerized_gateway is dockerized_gateway
+    assert data_config.terminal_access == MT5TerminalAccessMode.MANAGED_TERMINAL
+    assert data_config.managed_terminal.dockerized is dockerized_gateway
 
     assert exec_config.client_id == 1
     assert exec_config.account_id == "123"
-    assert exec_config.dockerized_gateway is dockerized_gateway
+    assert exec_config.terminal_access == MT5TerminalAccessMode.MANAGED_TERMINAL
+    assert exec_config.managed_terminal.dockerized is dockerized_gateway
 
     # Should not have `mt5_client_id`
     with pytest.raises(AttributeError):

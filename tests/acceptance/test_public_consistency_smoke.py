@@ -26,6 +26,13 @@ def test_readme_terminal_access_terminology():
     assert "DOCKERIZED" in content
     assert "internal strategy" in content.lower() or "backend" in content.lower()
 
+    # Reforço: DOCKERIZED não deve ser listado como um MT5TerminalAccessMode de primeiro nível
+    # na documentação pública (README)
+    assert "MT5TerminalAccessMode.DOCKERIZED" not in content
+    # O README deve deixar claro que os modos são EXTERNAL_RPYC e MANAGED_TERMINAL
+    assert "EXTERNAL_RPYC" in content
+    assert "MANAGED_TERMINAL" in content
+
 def test_example_external_rpyc_consistency():
     """
     Valida que o exemplo de external_rpyc reflete o caminho público atual.
