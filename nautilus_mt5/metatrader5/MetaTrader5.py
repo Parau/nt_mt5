@@ -523,7 +523,7 @@ mt5.shutdown()
 
     `shutdown`, `terminal_info`, `version`
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_initialize(*args, **kwargs)
 
     def login(self,*args,**kwargs):
         r'''
@@ -649,7 +649,7 @@ account properties:
 
     `initialize`, `shutdown`
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_login(*args, **kwargs)
 
     def shutdown(self,*args,**kwargs):
         r'''
@@ -693,7 +693,7 @@ mt5.shutdown()
 
 
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_shutdown(*args, **kwargs)
 
     def version(self,*args,**kwargs):
         r'''
@@ -787,7 +787,7 @@ terminal_info() as dataframe:
 
     `initialize`, `shutdown`, `terminal_info`
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_version(*args, **kwargs)
 
     def last_error(self,*args,**kwargs):
         r'''
@@ -846,7 +846,25 @@ mt5.shutdown()
 
     `version`, `GetLastError`
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_last_error(*args, **kwargs)
+
+    def get_constant(self,*args,**kwargs):
+        r'''
+# get_constant
+
+Get a MetaTrader 5 constant value by name.
+
+```python
+get_constant(
+   name      # constant name, e.g., "TIMEFRAME_M1"
+)
+```
+
+## Return Value
+
+The value of the constant.
+        '''
+        return self.__conn.root.exposed_get_constant(*args, **kwargs)
 
     def account_info(self,*args,**kwargs):
         r'''
@@ -979,7 +997,7 @@ account_info() as dataframe
 
 
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_account_info(*args, **kwargs)
 
     def terminal_info(self,*args,**kwargs):
         r'''
@@ -1098,10 +1116,7 @@ terminal_info() as dataframe:
 
 
         '''
-        if hasattr(self.__conn, "eval"):
-            return self.__conn.root.exposed_positions_get(*args, **kwargs)
-        else:
-            return self.__conn.root.exposed_terminal_info()
+        return self.__conn.root.exposed_terminal_info(*args, **kwargs)
 
     def symbols_total(self,*args,**kwargs):
         r'''
