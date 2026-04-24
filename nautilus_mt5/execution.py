@@ -86,7 +86,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
     loop : asyncio.AbstractEventLoop
         The event loop for the client.
     client : MetaTrader5Client
-        The nautilus MetaTrader5Client using ibapi.
+        The nautilus MetaTrader5Client.
     account_id: AccountId
         Account ID associated with this client.
     msgbus : MessageBus
@@ -123,7 +123,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             oms_type=OmsType.NETTING,
             instrument_provider=instrument_provider,
             account_type=AccountType.MARGIN,
-            base_currency=None,  # IB accounts are multi-currency | TODO: change this to USD
+            base_currency=None,  # MT5 accounts can be multi-currency | TODO: change this to USD
             msgbus=msgbus,
             cache=cache,
             clock=clock,
@@ -376,7 +376,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             elif position.quantity < 0:
                 order_side = OrderSide.SELL
             else:
-                continue  # Skip, IB may continue to display closed positions
+                continue  # Skip closed positions
 
             instrument = await self.instrument_provider.find_with_symbol_id(
                 position.symbol.symbol,
@@ -486,7 +486,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             elif position.quantity < 0:
                 side = PositionSide.SHORT
             else:
-                continue  # Skip, IB may continue to display closed positions
+                continue  # Skip closed positions
 
             instrument = await self.instrument_provider.find_with_symbol_id(
                 position.symbol.symbol,
