@@ -3435,7 +3435,7 @@ MetaTrader5 package version:  5.0.29
 
     `order_check`, `OrderSend`,Trading operation types, Trading request structure, Structure of the trading request check results, Structure of the trading request result
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_order_send(request, *args, **kwargs)
 
     def positions_total(self,*args,**kwargs):
         r'''
@@ -3674,8 +3674,7 @@ mt5.shutdown()
 
     `history_orders_get`, `history_deals_total`
         '''
-        f'mt5.history_orders_total({repr(date_from.astimezone())}, {repr(date_to.astimezone())})'
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_history_orders_total(date_from, date_to, *args, **kwargs)
 
     def history_orders_get(self,*args,**kwargs):
         r'''
@@ -3814,7 +3813,7 @@ TradeOrder(ticket=535548147, time_setup=1583176242, time_setup_msc=1583176242265
 
 
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_history_orders_get(*args, **kwargs)
 
     def history_deals_total(self,date_from, date_to,*args,**kwargs):
         r'''
@@ -3880,8 +3879,7 @@ mt5.shutdown()
 
 
         '''
-        f'mt5.history_deals_total({repr(date_from.astimezone())}, {repr(date_to.astimezone())})'
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_history_deals_total(date_from, date_to, *args, **kwargs)
 
     def history_deals_get(self,*args,**kwargs):
         r'''
@@ -4045,9 +4043,7 @@ Deals with position id #530218319: 2
 
     `history_deals_total`, `history_orders_get`
         '''
-        code=f'mt5.history_deals_get(*{args},**{kwargs})'
-        response = self.__conn.eval(code)
-        return response
+        return self.__conn.root.exposed_history_deals_get(*args, **kwargs)
 
     def eval(self,command:str):
         if hasattr(self.__conn, "eval"):
