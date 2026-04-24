@@ -130,6 +130,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             config=config,
         )
         self._client: MetaTrader5Client = client
+        self._config: MetaTrader5ExecClientConfig = config
         self._set_account_id(account_id)
         self._account_summary_tags = {
             "NetLiquidation",
@@ -171,7 +172,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         if not account_info:
             raise ConnectionError("Failed to retrieve account info from MT5 bridge.")
 
-        expected_login = int(self.config.account_id)
+        expected_login = int(self._config.account_id)
         actual_login = int(getattr(account_info, "login", 0))
 
         if expected_login != actual_login:

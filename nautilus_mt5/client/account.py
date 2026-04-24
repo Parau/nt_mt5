@@ -1,7 +1,7 @@
 import asyncio
 from decimal import Decimal
 import functools
-from typing import Tuple
+from typing import Any, Tuple
 
 from nautilus_trader.common.enums import LogColor
 from nautilus_trader.model.position import Position
@@ -32,6 +32,31 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
 
         """
         return self._account_ids.copy()
+
+    async def get_account_info(self) -> Any:
+        """
+        Retrieve information about the current trading account.
+
+        Returns
+        -------
+        Any
+        """
+        import rpyc
+        from types import SimpleNamespace
+        try:
+            res = await asyncio.to_thread(self._mt5_client['mt5'].account_info)
+            if res is None:
+                return None
+
+            # Obtain local copy if it's an RPyC netref
+            res_local = rpyc.classic.obtain(res)
+
+            if isinstance(res_local, dict):
+                return SimpleNamespace(**res_local)
+            return res_local
+        except Exception as e:
+            self._log.warning(f"Error fetching account info: {e}")
+            return None
 
     def subscribe_account_summary(self) -> None:
         """
