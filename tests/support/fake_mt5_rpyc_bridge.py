@@ -220,6 +220,13 @@ class FakeMT5RPyCConnection:
 
     def __init__(self):
         self.root = FakeMT5RPyCRoot()
+        self.closed = False
+
+    def close(self):
+        """
+        Closes the fake connection.
+        """
+        self.closed = True
 
 
 def make_fake_mt5_rpyc_connection() -> FakeMT5RPyCConnection:
