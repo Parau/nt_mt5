@@ -92,3 +92,4 @@ Any external gateway (used in `EXTERNAL_RPYC` mode) must expose at least the fol
 
 For the complete technical and architectural specification, see:
 - `docs/specs/spec_terminal_access_with_gateway.md`
+- `docs/terminal_access_capability_audit.md`

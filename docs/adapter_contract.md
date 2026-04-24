@@ -124,8 +124,9 @@ Use:
 - `docs/data_capability_matrix.md` as the local matrix for supported and unsupported data capabilities
 - `docs/execution_capability_matrix.md` as the local matrix for supported and unsupported execution capabilities
 - `docs/terminal_access_contract.md` as the local contract for terminal-access behavior and public terminal-access architecture
+- `docs/terminal_access_capability_audit.md` as the audit between terminal access, gateway RPC, and actual Nautilus capabilities
 
-These matrices and contracts are operational project documents derived from the NautilusTrader specs; the published upstream docs remain the final source of truth.
+These matrices, contracts, and audits are operational project documents derived from the NautilusTrader specs; the published upstream docs remain the final source of truth.
 
 ## Notes for contributors and coding agents
 
