@@ -4,11 +4,27 @@ from nautilus_mt5.metatrader5.MetaTrader5 import MetaTrader5
 
 @pytest.fixture
 def mock_rpyc_connect():
+    """
+    Fixture to mock rpyc.connect and return a fake connection with independent mocks
+    for the exposed endpoints as required by the routing task.
+    """
     with patch("rpyc.connect") as mock_connect:
         mock_conn = MagicMock()
+        # Explicitly set up independent mocks for the exposed endpoints
+        mock_conn.root.exposed_initialize = MagicMock(name="exposed_initialize")
+        mock_conn.root.exposed_login = MagicMock(name="exposed_login")
+        mock_conn.root.exposed_shutdown = MagicMock(name="exposed_shutdown")
+        mock_conn.root.exposed_version = MagicMock(name="exposed_version")
+        mock_conn.root.exposed_last_error = MagicMock(name="exposed_last_error")
+        mock_conn.root.exposed_terminal_info = MagicMock(name="exposed_terminal_info")
+        mock_conn.root.exposed_account_info = MagicMock(name="exposed_account_info")
+        mock_conn.root.exposed_get_constant = MagicMock(name="exposed_get_constant")
+        mock_conn.root.exposed_positions_get = MagicMock(name="exposed_positions_get")
+
         # Default mock_conn should not have 'eval' unless we specifically add it
         # However, rpyc connections might have it. Let's ensure we can control it.
-        del mock_conn.eval
+        if hasattr(mock_conn, "eval"):
+            del mock_conn.eval
         mock_connect.return_value = mock_conn
         yield mock_connect, mock_conn
 
