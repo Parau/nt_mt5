@@ -60,6 +60,10 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
         self._mt5_client = await asyncio.to_thread(self._create_mt5_client)
         if self._mt5_client['mt5']:
             self._mt5_client['mt5'].id = self._client_id
+            # Initialize MT5 terminal connection via gateway
+            success = await asyncio.to_thread(self._mt5_client['mt5'].initialize)
+            if not success:
+                raise ConnectionError("Failed to initialize MT5 terminal via gateway.")
         if self._mt5_client['ea']:
             self._mt5_client['ea'].id = self._client_id
 
