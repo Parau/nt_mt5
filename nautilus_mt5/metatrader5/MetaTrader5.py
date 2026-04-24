@@ -417,15 +417,18 @@ class MetaTrader5:
 
     """End MT5 Constants"""
 
-    def __init__(self, host='localhost', port=18812, keep_alive=True):
+    def __init__(self, host='localhost', port=18812, keep_alive=True, timeout=None):
         '''
 host: str
     default = localhost
 port: int
     default = 18812
+timeout: float | None
+    default = None (RPyC default will be used or sync_request_timeout=300)
         '''
         self.id = 1
-        self.__conn = rpyc.connect(host, port, config={"allow_public_attrs": True, "sync_request_timeout": 300}, keepalive=keep_alive)
+        rpyc_config = {"allow_public_attrs": True, "sync_request_timeout": timeout or 300}
+        self.__conn = rpyc.connect(host, port, config=rpyc_config, keepalive=keep_alive)
 
     def __del__(self):
         pass

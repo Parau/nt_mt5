@@ -33,7 +33,8 @@ def test_external_rpyc_cache_key_distinguishes_keep_alive(mock_components, mock_
     Test that the cache key for EXTERNAL_RPYC distinguishes between different keep_alive values.
     """
     # Mock MetaTrader5Client to avoid real connections
-    mock_client_class = MagicMock()
+    # We use side_effect to return a new mock instance on each call
+    mock_client_class = MagicMock(side_effect=lambda *args, **kwargs: MagicMock())
     monkeypatch.setattr("nautilus_mt5.factories.MetaTrader5Client", mock_client_class)
 
     config_keep_alive_true = MetaTrader5DataClientConfig(

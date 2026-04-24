@@ -67,6 +67,7 @@ def get_resolved_mt5_client(
     rpyc_host: str | None = None
     rpyc_port: int | None = None
     rpyc_keep_alive: bool = False
+    rpyc_timeout_secs: float | None = None
     managed_backend: str | None = None
 
     if terminal_access == MT5TerminalAccessMode.EXTERNAL_RPYC:
@@ -82,6 +83,7 @@ def get_resolved_mt5_client(
         rpyc_host = external_rpyc.host
         rpyc_port = external_rpyc.port
         rpyc_keep_alive = external_rpyc.keep_alive
+        rpyc_timeout_secs = external_rpyc.timeout_secs
 
     elif terminal_access == MT5TerminalAccessMode.MANAGED_TERMINAL:
         if config.external_rpyc is not None:
@@ -110,6 +112,7 @@ def get_resolved_mt5_client(
         host=rpyc_host,
         port=rpyc_port,
         keep_alive=rpyc_keep_alive,
+        timeout_secs=rpyc_timeout_secs,
     )
 
     client_key = (
@@ -118,6 +121,8 @@ def get_resolved_mt5_client(
         client_id,
         rpyc_host,
         rpyc_port,
+        rpyc_keep_alive,
+        rpyc_timeout_secs,
         managed_backend,
         ea_config.host,
         ea_config.rest_port,
