@@ -10,10 +10,12 @@ class RpycConnectionConfig(msgspec.Struct, frozen=True):
         host (str): Host address for the RPYC connection. Default is "localhost".
         port (int): Port number for the RPYC connection. Default is 18812.
         keep_alive (bool): Whether to keep the RPYC connection alive. Default is False.
+        timeout_secs (float | None): Timeout in seconds for the RPYC connection. Default is None.
     """
     host: str = "localhost"
     port: int = RPYC_DEFAULT_SERVER_PORT
     keep_alive: bool = False
+    timeout_secs: float | None = None
 
 
 

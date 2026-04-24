@@ -81,12 +81,22 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
         if self._terminal_access == MT5TerminalAccessMode.EXTERNAL_RPYC:
             config = self._mt5_config['rpyc']
             self._log.info(f"Connecting to External RPYC host: {config.host}, port: {config.port}")
-            return MetaTrader5(host=config.host, port=config.port, keep_alive=config.keep_alive)
+            return MetaTrader5(
+                host=config.host,
+                port=config.port,
+                keep_alive=config.keep_alive,
+                timeout=config.timeout_secs,
+            )
 
         if self._terminal_platform != TerminalPlatform.WINDOWS:
             config = self._mt5_config['rpyc']
             self._log.info(f"Connecting to RPYC host: {config.host}, port: {config.port}")
-            return MetaTrader5(host=config.host, port=config.port, keep_alive=config.keep_alive)
+            return MetaTrader5(
+                host=config.host,
+                port=config.port,
+                keep_alive=config.keep_alive,
+                timeout=config.timeout_secs,
+            )
         self._log.info(f"Connecting to IPC Process with client id: {self._client_id}")
         return MetaTrader5()
 
