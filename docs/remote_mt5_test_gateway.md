@@ -49,7 +49,7 @@ Ao conectar-se via `MT5TerminalAccessMode.EXTERNAL_RPYC`, o adaptador estabelece
 Para entender a base arquitetural que sustenta este gateway, consulte:
 
 - **`docs/adapter_contract.md`**: Define a arquitetura em camadas do adaptador e como ele consome o transporte venue-native.
-- **`docs/terminal_access_contract.md`**: Estabelece o contrato público e os modos de acesso (`EXTERNAL_RPYC` vs `MANAGED_TERMINAL`). *Nota: Em caso de indisponibilidade deste documento, a especificação técnica abaixo serve como referência primária.*
+- **`docs/terminal_access_contract.md`**: Estabelece o contrato público e os modos de acesso (`EXTERNAL_RPYC` vs `MANAGED_TERMINAL`).
 - **`docs/testing_contract.md`**: Define a estratégia de testes e deixa claro que a suíte determinística principal é a autoridade de correção, não a validação via gateway.
 - **`docs/decisions.md`**: Registra as decisões estáveis de arquitetura (como o venue `METATRADER_5`) que este gateway deve respeitar.
 - **`docs/specs/spec_terminal_access_with_gateway.md`**: Contém a especificação técnica detalhada da superfície RPC suportada e serve como a principal referência arquitetural para este modo de acesso.
