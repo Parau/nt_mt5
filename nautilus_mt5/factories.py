@@ -75,6 +75,14 @@ def get_resolved_mt5_client(
             raise ValueError(
                 "managed_terminal config must be None for EXTERNAL_RPYC terminal access."
             )
+        if config.dockerized_gateway is not None:
+            raise ValueError(
+                "dockerized_gateway config at top-level is legacy. Use managed_terminal.dockerized instead for MANAGED_TERMINAL access."
+            )
+        if getattr(config, "rpyc_config", None) is not None:
+            raise ValueError(
+                "rpyc_config config at top-level is legacy. Use external_rpyc instead for EXTERNAL_RPYC access."
+            )
         external_rpyc = config.external_rpyc
         if external_rpyc is None:
             raise ValueError(
@@ -93,6 +101,10 @@ def get_resolved_mt5_client(
         if config.dockerized_gateway is not None:
             raise ValueError(
                 "dockerized_gateway config at top-level is legacy. Use managed_terminal.dockerized instead for MANAGED_TERMINAL access."
+            )
+        if getattr(config, "rpyc_config", None) is not None:
+            raise ValueError(
+                "rpyc_config config at top-level is legacy. Use external_rpyc instead for EXTERNAL_RPYC access."
             )
         managed_terminal = config.managed_terminal
         if managed_terminal is None:
