@@ -1767,7 +1767,7 @@ The function is similar to `MarketBookAdd`.
 
 
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_market_book_add(*args, **kwargs)
 
     def market_book_get(self,*args,**kwargs):
         r'''
@@ -1906,7 +1906,7 @@ MetaTrader5 package version:  5.0.34
 
 
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_market_book_get(*args, **kwargs)
 
     def market_book_release(self,symbol,*args,**kwargs):
         r'''
@@ -1938,7 +1938,7 @@ The function is similar to `MarketBookRelease`.
 
 
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_market_book_release(symbol, *args, **kwargs)
 
     def copy_rates_from(self,symbol, timeframe, date_from, count):
         r'''
@@ -2690,7 +2690,7 @@ mt5.shutdown()
 
 
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_orders_total(*args, **kwargs)
 
     def orders_get(self,*args,**kwargs):
         r'''
@@ -2819,7 +2819,7 @@ orders_get(group="*GBP*")=4
 
 
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_orders_get(*args, **kwargs)
 
     def order_calc_margin(self,*args,**kwargs):
         r'''
@@ -2940,7 +2940,7 @@ Symbols to check margin: ('EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'EURJPY', 'GBP
 
 
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_order_calc_margin(*args, **kwargs)
 
     def order_calc_profit(self,*args,**kwargs):
         r'''
@@ -3063,7 +3063,7 @@ Symbols to check margin: ('EURUSD', 'GBPUSD', 'USDJPY')
 
     `order_calc_margin`, `order_check`
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_order_calc_profit(*args, **kwargs)
 
     def order_check(self,*args,**kwargs):
         r'''
@@ -3227,7 +3227,7 @@ Account сurrency: USD
 
 
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_order_check(*args, **kwargs)
 
     def order_send(self,request,*args,**kwargs):
         r'''
@@ -3485,7 +3485,7 @@ mt5.shutdown()
 
 
         '''
-        return self.__conn.root.exposed_positions_get(*args, **kwargs)
+        return self.__conn.root.exposed_positions_total(*args, **kwargs)
 
     def positions_get(self,*args,**kwargs):
         r'''
