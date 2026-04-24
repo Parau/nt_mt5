@@ -6,6 +6,8 @@ Este documento descreve o papel, o propósito e o funcionamento do gateway remot
 
 O gateway remoto é uma **ferramenta operacional de suporte e infraestrutura externa**, destinada exclusivamente à validação em tempo real (*live validation*) do adaptador em ambientes onde o terminal MetaTrader 5 (MT5) está disponível nativamente (tipicamente Windows).
 
+Este gateway representa a implementação operacional concreta para o modo de acesso **`EXTERNAL_RPYC`**, atuando como a bridge de comunicação entre o adaptador e o terminal MT5.
+
 Ele permite que desenvolvedores e contribuidores validem a conectividade, a recepção de dados e a execução de ordens contra um terminal MT5 real em um ambiente controlado, sem a necessidade de gerenciar o ciclo de vida do terminal através do adaptador.
 
 **Atenção:** Este gateway e a prática de *live validation* são secundários e suplementares. Eles **não substituem** a suíte de testes determinística principal (unitários e de integração com fakes) definida no contrato de testes do projeto.
@@ -26,6 +28,7 @@ O uso deste gateway é regido pela configuração de `terminal_access`. Quando o
 
 - `host`: Endereço IP ou hostname onde o gateway está ouvindo.
 - `port`: Porta RPyC configurada no gateway (padrão `18812`).
+- `label`: Rótulo opcional para identificação da conexão.
 - Parâmetros opcionais de timeout e keep-alive conforme definido no contrato de conexão.
 
 O adaptador atua como um cliente puro, assumindo que o gateway já está pronto e operacional.
@@ -46,10 +49,10 @@ Ao conectar-se via `MT5TerminalAccessMode.EXTERNAL_RPYC`, o adaptador estabelece
 Para entender a base arquitetural que sustenta este gateway, consulte:
 
 - **`docs/adapter_contract.md`**: Define a arquitetura em camadas do adaptador e como ele consome o transporte venue-native.
-- **`docs/terminal_access_contract.md`**: Estabelece o contrato público e os modos de acesso (`EXTERNAL_RPYC` vs `MANAGED_TERMINAL`).
+- **`docs/terminal_access_contract.md`**: Estabelece o contrato público e os modos de acesso (`EXTERNAL_RPYC` vs `MANAGED_TERMINAL`). *Nota: Em caso de indisponibilidade deste documento, a especificação técnica abaixo serve como referência primária.*
 - **`docs/testing_contract.md`**: Define a estratégia de testes e deixa claro que a suíte determinística principal é a autoridade de correção, não a validação via gateway.
 - **`docs/decisions.md`**: Registra as decisões estáveis de arquitetura (como o venue `METATRADER_5`) que este gateway deve respeitar.
-- **`docs/specs/spec_terminal_access_with_gateway.md`**: Contém a especificação técnica detalhada da superfície RPC suportada.
+- **`docs/specs/spec_terminal_access_with_gateway.md`**: Contém a especificação técnica detalhada da superfície RPC suportada e serve como a principal referência arquitetural para este modo de acesso.
 
 ---
 
