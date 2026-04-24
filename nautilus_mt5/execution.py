@@ -169,14 +169,17 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         self._client.subscribe_account_summary()
         # Synchronous account validation
         account_info = await self._client.get_account_info()
-        if not account_info:
-            raise ConnectionError("Failed to retrieve account info from MT5 bridge.")
+        if not account_info or not hasattr(account_info, "login"):
+            raise RuntimeError("external_rpyc account_info invalid or login missing")
 
         expected_login = int(self._config.account_id)
         actual_login = int(getattr(account_info, "login", 0))
 
         if expected_login != actual_login:
-            raise ConnectionError(f"Account mismatch. Expected: {expected_login}, Actual logged in: {actual_login}")
+            raise RuntimeError(
+                f"external_rpyc execution account mismatch: "
+                f"expected account {expected_login}, actual account {actual_login}"
+            )
 
         # Load initial balances from the retrieved account_info
         if hasattr(account_info, 'balance'):
@@ -192,6 +195,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             f"Account `{self.account_id.get_id()}` validated and associated with Terminal.",
             LogColor.GREEN,
         )
+        self._set_connected(True)
 
     async def _disconnect(self):
         self._client.registered_nautilus_clients.discard(self.id)
