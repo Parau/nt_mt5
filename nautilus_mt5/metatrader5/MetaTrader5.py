@@ -1168,7 +1168,7 @@ mt5.shutdown()
         '''
         return self.__conn.root.exposed_symbols_total(*args, **kwargs)
 
-    def symbols_get(self,*args,**kwargs):
+    def symbols_get(self, *args, **kwargs):
         r'''
 # symbols_get
 
@@ -1283,12 +1283,9 @@ FOREX.CHF.M5 : SymbolInfo(custom=True, chart_mode=0, select=False, visible=False
 
 
         '''
-        if hasattr(self.__conn, "eval"):
-            return self.__conn.root.exposed_positions_get(*args, **kwargs)
-        else:
-            return self.__conn.root.exposed_symbols_get(*args,**kwargs)
+        return self.__conn.root.exposed_symbols_get(*args, **kwargs)
 
-    def symbol_info(self,*args,**kwargs):
+    def symbol_info(self, *args, **kwargs):
         r'''
 # symbol_info
 
@@ -1460,12 +1457,9 @@ Show symbol_info()._asdict():
 
 
         '''
-        if hasattr(self.__conn, "eval"):
-            return self.__conn.root.exposed_symbol_info(*args, **kwargs)
-        else:
-            return self.__conn.root.exposed_symbol_info(*args,**kwargs)
+        return self.__conn.root.exposed_symbol_info(*args, **kwargs)
 
-    def symbol_info_tick(self,*args,**kwargs):
+    def symbol_info_tick(self, *args, **kwargs):
         r'''
 # symbol_info_tick
 
@@ -1545,7 +1539,7 @@ Show symbol_info_tick._asdict():
         '''
         return self.__conn.root.exposed_symbol_info_tick(*args, **kwargs)
 
-    def symbol_select(self,*args,**kwargs):
+    def symbol_select(self, *args, **kwargs):
         r'''
 # symbol_select
 
@@ -2104,7 +2098,7 @@ Display dataframe with data
         code=f'mt5.copy_rates_from("{symbol}", {timeframe}, {repr(date_from.astimezone())}, {count})'
         return rpyc.classic.obtain(self.__conn.eval(code))
 
-    def copy_rates_from_pos(self,symbol,timeframe,start_pos,count):
+    def copy_rates_from_pos(self, *args, **kwargs):
         r'''
 # copy_rates_from_pos
 
@@ -2222,8 +2216,7 @@ Display dataframe with data
 
     `CopyRates`, `copy_rates_from`, `copy_rates_range`, `copy_ticks_from`, `copy_ticks_range`
         '''
-        code=f'mt5.copy_rates_from_pos("{symbol}",{timeframe},{start_pos},{count})'
-        return rpyc.utils.classic.obtain(self.__conn.eval(code))
+        return self.__conn.root.exposed_copy_rates_from_pos(*args, **kwargs)
 
     def copy_rates_range(self,symbol, timeframe, date_from, date_to):
         r'''
@@ -2361,7 +2354,7 @@ Display dataframe with data
         code=f'mt5.copy_rates_range("{symbol}", {timeframe}, {repr(date_from.astimezone())}, {repr(date_to.astimezone())})'
         return rpyc.utils.classic.obtain(self.__conn.eval(code))
 
-    def copy_ticks_from(self,symbol, date_from, count, flags):
+    def copy_ticks_from(self, *args, **kwargs):
         r'''
 # copy_ticks_from
 
@@ -2513,10 +2506,9 @@ Display dataframe with ticks
 
 
         '''
-        code=f'mt5.copy_ticks_from("{symbol}", {repr(date_from.astimezone())}, {count}, {flags})'
-        return rpyc.utils.classic.obtain(self.__conn.eval(code))
+        return self.__conn.root.exposed_copy_ticks_from(*args, **kwargs)
 
-    def copy_ticks_range(self,symbol, date_from, date_to, flags):
+    def copy_ticks_range(self, *args, **kwargs):
         r'''
 # copy_ticks_range
 
@@ -2648,8 +2640,7 @@ Display dataframe with ticks
 
     `CopyRates`, `copy_rates_from_pos`, `copy_rates_range`, `copy_ticks_from`, `copy_ticks_range`
         '''
-        code=f'mt5.copy_ticks_range("{symbol}", {repr(date_from.astimezone())}, {repr(date_to.astimezone())}, {flags})'
-        return rpyc.utils.classic.obtain(self.__conn.eval(code))
+        return self.__conn.root.exposed_copy_ticks_range(*args, **kwargs)
 
     def orders_total(self,*args,**kwargs):
         r'''
