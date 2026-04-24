@@ -28,6 +28,7 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
         try:
             await self._initialize_and_connect()
             await self._fetch_terminal_info()
+            await self._fetch_account_info()
             self.set_conn_state(TerminalConnectionState.CONNECTED)
             self._log_connection_info()
         except asyncio.CancelledError:
@@ -63,7 +64,8 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
             # Initialize MT5 terminal connection via gateway
             success = await asyncio.to_thread(self._mt5_client['mt5'].initialize)
             if not success:
-                raise ConnectionError("Failed to initialize MT5 terminal via gateway.")
+                code, msg = self._mt5_client['mt5'].last_error()
+                raise ConnectionError(f"Failed to initialize MT5 terminal via gateway (code={code}, msg={msg}).")
         if self._mt5_client['ea']:
             self._mt5_client['ea'].id = self._client_id
 
@@ -124,6 +126,10 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
                     info = terminal_info.__dict__
                 else:
                     info = dict(terminal_info)
+
+                if not info.get("connected", True):
+                    raise ConnectionError("MetaTrader 5 terminal is not connected to a server via gateway.")
+
                 self._terminal_info = {
                     "version": 5,
                     "build": info.get("build", 0),
@@ -131,10 +137,23 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
                     "connection_time": "Unavailable"
                 }
             else:
-                raise ConnectionError("Failed to fetch terminal info from MT5 bridge.")
+                raise ConnectionError("terminal_info indisponível: Failed to fetch terminal info from external_rpyc gateway.")
         except Exception as e:
+            if isinstance(e, ConnectionError):
+                raise
             self._log.error(f"Error fetching terminal info: {e}")
-            raise ConnectionError(f"Failed to fetch terminal info from MT5 bridge: {e}")
+            raise ConnectionError(f"terminal_info indisponível: Failed to fetch terminal info from external_rpyc gateway: {e}")
+
+    async def _fetch_account_info(self) -> None:
+        try:
+            account_info = getattr(self._mt5_client['mt5'], "account_info", None)()
+            if account_info is None:
+                raise ConnectionError("account_info indisponível: Failed to fetch account info from external_rpyc gateway.")
+        except Exception as e:
+            if isinstance(e, ConnectionError):
+                raise
+            self._log.error(f"Error fetching account info: {e}")
+            raise ConnectionError(f"account_info indisponível: Failed to fetch account info from external_rpyc gateway: {e}")
 
     def process_connection_closed(self) -> None:
         """Handle terminal disconnection."""

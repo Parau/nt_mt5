@@ -429,7 +429,12 @@ timeout: float | None
         '''
         self.id = 1
         rpyc_config = {"allow_public_attrs": True, "sync_request_timeout": timeout or 300}
-        self.__conn = rpyc.connect(host, port, config=rpyc_config, keepalive=keep_alive)
+        try:
+            self.__conn = rpyc.connect(host, port, config=rpyc_config, keepalive=keep_alive)
+        except (ConnectionError, OSError, TimeoutError) as exc:
+            raise RuntimeError(
+                f"external_rpyc gateway unreachable at {host}:{port}"
+            ) from exc
 
     def __del__(self):
         pass
