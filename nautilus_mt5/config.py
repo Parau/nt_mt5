@@ -129,10 +129,10 @@ class MetaTrader5DataClientConfig(LiveDataClientConfig, frozen=True):
         terminal_access (MT5TerminalAccessMode): The terminal access mode. Default is EXTERNAL_RPYC.
         external_rpyc (ExternalRPyCTerminalConfig | None): Configuration for external RPyC access. Default is None.
         managed_terminal (ManagedTerminalConfig | None): Configuration for managed terminal. Default is None.
-        mode (TerminalConnectionMode): The connection mode. Default is TerminalConnectionMode.IPC.
-        dockerized_gateway (DockerizedMT5TerminalConfig | None): The client's terminal container configuration. Default is None.
+        mode (TerminalConnectionMode): [Legacy/Transitional] The connection mode (IPC/EA). Use `terminal_access` for access mode.
+        dockerized_gateway (DockerizedMT5TerminalConfig | None): [Legacy] Use `managed_terminal.dockerized` instead.
         ea_config (Optional[EAConnectionConfig]): Configuration for EAClient. Default is None.
-        rpyc_config (Optional[RpycConnectionConfig]): Configuration for RPYC. Default is None.
+        rpyc_config (Optional[RpycConnectionConfig]): [Legacy] Use `external_rpyc` instead.
         instrument_provider (MetaTrader5InstrumentProviderConfig): Configuration for instrument provider.
     """
     client_id: int = 1
@@ -161,10 +161,10 @@ class MetaTrader5ExecClientConfig(LiveExecClientConfig, frozen=True):
         terminal_access (MT5TerminalAccessMode): The terminal access mode. Default is EXTERNAL_RPYC.
         external_rpyc (ExternalRPyCTerminalConfig | None): Configuration for external RPyC access. Default is None.
         managed_terminal (ManagedTerminalConfig | None): Configuration for managed terminal. Default is None.
-        mode (TerminalConnectionMode): The connection mode. Default is TerminalConnectionMode.IPC.
-        dockerized_gateway (DockerizedMT5TerminalConfig | None): The client's terminal container configuration. Default is None.
+        mode (TerminalConnectionMode): [Legacy/Transitional] The connection mode (IPC/EA). Use `terminal_access` for access mode.
+        dockerized_gateway (DockerizedMT5TerminalConfig | None): [Legacy] Use `managed_terminal.dockerized` instead.
         ea_config (Optional[EAConnectionConfig]): Configuration for EAClient. Default is None.
-        rpyc_config (Optional[RpycConnectionConfig]): Configuration for RPYC. Default is None.
+        rpyc_config (Optional[RpycConnectionConfig]): [Legacy] Use `external_rpyc` instead.
         request_account_state_secs (NonNegativeInt): The request interval (seconds) for account state checks. Default is 300.
         instrument_provider (MetaTrader5InstrumentProviderConfig): Configuration for instrument provider.
     """

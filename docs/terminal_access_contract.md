@@ -36,6 +36,18 @@ To ensure architectural consistency, the following validation rules apply to ada
 - **Legacy Fields**:
     - Top-level `dockerized_gateway` fields are deprecated and must be rejected to prevent silent fallbacks to legacy behavior.
 
+## Migration and Deprecation Plan
+
+To avoid concurrent public architectures, the following legacy fields are being phased out in favor of the modern `terminal_access` model.
+
+| Legacy Field | Status | Recommended Substitute | Transition Behavior | Future Disposal |
+|---|---|---|---|---|
+| `mode` | deprecated/transitional | `terminal_access` | accepted only if still necessary for communication type (IPC/EA) | remove as access indicator in future version |
+| `rpyc_config` | deprecated/transitional | `external_rpyc` | rejected in `EXTERNAL_RPYC` mode; do not use in new examples | remove from public API |
+| `dockerized_gateway` | legacy top-level | `managed_terminal.dockerized` | rejected as fallback for `MANAGED_TERMINAL` mode | remove from public API |
+
+The primary recommended configuration path is `terminal_access=EXTERNAL_RPYC` combined with an `external_rpyc` block.
+
 ## Minimum Required RPC Surface
 
 Any external gateway (used in `EXTERNAL_RPYC` mode) must expose at least the following MT5-native RPC endpoints:
