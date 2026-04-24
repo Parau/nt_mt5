@@ -1,10 +1,22 @@
+from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Optional
+
+
+@dataclass(frozen=True)
+class FakeMT5RPyCCall:
+    """
+    Represents a recorded call to the fake RPyC bridge.
+    """
+    method: str
+    args: Tuple[Any, ...]
+    kwargs: Dict[str, Any]
 
 
 class FakeMT5RPyCRoot:
     """
     Fake RPyC root for MetaTrader 5 gateway simulation.
     Exposes the minimum surface required for external_rpyc mode.
+    Includes call recording for auditing.
     """
 
     def __init__(self):
@@ -13,26 +25,53 @@ class FakeMT5RPyCRoot:
             "TIMEFRAME_M5": 5,
             "COPY_TICKS_ALL": 0,
         }
+        self._calls: List[FakeMT5RPyCCall] = []
+
+    @property
+    def calls(self) -> List[FakeMT5RPyCCall]:
+        """
+        Returns the list of recorded calls.
+        """
+        return self._calls
+
+    def reset_calls(self) -> None:
+        """
+        Resets the recorded calls list.
+        """
+        self._calls.clear()
+
+    def _record_call(self, method: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]) -> None:
+        """
+        Internal helper to record a call.
+        """
+        self._calls.append(FakeMT5RPyCCall(method=method, args=args, kwargs=dict(kwargs)))
 
     def exposed_initialize(self, *args, **kwargs) -> bool:
+        self._record_call("initialize", args, kwargs)
         return True
 
     def exposed_login(self, *args, **kwargs) -> bool:
+        self._record_call("login", args, kwargs)
         return True
 
     def exposed_last_error(self, *args, **kwargs) -> Tuple[int, str]:
+        self._record_call("last_error", args, kwargs)
         return (0, "OK")
 
     def exposed_version(self, *args, **kwargs) -> Tuple[int, int, str]:
+        self._record_call("version", args, kwargs)
         return (500, 0, "Fake MT5")
 
     def exposed_shutdown(self, *args, **kwargs) -> bool:
+        self._record_call("shutdown", args, kwargs)
         return True
 
     def exposed_get_constant(self, name: str) -> Any:
+        self._record_call("get_constant", (name,), {})
         return self._constants.get(name)
 
     def exposed_terminal_info(self, *args, **kwargs) -> Dict[str, Any]:
+        self._record_call("terminal_info", args, kwargs)
         return {
             "name": "Fake MetaTrader 5",
             "company": "Fake Broker",
@@ -42,6 +81,7 @@ class FakeMT5RPyCRoot:
         }
 
     def exposed_account_info(self, *args, **kwargs) -> Dict[str, Any]:
+        self._record_call("account_info", args, kwargs)
         return {
             "login": 123456,
             "server": "FakeServer",
@@ -51,9 +91,11 @@ class FakeMT5RPyCRoot:
         }
 
     def exposed_symbols_get(self, *args, **kwargs) -> List[str]:
+        self._record_call("symbols_get", args, kwargs)
         return ["EURUSD"]
 
     def exposed_symbol_info(self, symbol: str, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        self._record_call("symbol_info", (symbol, *args), kwargs)
         if symbol == "EURUSD":
             return {
                 "name": "EURUSD",
@@ -64,6 +106,7 @@ class FakeMT5RPyCRoot:
         return None
 
     def exposed_symbol_info_tick(self, symbol: str, *args, **kwargs) -> Optional[Dict[str, Any]]:
+        self._record_call("symbol_info_tick", (symbol, *args), kwargs)
         if symbol == "EURUSD":
             return {
                 "symbol": "EURUSD",
@@ -75,9 +118,11 @@ class FakeMT5RPyCRoot:
         return None
 
     def exposed_symbol_select(self, symbol: str, enable: bool = True) -> bool:
+        self._record_call("symbol_select", (symbol,), {"enable": enable})
         return True
 
     def exposed_copy_rates_from_pos(self, symbol: str, timeframe: int, start_pos: int, count: int) -> List[Dict[str, Any]]:
+        self._record_call("copy_rates_from_pos", (symbol, timeframe, start_pos, count), {})
         return [
             {
                 "time": 1700000000,
@@ -92,6 +137,7 @@ class FakeMT5RPyCRoot:
         ] * count
 
     def exposed_copy_ticks_range(self, symbol: str, date_from: Any, date_to: Any, flags: int) -> List[Dict[str, Any]]:
+        self._record_call("copy_ticks_range", (symbol, date_from, date_to, flags), {})
         return [
             {
                 "time": 1700000000,
@@ -103,6 +149,7 @@ class FakeMT5RPyCRoot:
         ]
 
     def exposed_copy_ticks_from(self, symbol: str, date_from: Any, count: int, flags: int) -> List[Dict[str, Any]]:
+        self._record_call("copy_ticks_from", (symbol, date_from, count, flags), {})
         return [
             {
                 "time": 1700000000,
@@ -114,6 +161,7 @@ class FakeMT5RPyCRoot:
         ] * count
 
     def exposed_order_send(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        self._record_call("order_send", (request,), {})
         return {
             "retcode": 10009,
             "comment": "Request completed",
@@ -122,6 +170,7 @@ class FakeMT5RPyCRoot:
         }
 
     def exposed_positions_get(self, *args, **kwargs) -> List[Dict[str, Any]]:
+        self._record_call("positions_get", args, kwargs)
         return [
             {
                 "ticket": 1,
@@ -133,9 +182,11 @@ class FakeMT5RPyCRoot:
         ]
 
     def exposed_history_orders_total(self, *args, **kwargs) -> int:
+        self._record_call("history_orders_total", args, kwargs)
         return 1
 
     def exposed_history_orders_get(self, *args, **kwargs) -> List[Dict[str, Any]]:
+        self._record_call("history_orders_get", args, kwargs)
         return [
             {
                 "ticket": 1,
@@ -146,9 +197,11 @@ class FakeMT5RPyCRoot:
         ]
 
     def exposed_history_deals_total(self, *args, **kwargs) -> int:
+        self._record_call("history_deals_total", args, kwargs)
         return 1
 
     def exposed_history_deals_get(self, *args, **kwargs) -> List[Dict[str, Any]]:
+        self._record_call("history_deals_get", args, kwargs)
         return [
             {
                 "ticket": 1,
