@@ -20,6 +20,17 @@ If this file conflicts with NautilusTrader's published testing spec, the upstrea
 - Every supported capability should map to concrete tests in the project test suite.
 - Every unsupported capability should be documented explicitly in adapter docs rather than silently ignored.
 
+## Capability status definitions
+
+Use these status values when tracking actual project support:
+
+- **Supported**: production implementation exists, the Nautilus-level data flow is exercised, deterministic tests exist, and docs/capability matrix are aligned.
+- **Partial**: gateway/wrapper/wiring exists, but Nautilus-level flow, DataTester coverage, lifecycle behavior, or documentation is incomplete.
+- **Unsupported**: not implemented and should fail safely or be documented as unavailable.
+- **Planned**: intentionally future work.
+
+A gateway method being available is not enough to mark a Nautilus data capability as `Supported`.
+
 ## Upstream framing
 
 The NautilusTrader Data Testing Spec defines a grouped test matrix using `DataTester`. Each adapter must pass the subset of tests matching its supported data types. Test groups are ordered from least derived to most derived data, and an adapter that passes groups 1–4 is considered baseline data compliant. Adapter-specific data behavior should be documented in the adapter's own guide, not in the upstream spec.
@@ -38,6 +49,24 @@ The NautilusTrader Data Testing Spec defines a grouped test matrix using `DataTe
 | 8. Option greeks / chain | Option greeks and option chain slice subscriptions | TC-D62, TC-D63 | **Out of scope unless intentionally added** | Only relevant if `nt_mt5` intentionally supports options-specific analytics in Nautilus-native form. |
 | 9. Lifecycle / custom params | Unsubscribe on stop, custom subscribe params, custom request params | TC-D70–TC-D72 | **Required where applicable** | Clean unsubscribe and pass-through custom params should be tested for supported flows. Adapter-specific params must be documented in project docs. |
 
+## Operational traceability matrix
+
+This section tracks the current implementation status. It should be updated whenever a task changes data behavior, tests, or documented support.
+
+| Capability | Status | Official test IDs | Deterministic coverage | Live coverage | Validated by | Notes |
+|---|---|---|---|---|---|---|
+| Instruments | Partial | TC-D01, TC-D02, TC-D03 | Provider and fake bridge coverage exists, but Nautilus-level/DataTester coverage must be kept explicit | Live DataTester pending | `tests/integration/test_external_rpyc_data_flow.py` and future `test_data_tester_matrix_external_rpyc.py` | Keep symbol normalization and cache population testable. |
+| Order book | Unsupported | TC-D10–TC-D15 | N/A | N/A | N/A | Do not mark supported merely because a wrapper/gateway method exists. Implement Nautilus order book flow first. |
+| Quote ticks | Partial | TC-D20 | Wrapper/fake bridge coverage exists; Nautilus-level data client/DataTester path must be completed before `Supported` | Live smoke pending | `tests/integration/test_external_rpyc_data_flow.py` and future DataTester tests | `symbol_info_tick` alone is not enough to claim full data-client support. |
+| Historical quote ticks | Partial | TC-D21 | Wrapper/fake bridge coverage exists for historical tick RPCs; Nautilus request flow needs explicit coverage | Live smoke pending | `tests/integration/test_external_rpyc_data_flow.py` | Validate timestamp conversion and Nautilus `QuoteTick` construction. |
+| Trade ticks | Partial | TC-D30 | Decision and deterministic Nautilus-level mapping still required | Pending | Future `test_data_tester_matrix_external_rpyc.py` | Do not treat quote ticks as trade ticks without explicit MT5-native mapping. |
+| Historical trade ticks | Partial | TC-D31 | Decision and deterministic Nautilus-level mapping still required | Pending | Future `test_data_tester_matrix_external_rpyc.py` | Use `Partial` until `TradeTick` semantics and tests are explicit. |
+| Bars | Partial | TC-D40, TC-D41 | Fake bridge/wrapper coverage exists; Nautilus-level request/subscription and timestamp semantics need explicit tests | Live smoke pending | `tests/integration/test_external_rpyc_data_flow.py` and future DataTester tests | Bars are a practical core capability for MT5, but support should not be overstated. |
+| Derivatives data | Unsupported | TC-D50–TC-D53 | N/A | N/A | N/A | Out of scope unless intentionally mapped from real MT5/venue concepts. |
+| Instrument status / close | Unsupported | TC-D60, TC-D61 | N/A | N/A | N/A | Conditional only if a reliable MT5-native source is introduced. |
+| Option greeks / chain | Unsupported | TC-D62, TC-D63 | N/A | N/A | N/A | Out of scope unless intentionally added. |
+| Lifecycle / unsubscribe / custom params | Partial | TC-D70–TC-D72 | Some lifecycle behavior exists; unsubscribe/custom params require explicit per-flow coverage | Pending | Future data client integration tests | Supported subscriptions must have clean stop/unsubscribe tests. |
+
 ## Recommended minimum target for `nt_mt5`
 
 A practical minimum target for `nt_mt5` is:
@@ -55,9 +84,15 @@ For each supported data capability, confirm all of the following:
 - the provider/client path exists in production code;
 - the public API documents the capability;
 - the unsupported-path behavior is explicit where capability is absent;
-- there is at least one deterministic test path covering the behavior.
+- there is at least one deterministic test path covering the behavior;
+- the flow is exercised at Nautilus adapter level, not only through wrapper/RPyC calls;
+- the `Operational traceability matrix` above is updated.
 
 For each unsupported capability, confirm:
 - it is documented as unsupported;
 - tests do not falsely imply support;
 - the adapter fails safely rather than pretending support exists.
+
+For each partial capability, confirm:
+- the missing piece is documented in `Notes`;
+- future tests or implementation tasks can identify what must change before it becomes `Supported`.
