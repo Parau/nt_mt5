@@ -1,14 +1,6 @@
 import asyncio
 import pytest
 import rpyc
-from unittest.mock import MagicMock
-
-from nautilus_trader.cache.cache import Cache
-from nautilus_trader.common.component import LiveClock
-from nautilus_trader.common.component import MessageBus
-from nautilus_trader.model.identifiers import TraderId
-
-from nautilus_mt5.client.client import MetaTrader5Client
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
@@ -17,6 +9,8 @@ from nautilus_mt5.config import (
 )
 from nautilus_mt5.factories import get_resolved_mt5_client, MT5_CLIENTS
 from tests.support.fake_mt5_rpyc_bridge import FakeMT5RPyCRoot, FakeMT5RPyCConnection
+from tests.support.nautilus_components import nautilus_components
+
 
 class FakeRootWithoutSymbolInfoTick(FakeMT5RPyCRoot):
     """
@@ -37,7 +31,7 @@ def clean_factory_cache():
     MT5_CLIENTS.clear()
 
 @pytest.mark.asyncio
-async def test_external_rpyc_fails_on_missing_method(monkeypatch, clean_factory_cache):
+async def test_external_rpyc_fails_on_missing_method(monkeypatch, clean_factory_cache, nautilus_components):
     """
     Test that the adapter fails with a controlled RuntimeError when a remote method is missing.
     """
@@ -50,16 +44,8 @@ async def test_external_rpyc_fails_on_missing_method(monkeypatch, clean_factory_
 
     monkeypatch.setattr(rpyc, "connect", mock_rpyc_connect)
 
-    # Mock component properties to avoid Cython setter issues
-    monkeypatch.setattr(MetaTrader5Client, "_cache", MagicMock(), raising=False)
-    monkeypatch.setattr(MetaTrader5Client, "_clock", MagicMock(), raising=False)
-    monkeypatch.setattr(MetaTrader5Client, "_msgbus", MagicMock(), raising=False)
-
-    # 2. Setup NautilusTrader components
+    msgbus, cache, clock = nautilus_components
     loop = asyncio.get_running_loop()
-    clock = LiveClock()
-    msgbus = MessageBus(TraderId("TEST-1"), clock)
-    cache = Cache()
 
     # 3. Setup configuration for EXTERNAL_RPYC
     external_rpyc_config = ExternalRPyCTerminalConfig(

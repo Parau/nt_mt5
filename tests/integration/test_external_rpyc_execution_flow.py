@@ -1,15 +1,7 @@
 import asyncio
 import pytest
-import rpyc
-from unittest.mock import MagicMock
 from datetime import datetime
 
-from nautilus_trader.cache.cache import Cache
-from nautilus_trader.common.component import LiveClock
-from nautilus_trader.common.component import MessageBus
-from nautilus_trader.model.identifiers import TraderId
-
-from nautilus_mt5.client.client import MetaTrader5Client
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
@@ -18,7 +10,8 @@ from nautilus_mt5.config import (
 )
 from nautilus_mt5.factories import get_resolved_mt5_client, MT5_CLIENTS
 from nautilus_mt5.metatrader5.models import Order as MT5Order
-from tests.support.fake_mt5_rpyc_bridge import make_fake_mt5_rpyc_connection
+from tests.support.nautilus_components import nautilus_components
+from tests.support.external_rpyc_harness import fake_external_rpyc_environment
 
 
 @pytest.fixture
@@ -32,31 +25,19 @@ def clean_factory_cache():
 
 
 @pytest.mark.asyncio
-async def test_external_rpyc_execution_flow(monkeypatch, clean_factory_cache):
+async def test_external_rpyc_execution_flow(
+    clean_factory_cache,
+    nautilus_components,
+    fake_external_rpyc_environment
+):
     """
     Test the execution and operational history flow in EXTERNAL_RPYC mode.
     """
-    # 1. Setup fake bridge and mock rpyc.connect
-    fake_connection = make_fake_mt5_rpyc_connection()
-    fake_root = fake_connection.root
-
-    def mock_rpyc_connect(host, port, config=None, keepalive=False):
-        return fake_connection
-
-    monkeypatch.setattr(rpyc, "connect", mock_rpyc_connect)
-
-    # Workaround for AttributeError: property of 'MetaTrader5Client' object has no setter
-    monkeypatch.setattr(MetaTrader5Client, "_cache", MagicMock(), raising=False)
-    monkeypatch.setattr(MetaTrader5Client, "_clock", MagicMock(), raising=False)
-    monkeypatch.setattr(MetaTrader5Client, "_msgbus", MagicMock(), raising=False)
-
-    # 2. Setup NautilusTrader components
+    fake_root = fake_external_rpyc_environment
+    msgbus, cache, clock = nautilus_components
     loop = asyncio.get_running_loop()
-    clock = LiveClock()
-    msgbus = MessageBus(TraderId("TEST-1"), clock)
-    cache = Cache()
 
-    # 3. Setup configuration for EXTERNAL_RPYC
+    # Setup configuration for EXTERNAL_RPYC
     external_rpyc_config = ExternalRPyCTerminalConfig(
         host="127.0.0.1",
         port=18812
@@ -71,7 +52,7 @@ async def test_external_rpyc_execution_flow(monkeypatch, clean_factory_cache):
         instrument_provider=MetaTrader5InstrumentProviderConfig()
     )
 
-    # 4. Use factory to get and start the client
+    # Use factory to get and start the client
     mt5_client = get_resolved_mt5_client(
         loop=loop,
         msgbus=msgbus,
