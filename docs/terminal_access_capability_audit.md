@@ -12,19 +12,33 @@ A auditoria separa explicitamente:
 
 ---
 
+## Definições de status
+
+Para evitar que a disponibilidade de um método RPC seja confundida com suporte funcional completo no NautilusTrader, esta auditoria usa os seguintes status:
+
+- **Supported**: existe implementação produtiva, o fluxo Nautilus-level é exercitado, há teste determinístico cobrindo o comportamento e a documentação/matriz de capability está alinhada.
+- **Partial**: a superfície RPC, o wrapper ou o wiring existe, mas ainda falta cobertura completa do fluxo Nautilus-level, DataTester/ExecTester, geração de reports, reconciliação ou documentação rastreável.
+- **Unsupported**: não implementado no adapter Nautilus e deve falhar de forma segura ou ser documentado como indisponível.
+- **Planned**: trabalho futuro intencional, ainda não suportado operacionalmente.
+
+Uma capability não deve ser marcada como **Supported** apenas porque o gateway externo expõe um método, ou porque o wrapper consegue roteá-lo.
+
+---
+
 ## Data Capabilities
 
 Auditado contra `docs/data_capability_matrix.md`.
 
 | Capability | Gateway RPC disponível | Adapter suporta hoje | Teste determinístico existe | Status/documentação |
 |---|---|---|---|---|
-| **Instruments** | `symbols_get`, `symbol_info`, `symbol_select` | Sim (parcial/indireto via provider) | Sim (`tests/integration/test_external_rpyc_data_flow.py`) | **Supported** |
-| **Quotes/ticks** | `symbol_info_tick` | Sim (via polling no background) | Sim (`tests/integration/test_external_rpyc_data_flow.py`) | **Supported** |
-| **Historical ticks** | `copy_ticks_range`, `copy_ticks_from` | Sim | Sim (`tests/integration/test_external_rpyc_data_flow.py`) | **Supported** |
-| **Bars** | `copy_rates_from_pos`, `copy_rates_range` | Sim | Sim (`tests/integration/test_external_rpyc_data_flow.py`) | **Supported** |
+| **Instruments** | `symbols_get`, `symbol_info`, `symbol_select` | Sim, parcial/indireto via provider | Sim (`tests/integration/test_external_rpyc_data_flow.py`), mas deve evoluir para cobertura Nautilus-level/DataTester explícita | **Partial** |
+| **Quotes/ticks** | `symbol_info_tick` | Sim, via polling/background path | Sim (`tests/integration/test_external_rpyc_data_flow.py`), mas ainda deve provar fluxo completo via `MetaTrader5DataClient`/DataTester | **Partial** |
+| **Historical ticks** | `copy_ticks_range`, `copy_ticks_from` | Sim, por superfície RPC/wrapper | Sim (`tests/integration/test_external_rpyc_data_flow.py`), mas ainda deve provar request flow e conversão Nautilus-level | **Partial** |
+| **Trade ticks** | Depende do mapeamento MT5 disponível em `copy_ticks_*` ou equivalente | Decisão explícita ainda necessária | Não há cobertura conclusiva de `TradeTick` Nautilus-level | **Partial** |
+| **Bars** | `copy_rates_from_pos`, `copy_rates_range` | Sim, por superfície RPC/wrapper | Sim (`tests/integration/test_external_rpyc_data_flow.py`), mas timestamp semantics e fluxo Nautilus-level/DataTester precisam ficar explícitos | **Partial** |
 | **Order book** | `market_book_get` (disponível no wrapper) | Não | Não | **Unsupported** |
-| **Instrument status** | N/A | Não | Não | **Conditional** (Indisponível via RPC simples) |
-| **Lifecycle** | `shutdown` | Sim (unsubscribe/stop) | Sim | **Supported** |
+| **Instrument status** | N/A | Não | Não | **Unsupported** |
+| **Lifecycle** | `shutdown` | Sim, parcial para stop/unsubscribe | Parcial; lifecycle de cada subscription/request suportado ainda deve ter cobertura explícita | **Partial** |
 
 ---
 
@@ -34,14 +48,14 @@ Auditado contra `docs/execution_capability_matrix.md`.
 
 | Capability | Gateway RPC disponível | Adapter suporta hoje | Teste determinístico existe | Status/documentação |
 |---|---|---|---|---|
-| **Market orders** | `order_send` | Sim | Sim (`tests/integration/test_external_rpyc_execution_flow.py`) | **Supported** |
-| **Limit orders** | `order_send` | Sim | Sim (parcial - via wiring `order_send`) | **Supported** |
-| **Cancel orders** | `order_send` (`TRADE_ACTION_REMOVE`) | Sim | Parcial (wiring validado em testes unitários) | **Supported** |
-| **Modify orders** | `order_send` (`TRADE_ACTION_MODIFY`) | Não | Não | **Unsupported** |
-| **Positions reconciliation**| `positions_get` | Sim | Sim (`tests/integration/test_external_rpyc_execution_flow.py`) | **Supported** |
-| **Orders history** | `history_orders_get` | Sim | Sim (`tests/integration/test_external_rpyc_execution_flow.py`) | **Supported** |
-| **Deals history** | `history_deals_get` | Sim | Sim (`tests/integration/test_external_rpyc_execution_flow.py`) | **Supported** |
-| **Unsupported TIF/type** | N/A (Lógica interna do adapter) | Sim | Sim (validação de config) | **Supported** |
+| **Market orders** | `order_send` | Sim, por wiring/submit path | Sim (`tests/integration/test_external_rpyc_execution_flow.py`), mas ainda deve provar lifecycle Nautilus completo, como submitted/accepted/filled ou reports equivalentes | **Partial** |
+| **Limit orders** | `order_send` | Sim, parcial por wiring `order_send` | Parcial; precisa validar lifecycle, status e TIFs suportados | **Partial** |
+| **Cancel orders** | `order_send` (`TRADE_ACTION_REMOVE`) | Sim, parcial por ticket/cancel path | Parcial; precisa cobrir cancel lifecycle, invalid cancel, stop cleanup e/ou batch behavior quando suportado | **Partial** |
+| **Modify orders** | `order_send` (`TRADE_ACTION_MODIFY`) | Não no nível Nautilus operacional | Não | **Unsupported** |
+| **Positions reconciliation** | `positions_get` | Sim, parcial por consulta/wrapper | Sim (`tests/integration/test_external_rpyc_execution_flow.py`), mas reconciliação Nautilus-level ainda deve ser explicitamente validada | **Partial** |
+| **Orders history** | `history_orders_get` | Sim, parcial por consulta/wrapper | Sim (`tests/integration/test_external_rpyc_execution_flow.py`), mas geração de `OrderStatusReport`/reconciliação completa precisa cobertura explícita | **Partial** |
+| **Deals history** | `history_deals_get` | Sim, parcial por consulta/wrapper | Sim (`tests/integration/test_external_rpyc_execution_flow.py`), mas `FillReport` ainda precisa implementação/cobertura completa | **Partial** |
+| **Unsupported TIF/type** | N/A (lógica interna do adapter) | Planejado/necessário como comportamento de rejeição segura | Cobertura específica ainda deve validar rejeição antes do envio ao venue | **Planned** |
 
 ---
 
@@ -50,22 +64,34 @@ Auditado contra `docs/execution_capability_matrix.md`.
 Os seguintes itens representam lacunas conhecidas entre a superfície RPC e o suporte efetivo do adapter, mapeados para planejamento futuro:
 
 - **Order Book**: Embora o wrapper `MetaTrader5.py` exponha `market_book_get`, o adapter Nautilus não possui o componente de Order Book provider/subscriber implementado para MT5. Permanece como **Unsupported**.
-- **Modify Orders**: O gateway suporta modificação via `order_send`, mas o `MetaTrader5ClientOrderMixin` não expõe método público para modificação de ordens Nautilus. Permanece como **Unsupported**.
-- **Cancelamento em nível Nautilus**: O cancelamento unitário via ticket está funcional, mas o cancelamento em massa (`cancel_all_orders`) não é nativo do MT5 e requer iteração manual ainda não implementada de forma robusta.
+- **Trade ticks**: O projeto precisa decidir explicitamente se dados de `copy_ticks_*` ou outro mecanismo MT5 representam semântica suficiente para `TradeTick` Nautilus. Até essa decisão, a capability permanece **Partial**.
+- **Bars em nível Nautilus**: A superfície RPC existe, mas a validação deve cobrir fluxo de request/subscription do data client, conversão para `Bar` Nautilus e semântica de timestamp/timeframe.
+- **Modify Orders**: O gateway pode suportar modificação via `order_send`, mas o fluxo Nautilus operacional de modificação ainda não está suportado. Permanece como **Unsupported**.
+- **Cancelamento em nível Nautilus**: O cancelamento unitário via ticket está funcional em nível parcial, mas o cancelamento em massa (`cancel_all_orders`), cancel-on-stop e rejeições de cancelamento ainda requerem cobertura mais robusta.
+- **Lifecycle de market/limit orders**: `order_send` funcionando não prova, sozinho, o ciclo Nautilus completo de ordem submetida, aceita, preenchida, cancelada ou rejeitada.
+- **Fill reports**: `history_deals_get` disponível não implica suporte completo a `FillReport`. É necessário converter deals MT5 em reports Nautilus, cobrir a reconciliação e atualizar a matriz de execução.
 - **Instrument Status**: O MT5 não fornece streaming nativo de status de instrumento (Open/Closed) via API Python simples de forma eficiente; requer mapeamento customizado ou polling.
+- **Unsupported TIF/type**: A rejeição de tipo de ordem ou TIF não suportado deve ser testada explicitamente, preferencialmente antes do envio ao venue.
 
 ---
 
 ## Regras de Interpretação
 
 1.  **Existência de método != Capability**: A existência de um método `exposed_` no gateway RPyC ou no wrapper `MetaTrader5` não implica, por si só, que a capability NautilusTrader correspondente está suportada.
-2.  **Critério de Suporte**: Uma capability só é declarada **Supported** quando houver comportamento produtivo implementado, documentação coerente e teste determinístico (unitário ou de integração com fake bridge) validando o fluxo.
-3.  **Segurança em Falhas**: O modo `EXTERNAL_RPYC` deve lançar `RuntimeError` informativo se o gateway não expuser um método RPC obrigatório para uma capability declarada.
+2.  **Critério de Suporte**: Uma capability só é declarada **Supported** quando houver comportamento produtivo implementado, fluxo Nautilus-level exercitado, documentação coerente e teste determinístico validando o comportamento.
+3.  **Status parcial é esperado durante evolução**: Quando há superfície RPC e wiring funcional, mas ainda falta DataTester, ExecTester, reports, reconciliação ou fluxo Nautilus completo, use **Partial**.
+4.  **Segurança em Falhas**: O modo `EXTERNAL_RPYC` deve lançar `RuntimeError` informativo se o gateway não expuser um método RPC obrigatório para uma capability declarada como **Supported**.
+5.  **Matrizes são fonte operacional de status**: `docs/data_capability_matrix.md` e `docs/execution_capability_matrix.md` devem refletir o mesmo status desta auditoria. Se uma capability mudar de estado, atualize ambos os documentos.
+6.  **Validação live é suplementar**: Testes com MT5 real/gateway RPyC real são úteis para validação operacional, mas não substituem cobertura determinística com fake bridge e fluxo Nautilus-level.
 
 ---
 
 ## Referências
+- `docs/adapter_contract.md`
 - `docs/terminal_access_contract.md`
+- `docs/testing_contract.md`
 - `docs/data_capability_matrix.md`
 - `docs/execution_capability_matrix.md`
+- `docs/decisions.md`
+- `docs/remote_mt5_test_gateway.md`
 - `docs/specs/spec_terminal_access_with_gateway.md`
