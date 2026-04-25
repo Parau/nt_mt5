@@ -40,6 +40,56 @@ O adaptador atua como um cliente puro, assumindo que o gateway já está pronto 
 3.  **Segurança**: Por utilizar RPyC, o gateway deve ser operado em redes seguras ou através de túneis criptografados, visto que expõe capacidades de execução de ordens no terminal MT5.
 4.  **Estabilidade**: Falhas no gateway (como perda de conexão RPC) devem ser tratadas pelo adaptador como falhas de transporte, sem comprometer a integridade dos parsers internos.
 
+## Política de testes live
+
+Testes que exigem este gateway são testes live e devem ser tratados como validação operacional suplementar.
+
+Eles devem:
+
+- viver em `tests/live/` ou ser explicitamente marcados como live;
+- usar `@pytest.mark.live`;
+- usar `@pytest.mark.external_rpyc` quando dependerem do gateway RPyC real;
+- usar `@pytest.mark.demo_execution` quando puderem submeter ordens;
+- pular automaticamente quando variáveis de ambiente obrigatórias estiverem ausentes;
+- nunca bloquear a suíte determinística padrão;
+- nunca substituir testes unitários ou de integração com fake bridge.
+
+Testes de execução live devem exigir opt-in explícito:
+
+```text
+MT5_ENABLE_LIVE_EXECUTION=1
+```
+
+Variáveis típicas para validação live incluem:
+
+```text
+MT5_HOST
+MT5_PORT
+MT5_ACCOUNT_NUMBER
+MT5_SERVER
+MT5_TEST_SYMBOL
+MT5_TEST_ORDER_QTY
+MT5_ENABLE_LIVE_EXECUTION
+```
+
+O comando padrão de regressão deve continuar excluindo testes live, por exemplo:
+
+```bash
+pytest -m "not live"
+```
+
+Um smoke live de dados pode ser executado explicitamente, por exemplo:
+
+```bash
+pytest -m "live and external_rpyc" tests/live/test_external_rpyc_data_smoke.py
+```
+
+Um smoke live de execução demo deve exigir opt-in explícito, por exemplo:
+
+```bash
+MT5_ENABLE_LIVE_EXECUTION=1 pytest -m "live and external_rpyc and demo_execution" tests/live/test_external_rpyc_exec_smoke.py
+```
+
 ## Fluxo de Operação
 
 Ao conectar-se via `MT5TerminalAccessMode.EXTERNAL_RPYC`, o adaptador estabelece um link RPC. O gateway atua como um proxy transparente para a API nativa do MetaTrader 5, devolvendo resultados brutos que são normalizados pelo adaptador na camada de borda, transformando-os em tipos de domínio do NautilusTrader.
@@ -53,6 +103,8 @@ Para entender a base arquitetural que sustenta este gateway, consulte:
 - **`docs/testing_contract.md`**: Define a estratégia de testes e deixa claro que a suíte determinística principal é a autoridade de correção, não a validação via gateway.
 - **`docs/decisions.md`**: Registra as decisões estáveis de arquitetura (como o venue `METATRADER_5`) que este gateway deve respeitar.
 - **`docs/specs/spec_terminal_access_with_gateway.md`**: Contém a especificação técnica detalhada da superfície RPC suportada e serve como a principal referência arquitetural para este modo de acesso.
+- **`docs/ai_agent_guidelines.md`**: Define regras para evitar que agentes confundam validação live com regressão determinística.
+- **`docs/contract_tests_plan.md`**: Planeja testes de contrato para garantir que live tests permaneçam opcionais e seguros.
 
 ---
 

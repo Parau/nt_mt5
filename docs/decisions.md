@@ -72,6 +72,40 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - `MANAGED_TERMINAL` is for when the adapter controls the terminal lifecycle.
 - Internally, `DOCKERIZED` is a backend for `MANAGED_TERMINAL`, not a top-level access mode.
 
+### 11. Python/RPyC low-level layer
+- Although the official NautilusTrader adapter guide describes a Rust-first architecture for new high-performance adapters, `nt_mt5` intentionally uses a Python/RPyC low-level boundary because the MetaTrader5 Python package and terminal availability dictate the integration boundary.
+- This decision does not change the Nautilus layering principles used by the project:
+  - keep the low-level boundary venue-native;
+  - keep adapter responsibilities in the Python adapter layer;
+  - expose typed configs, factories, provider, data client, and execution client;
+  - use deterministic fake bridge tests for regression;
+  - use optional live smoke tests only as supplementary validation.
+- Do not introduce a second low-level architecture unless a future decision explicitly supersedes this one.
+
+### 12. Live tests are supplementary
+- Live tests with real MT5/RPyC are useful for validation, but they are not the source of truth for regression.
+- The deterministic fake bridge suite remains the main correctness guard.
+- Live tests must be optional, explicitly marked, and skipped when required environment variables are absent.
+- Live execution tests must require explicit opt-in, such as `MT5_ENABLE_LIVE_EXECUTION=1`.
+
+### 13. Capability support definition
+- A capability is only `Supported` when it has production implementation, Nautilus-level flow coverage, deterministic tests, and updated docs.
+- Gateway method availability alone is not sufficient.
+- Wrapper-level routing tests are valuable, but they do not by themselves prove that a Nautilus-level capability is supported.
+- If gateway/wrapper/wiring exists but Nautilus-level flow or tester coverage is incomplete, the capability should be marked `Partial`.
+- Unsupported capabilities must be denied, rejected, or reported safely and documented clearly.
+
+### 14. Fill reports source
+- When fill reports are implemented, the preferred source is MT5 deal history through `history_deals_get` / `history_deals_total`, unless a better MT5-native source is explicitly adopted.
+- `history_deals_get` existing in the gateway or wrapper does not, by itself, mean that Nautilus `FillReport` generation is supported.
+- Fill-report support must include MT5 payload normalization, Nautilus report generation, deterministic tests, and execution capability matrix updates.
+
+### 15. Trade tick decision point
+- Trade tick support must be decided explicitly.
+- If MT5/gateway data can provide last-trade semantics suitable for Nautilus `TradeTick`, the adapter should implement and test that mapping before declaring trade ticks supported.
+- If the available MT5 data is quote-only or does not provide a reliable trade-tick semantic for a given asset class, the limitation must be documented in `docs/data_capability_matrix.md` and related docs.
+- Do not treat quote ticks as trade ticks without an explicit documented mapping decision.
+
 ## How to use this file
 
 When changing the adapter, ask:
@@ -82,3 +116,5 @@ When changing the adapter, ask:
 
 If the answer to (2) is yes and (4) is no, keep the existing decision.
 If the answer to (3) is yes, keep the capability matrices aligned with the implementation and tests.
+
+When an implementation task requires changing one of these decisions, update this file in the same task and explain why the previous decision no longer applies.
