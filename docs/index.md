@@ -161,7 +161,19 @@ Live tests should use markers such as:
 
 Execution tests must require explicit opt-in before sending demo orders.
 
----
+### Technical specification
+
+[`specs/spec_terminal_access_with_gateway.md`](specs/spec_terminal_access_with_gateway.md) defines the technical specification for terminal access through an external RPyC gateway.
+
+Use it when working on:
+
+- `EXTERNAL_RPYC` wiring;
+- required RPC surface;
+- gateway method expectations;
+- external bridge behavior;
+- terminal access validation.
+
+This spec complements [`terminal_access_contract.md`](terminal_access_contract.md) and [`remote_mt5_test_gateway.md`](remote_mt5_test_gateway.md).
 
 ## 6. Agent task specification
 
