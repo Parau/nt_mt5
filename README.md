@@ -97,6 +97,12 @@ nautilus_mt5/
 ├── README.md                # Project documentation
 ```
 
+## Project documentation 📚
+
+Before contributing or assigning AI-agent tasks, start with [`docs/index.md`](docs/index.md).
+
+It provides the documentation map for architecture contracts, terminal access rules, testing expectations, capability matrices, project decisions, operational live validation, and AI-agent task guidance.
+
 ## Contributing 🤝
 
 Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes. 🐛
@@ -130,4 +136,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ## Support 📞
 
 If you encounter any issues or have questions, feel free to open an issue on the GitHub repository or contact the author via email at [quantspub@gmail.com](mailto:quantspub@gmail.com)
-
