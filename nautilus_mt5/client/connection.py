@@ -30,14 +30,20 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
             await self._fetch_terminal_info()
             await self._fetch_account_info()
             self.set_conn_state(TerminalConnectionState.CONNECTED)
+            self._last_connection_error = None
             self._log_connection_info()
         except asyncio.CancelledError:
             self._log.info("Connection cancelled.")
             await self._disconnect()
         except Exception as e:
+            self._last_connection_error = e
             self._log.error(f"Connection failed: {e}")
-            self._handle_connection_error()
+            try:
+                self._handle_connection_error()
+            except ValueError as ve:
+                self._last_connection_error = ve
             await self._handle_reconnect()
+            raise
 
     async def _disconnect(self) -> None:
         """Disconnect from Terminal and clear connection flag."""

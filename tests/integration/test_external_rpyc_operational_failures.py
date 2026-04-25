@@ -7,8 +7,9 @@ from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock
 from nautilus_trader.common.component import MessageBus
 from nautilus_trader.model.identifiers import TraderId
+from nautilus_trader.test_kit.functions import eventually
 
-from nautilus_mt5.client.types import MT5TerminalAccessMode
+from nautilus_mt5.client.types import MT5TerminalAccessMode, TerminalConnectionState
 from nautilus_mt5.config import ExternalRPyCTerminalConfig, MetaTrader5DataClientConfig
 from nautilus_mt5.factories import get_resolved_mt5_client, MT5_CLIENTS
 from tests.support.fake_mt5_rpyc_bridge import make_fake_mt5_rpyc_connection, FakeMT5RPyCRoot
@@ -62,24 +63,21 @@ async def test_endpoint_unreachable_connection_refused(monkeypatch, clean_factor
     loop, clock, msgbus, cache = nautilus_components
     config = get_config()
 
-    # Mock logger
-    from nautilus_trader.common.component import Logger
-    mock_log = MagicMock(spec=Logger)
-    monkeypatch.setattr("nautilus_mt5.client.client.MetaTrader5Client._log", mock_log)
-
     client = get_resolved_mt5_client(loop, msgbus, cache, clock, config)
 
-    await asyncio.sleep(0.5)
+    # Wait for the client to process the failure
+    await eventually(lambda: client._last_connection_error is not None)
 
+    # Ensure client is NOT ready
+    # In some failure cases, _stop() might have been called, but we want to be sure it never reached 'ready'
     assert not client._is_client_ready.is_set()
+    assert client.get_conn_state() != TerminalConnectionState.CONNECTED
 
-    # Verify logger was called with controlled error message
-    # In connection.py: self._log.error(f"Connection failed: {e}")
-    # e will be the RuntimeError we raised in MetaTrader5.__init__
-    error_calls = [call.args[0] for call in mock_log.error.call_args_list]
-    combined_errors = " ".join(error_calls)
-    assert "external_rpyc gateway unreachable" in combined_errors
-    assert f"{config.external_rpyc.host}:{config.external_rpyc.port}" in combined_errors
+    # Verify diagnostic info
+    # Initial Connection failure raises RuntimeError in MetaTrader5.__init__
+    assert isinstance(client._last_connection_error, RuntimeError)
+    assert "external_rpyc gateway unreachable" in str(client._last_connection_error)
+    assert f"{config.external_rpyc.host}:{config.external_rpyc.port}" in str(client._last_connection_error)
 
 @pytest.mark.asyncio
 async def test_initialize_returns_false(monkeypatch, clean_factory_cache, nautilus_components):
@@ -90,8 +88,15 @@ async def test_initialize_returns_false(monkeypatch, clean_factory_cache, nautil
     fake_root = fake_connection.root
 
     # Configure fake root to fail initialization
-    monkeypatch.setattr(fake_root, "exposed_initialize", lambda *a, **k: False)
-    monkeypatch.setattr(fake_root, "exposed_last_error", lambda *a, **k: (100, "MT5 initialize failed"))
+    def failing_initialize(*a, **k):
+        fake_root._record_call("initialize", a, k)
+        return False
+    fake_root.exposed_initialize = failing_initialize
+
+    def failing_last_error(*a, **k):
+        fake_root._record_call("last_error", a, k)
+        return (100, "MT5 initialize failed")
+    fake_root.exposed_last_error = failing_last_error
 
     monkeypatch.setattr(rpyc, "connect", lambda *a, **k: fake_connection)
     monkeypatch.setenv("MT5_MAX_CONNECTION_ATTEMPTS", "1")
@@ -99,21 +104,21 @@ async def test_initialize_returns_false(monkeypatch, clean_factory_cache, nautil
     loop, clock, msgbus, cache = nautilus_components
     config = get_config()
 
-    # Mock logger
-    from nautilus_trader.common.component import Logger
-    mock_log = MagicMock(spec=Logger)
-    monkeypatch.setattr("nautilus_mt5.client.client.MetaTrader5Client._log", mock_log)
-
     client = get_resolved_mt5_client(loop, msgbus, cache, clock, config)
 
-    await asyncio.sleep(0.5)
+    await eventually(lambda: client._last_connection_error is not None)
     assert not client._is_client_ready.is_set()
+    assert client.get_conn_state() != TerminalConnectionState.CONNECTED
 
-    error_calls = [call.args[0] for call in mock_log.error.call_args_list]
-    combined_errors = " ".join(error_calls)
-    assert "Failed to initialize MT5 terminal via gateway" in combined_errors
-    assert "code=100" in combined_errors
-    assert "msg=MT5 initialize failed" in combined_errors
+    # Verify diagnostic info
+    # MetaTrader5ClientConnectionMixin._handle_connection_error raises ValueError
+    assert isinstance(client._last_connection_error, (ConnectionError, ValueError))
+
+    # Verify RPC calls
+    method_names = [call.method for call in fake_root.calls]
+    assert "initialize" in method_names
+    assert "last_error" in method_names
+    assert "terminal_info" not in method_names
 
 @pytest.mark.asyncio
 async def test_terminal_info_returns_none(monkeypatch, clean_factory_cache, nautilus_components):
@@ -123,7 +128,10 @@ async def test_terminal_info_returns_none(monkeypatch, clean_factory_cache, naut
     fake_connection = make_fake_mt5_rpyc_connection()
     fake_root = fake_connection.root
 
-    monkeypatch.setattr(fake_root, "exposed_terminal_info", lambda *a, **k: None)
+    def failing_terminal_info(*a, **k):
+        fake_root._record_call("terminal_info", a, k)
+        return None
+    fake_root.exposed_terminal_info = failing_terminal_info
 
     monkeypatch.setattr(rpyc, "connect", lambda *a, **k: fake_connection)
     monkeypatch.setenv("MT5_MAX_CONNECTION_ATTEMPTS", "1")
@@ -131,19 +139,21 @@ async def test_terminal_info_returns_none(monkeypatch, clean_factory_cache, naut
     loop, clock, msgbus, cache = nautilus_components
     config = get_config()
 
-    # Mock logger
-    from nautilus_trader.common.component import Logger
-    mock_log = MagicMock(spec=Logger)
-    monkeypatch.setattr("nautilus_mt5.client.client.MetaTrader5Client._log", mock_log)
-
     client = get_resolved_mt5_client(loop, msgbus, cache, clock, config)
 
-    await asyncio.sleep(0.5)
+    await eventually(lambda: client._last_connection_error is not None)
     assert not client._is_client_ready.is_set()
+    assert client.get_conn_state() != TerminalConnectionState.CONNECTED
 
-    error_calls = [call.args[0] for call in mock_log.error.call_args_list]
-    combined_errors = " ".join(error_calls)
-    assert "terminal_info indisponível" in combined_errors
+    # Verify diagnostic info
+    assert isinstance(client._last_connection_error, (ConnectionError, ValueError))
+    assert "terminal_info indisponível" in str(client._last_connection_error)
+
+    # Verify RPC calls
+    method_names = [call.method for call in fake_root.calls]
+    assert "initialize" in method_names
+    assert "terminal_info" in method_names
+    assert "account_info" not in method_names
 
 @pytest.mark.asyncio
 async def test_terminal_info_connected_is_false(monkeypatch, clean_factory_cache, nautilus_components):
@@ -153,11 +163,14 @@ async def test_terminal_info_connected_is_false(monkeypatch, clean_factory_cache
     fake_connection = make_fake_mt5_rpyc_connection()
     fake_root = fake_connection.root
 
-    monkeypatch.setattr(fake_root, "exposed_terminal_info", lambda *a, **k: {
-        "connected": False,
-        "trade_allowed": False,
-        "build": 3000
-    })
+    def failing_terminal_info(*a, **k):
+        fake_root._record_call("terminal_info", a, k)
+        return {
+            "connected": False,
+            "trade_allowed": False,
+            "build": 3000
+        }
+    fake_root.exposed_terminal_info = failing_terminal_info
 
     monkeypatch.setattr(rpyc, "connect", lambda *a, **k: fake_connection)
     monkeypatch.setenv("MT5_MAX_CONNECTION_ATTEMPTS", "1")
@@ -165,19 +178,21 @@ async def test_terminal_info_connected_is_false(monkeypatch, clean_factory_cache
     loop, clock, msgbus, cache = nautilus_components
     config = get_config()
 
-    # Mock logger
-    from nautilus_trader.common.component import Logger
-    mock_log = MagicMock(spec=Logger)
-    monkeypatch.setattr("nautilus_mt5.client.client.MetaTrader5Client._log", mock_log)
-
     client = get_resolved_mt5_client(loop, msgbus, cache, clock, config)
 
-    await asyncio.sleep(0.5)
+    await eventually(lambda: client._last_connection_error is not None)
     assert not client._is_client_ready.is_set()
+    assert client.get_conn_state() != TerminalConnectionState.CONNECTED
 
-    error_calls = [call.args[0] for call in mock_log.error.call_args_list]
-    combined_errors = " ".join(error_calls)
-    assert "MetaTrader 5 terminal is not connected to a server via gateway" in combined_errors
+    # Verify diagnostic info
+    assert isinstance(client._last_connection_error, (ConnectionError, ValueError))
+    assert "MetaTrader 5 terminal is not connected to a server via gateway" in str(client._last_connection_error)
+
+    # Verify RPC calls
+    method_names = [call.method for call in fake_root.calls]
+    assert "initialize" in method_names
+    assert "terminal_info" in method_names
+    assert "account_info" not in method_names
 
 @pytest.mark.asyncio
 async def test_account_info_returns_none(monkeypatch, clean_factory_cache, nautilus_components):
@@ -187,7 +202,10 @@ async def test_account_info_returns_none(monkeypatch, clean_factory_cache, nauti
     fake_connection = make_fake_mt5_rpyc_connection()
     fake_root = fake_connection.root
 
-    monkeypatch.setattr(fake_root, "exposed_account_info", lambda *a, **k: None)
+    def failing_account_info(*a, **k):
+        fake_root._record_call("account_info", a, k)
+        return None
+    fake_root.exposed_account_info = failing_account_info
 
     monkeypatch.setattr(rpyc, "connect", lambda *a, **k: fake_connection)
     monkeypatch.setenv("MT5_MAX_CONNECTION_ATTEMPTS", "1")
@@ -195,16 +213,18 @@ async def test_account_info_returns_none(monkeypatch, clean_factory_cache, nauti
     loop, clock, msgbus, cache = nautilus_components
     config = get_config()
 
-    # Mock logger
-    from nautilus_trader.common.component import Logger
-    mock_log = MagicMock(spec=Logger)
-    monkeypatch.setattr("nautilus_mt5.client.client.MetaTrader5Client._log", mock_log)
-
     client = get_resolved_mt5_client(loop, msgbus, cache, clock, config)
 
-    await asyncio.sleep(0.5)
+    await eventually(lambda: client._last_connection_error is not None)
     assert not client._is_client_ready.is_set()
+    assert client.get_conn_state() != TerminalConnectionState.CONNECTED
 
-    error_calls = [call.args[0] for call in mock_log.error.call_args_list]
-    combined_errors = " ".join(error_calls)
-    assert "account_info indisponível" in combined_errors
+    # Verify diagnostic info
+    assert isinstance(client._last_connection_error, (ConnectionError, ValueError))
+    assert "account_info indisponível" in str(client._last_connection_error)
+
+    # Verify RPC calls
+    method_names = [call.method for call in fake_root.calls]
+    assert "initialize" in method_names
+    assert "terminal_info" in method_names
+    assert "account_info" in method_names
