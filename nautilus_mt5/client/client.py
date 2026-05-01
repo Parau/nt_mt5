@@ -57,9 +57,6 @@ class MetaTrader5Client(Component,
                 terminal_access: MT5TerminalAccessMode = MT5TerminalAccessMode.EXTERNAL_RPYC,
         ):
         self._mt5_client = {"mt5": None, "ea": None}
-        self._mt5_client['mt5'] = None
-        self._mt5_client = {"mt5": None, "ea": None}
-        self._mt5_client['mt5'] = None
         try:
             formatted_id = f"{client_id:03d}"
         except TypeError:
@@ -104,6 +101,7 @@ class MetaTrader5Client(Component,
         self._account_ids: set[str] = set()
 
         # ConnectionMixin
+        self._last_connection_error: Exception | None = None
         self._connection_attempts: int = 0
         self._max_connection_attempts: int = int(
             os.getenv("MT5_MAX_CONNECTION_ATTEMPTS", 0)
@@ -179,6 +177,7 @@ class MetaTrader5Client(Component,
             except asyncio.TimeoutError:
                 self._log.error("Client failed to initialize. Connection timeout.")
             except Exception as e:
+                self._last_connection_error = e
                 self._log.exception("Unhandled exception in client startup", e)
                 self._stop()
                 break

@@ -28,9 +28,7 @@ from nautilus_mt5.config import (
 from nautilus_mt5.data import MetaTrader5DataClient
 from nautilus_mt5.execution import MetaTrader5ExecutionClient
 from nautilus_mt5.providers import MetaTrader5InstrumentProvider
-from nautilus_mt5.terminal import DockerizedMT5Terminal
 
-TERMINAL = None
 MT5_CLIENTS: dict[tuple, MetaTrader5Client] = {}
 
 def get_resolved_mt5_client(
@@ -61,7 +59,6 @@ def get_resolved_mt5_client(
     MetaTrader5Client
 
     """
-    global TERMINAL
     terminal_access = config.terminal_access
     client_id = config.client_id
     connection_mode = config.mode
@@ -70,59 +67,64 @@ def get_resolved_mt5_client(
     rpyc_host: str | None = None
     rpyc_port: int | None = None
     rpyc_keep_alive: bool = False
+    rpyc_timeout_secs: float | None = None
     managed_backend: str | None = None
 
     if terminal_access == MT5TerminalAccessMode.EXTERNAL_RPYC:
+        if config.managed_terminal is not None:
+            raise ValueError(
+                "managed_terminal config must be None for EXTERNAL_RPYC terminal access."
+            )
+        if config.dockerized_gateway is not None:
+            raise ValueError(
+                "dockerized_gateway config at top-level is legacy. Use managed_terminal.dockerized instead for MANAGED_TERMINAL access."
+            )
+        if getattr(config, "rpyc_config", None) is not None:
+            raise ValueError(
+                "rpyc_config config at top-level is legacy. Use external_rpyc instead for EXTERNAL_RPYC access."
+            )
         external_rpyc = config.external_rpyc
         if external_rpyc is None:
-            # Fallback for transition if old rpyc_config exists
-            if config.rpyc_config:
-                rpyc_host = config.rpyc_config.host
-                rpyc_port = config.rpyc_config.port
-                rpyc_keep_alive = config.rpyc_config.keep_alive
-            else:
-                raise ValueError(
-                    "external_rpyc config is required for EXTERNAL_RPYC terminal access."
-                )
-        else:
-            rpyc_host = external_rpyc.host
-            rpyc_port = external_rpyc.port
-            rpyc_keep_alive = external_rpyc.keep_alive
+            raise ValueError(
+                "external_rpyc config is required for EXTERNAL_RPYC terminal access."
+            )
+        rpyc_host = external_rpyc.host
+        rpyc_port = external_rpyc.port
+        rpyc_keep_alive = external_rpyc.keep_alive
+        rpyc_timeout_secs = external_rpyc.timeout_secs
 
     elif terminal_access == MT5TerminalAccessMode.MANAGED_TERMINAL:
+        if config.external_rpyc is not None:
+            raise ValueError(
+                "external_rpyc config must be None for MANAGED_TERMINAL terminal access."
+            )
+        if config.dockerized_gateway is not None:
+            raise ValueError(
+                "dockerized_gateway config at top-level is legacy. Use managed_terminal.dockerized instead for MANAGED_TERMINAL access."
+            )
+        if getattr(config, "rpyc_config", None) is not None:
+            raise ValueError(
+                "rpyc_config config at top-level is legacy. Use external_rpyc instead for EXTERNAL_RPYC access."
+            )
         managed_terminal = config.managed_terminal
         if managed_terminal is None:
-            # Fallback for transition if old dockerized_gateway exists
-            if config.dockerized_gateway:
-                dockerized_gateway = config.dockerized_gateway
-                if TERMINAL is None:
-                    TERMINAL = DockerizedMT5Terminal(dockerized_gateway)
-                    TERMINAL.safe_start(wait=dockerized_gateway.timeout)
-                rpyc_host = "localhost" # Dockerized usually maps to localhost
-                rpyc_port = TERMINAL.port
-                managed_backend = "dockerized"
-            else:
-                raise ValueError(
-                    "managed_terminal config is required for MANAGED_TERMINAL terminal access."
-                )
-        else:
-            # For now, we only have placeholder for managed terminal
-            # If backend is DOCKERIZED, we could potentially use the old logic if available
-            raise NotImplementedError(
-                f"MANAGED_TERMINAL with backend {managed_terminal.backend} is not fully implemented yet."
+            raise ValueError(
+                "managed_terminal config is required for MANAGED_TERMINAL terminal access."
             )
+        managed_backend = managed_terminal.backend.value
+        # For now, we only have placeholder for managed terminal
+        raise RuntimeError(
+            f"MANAGED_TERMINAL access mode was recognized, but the backend 'ManagedTerminalBackend.{managed_terminal.backend.name}' is not yet implemented in this phase."
+        )
     else:
-        # Legacy/Default handling if terminal_access is somehow not set
-        rpyc_config = config.rpyc_config or RpycConnectionConfig()
-        rpyc_host = rpyc_config.host
-        rpyc_port = rpyc_config.port
-        rpyc_keep_alive = rpyc_config.keep_alive
+        raise ValueError(f"Unsupported or missing terminal_access mode: {terminal_access}")
 
     # Re-wrap as RpycConnectionConfig for internal use
     resolved_rpyc_config = RpycConnectionConfig(
         host=rpyc_host,
         port=rpyc_port,
         keep_alive=rpyc_keep_alive,
+        timeout_secs=rpyc_timeout_secs,
     )
 
     client_key = (
@@ -131,6 +133,8 @@ def get_resolved_mt5_client(
         client_id,
         rpyc_host,
         rpyc_port,
+        rpyc_keep_alive,
+        rpyc_timeout_secs,
         managed_backend,
         ea_config.host,
         ea_config.rest_port,

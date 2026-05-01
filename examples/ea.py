@@ -1,5 +1,5 @@
 import asyncio
-from metatrader5ext.ea.client import EAClient
+from nautilus_mt5.metatrader5 import EAClient
 
 async def main():
     client = EAClient()

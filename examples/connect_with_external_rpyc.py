@@ -21,14 +21,14 @@ from nautilus_mt5.config import (
     MetaTrader5ExecClientConfig,
     MetaTrader5InstrumentProviderConfig,
 )
-from nautilus_mt5.factories import MT5LiveDataClientFactory
+from nautilus_mt5.factories import MT5LiveDataClientFactory, MT5LiveExecClientFactory
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Use an already running gateway
-EXTERNAL_HOST = os.environ.get("MT5_HOST", "localhost")
+EXTERNAL_HOST = os.environ.get("MT5_HOST", "127.0.0.1")
 EXTERNAL_PORT = int(os.environ.get("MT5_PORT", 18812))
 
 external_rpyc = ExternalRPyCTerminalConfig(
@@ -76,8 +76,15 @@ config_node = TradingNodeConfig(
 
 node = TradingNode(config=config_node)
 
-# ... (rest of the strategy setup would be similar to other examples)
+# Register client factories with the node
+node.add_data_client_factory("MT5", MT5LiveDataClientFactory)
+node.add_exec_client_factory("MT5", MT5LiveExecClientFactory)
+
+node.build()
 
 if __name__ == "__main__":
     print(f"Connecting to external MT5 RPyC gateway at {EXTERNAL_HOST}:{EXTERNAL_PORT}...")
-    # node.run() # Uncomment to run
+    try:
+        node.run()
+    finally:
+        node.dispose()

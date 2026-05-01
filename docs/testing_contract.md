@@ -106,6 +106,23 @@ Derived from NautilusTrader guidance:
 - Prefer polling helpers over arbitrary sleeps when waiting for async effects.
 - Do not assert on log text when observable behavior can be asserted directly.
 
+## AI agent testing rules
+
+When implementing tasks, coding agents must follow these additional rules:
+
+- Do not introduce live MT5, network, or gateway dependencies into deterministic tests.
+- Do not patch internals of the object under test.
+- Do not assert exact log text when observable behavior can be asserted.
+- Do not use arbitrary sleeps as the primary async synchronization mechanism.
+- Prefer hand-written fakes/stubs over heavy mocking.
+- If a fake is insufficient, improve the fake instead of weakening production code.
+- Do not declare a capability `Supported` unless deterministic tests cover it.
+- Do not treat wrapper-level RPyC method coverage as proof of Nautilus-level adapter support.
+- Do not add production code only to make a mock or fragile test pass.
+- If a deterministic test needs MT5-like data, prefer canonical fixtures or the fake bridge over live infrastructure.
+
+These rules are intended to keep the suite useful for many independent AI-generated changes. They do not replace the upstream NautilusTrader guidance; they make the local project expectations explicit.
+
 ## Rules for this project
 
 - Do not end tests with `assert True`.
@@ -136,6 +153,26 @@ Use `docs/execution_capability_matrix.md` as the operational checklist for:
 - which capabilities are intentionally unsupported
 - which gaps should be treated as missing implementation versus out of scope
 
+## Live infrastructure policy
+
+The deterministic test suite is the main regression authority for this project.
+Live validation against a real MT5 terminal or an external RPyC gateway is useful, but it is supplementary.
+
+Tests requiring live infrastructure must:
+- live under `tests/live/` or be explicitly marked with `@pytest.mark.live`;
+- use `@pytest.mark.external_rpyc` when they require a real RPyC gateway;
+- use `@pytest.mark.demo_execution` when they may submit demo orders;
+- skip when required environment variables are missing;
+- never run as part of the default deterministic regression suite;
+- require `MT5_ENABLE_LIVE_EXECUTION=1` before sending any order.
+
+Deterministic tests outside `tests/live/` must not read live environment variables such as:
+- `MT5_HOST`
+- `MT5_PORT`
+- `MT5_ACCOUNT_NUMBER`
+- `MT5_PASSWORD`
+- `MT5_ENABLE_LIVE_EXECUTION`
+
 ## Practical layout
 
 Keep test organization readable. A structure like this is preferred when practical:
@@ -147,3 +184,14 @@ Keep test organization readable. A structure like this is preferred when practic
 - `tests/memory/`
 
 The exact tree may evolve, but category intent should remain obvious.
+
+A future contract-test suite may live under:
+
+- `tests/contracts/`
+
+Those tests should convert the most important documentation invariants into executable checks, for example:
+- terminal access modes remain stable;
+- `DOCKERIZED` is not promoted to a public access mode;
+- live tests are properly marked;
+- capability matrices do not mark unsupported behavior as `Supported`;
+- deterministic tests do not depend on live MT5/RPyC infrastructure.

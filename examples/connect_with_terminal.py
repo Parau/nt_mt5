@@ -1,5 +1,5 @@
 import os
-from nautilus_mt5.common import MT5Symbol
+from nautilus_mt5.data_types import MT5Symbol
 from nautilus_trader.config import LiveDataEngineConfig
 from nautilus_trader.config import LoggingConfig
 from nautilus_trader.config import RoutingConfig
@@ -9,11 +9,14 @@ from nautilus_trader.examples.strategies.subscribe import SubscribeStrategyConfi
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.identifiers import InstrumentId
 
-from nautilus_mt5.config import MetaTrader5DataClientConfig
-from nautilus_mt5.config import MetaTrader5ExecClientConfig
-from nautilus_mt5.config import MetaTrader5InstrumentProviderConfig
-from nautilus_mt5.factories import MetaTrader5LiveDataClientFactory
-from nautilus_mt5.factories import MetaTrader5LiveExecClientFactory
+from nautilus_mt5.client.types import MT5TerminalAccessMode
+from nautilus_mt5.config import (
+    ExternalRPyCTerminalConfig,
+    MetaTrader5DataClientConfig,
+    MetaTrader5ExecClientConfig,
+    MetaTrader5InstrumentProviderConfig,
+)
+from nautilus_mt5.factories import MT5LiveDataClientFactory, MT5LiveExecClientFactory
 
 from dotenv import load_dotenv
 
@@ -26,20 +29,19 @@ load_dotenv()
 # *** THIS INTEGRATION IS STILL UNDER CONSTRUCTION. ***
 # *** CONSIDER IT TO BE IN AN UNSTABLE BETA PHASE AND EXERCISE CAUTION. ***
 
-BROKER_SERVER = os.environ["MT5_SERVER"]
+BROKER_SERVER = os.environ.get("MT5_SERVER", "MetaQuotes-Demo")
 mt5_symbols = [
     MT5Symbol(symbol="EURUSD", broker=BROKER_SERVER),
-    # MT5Symbol(symbol="USDCHF", broker=BROKER_SERVER),
-    MT5Symbol(symbol="GBPUSD", broker=BROKER_SERVER),
-    # MT5Symbol(symbol="USDJPY", broker=BROKER_SERVER),
-    # MT5Symbol(symbol="USDCNH", broker=BROKER_SERVER),
-    # MT5Symbol(symbol="USDCAD", broker=BROKER_SERVER),
-    # MT5Symbol(symbol="XAGUSD", broker=BROKER_SERVER),
-    # MT5Symbol(symbol="Step Index", broker=BROKER_SERVER),
-    # MT5Symbol(symbol="Step-Index-200", broker=BROKER_SERVER),
-    # MT5Symbol(symbol="Boom 1000 Index", broker=BROKER_SERVER),
 ]
 
+external_rpyc = ExternalRPyCTerminalConfig(
+    host=os.environ.get("MT5_HOST", "127.0.0.1"),
+    port=int(os.environ.get("MT5_PORT", 18812)),
+)
+
+instrument_provider = MetaTrader5InstrumentProviderConfig(
+    load_symbols=frozenset(mt5_symbols),
+)
 
 # Configure the trading node
 
@@ -48,22 +50,18 @@ config_node = TradingNodeConfig(
     logging=LoggingConfig(log_level="INFO"),
     data_clients={
         "MT5": MetaTrader5DataClientConfig(
-            mt5_host="127.0.0.1",
-            mt5_port=18812,
-            mt5_client_id=1,
-            handle_revised_bars=False,
-            use_regular_trading_hours=True,
+            client_id=1,
+            terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
+            external_rpyc=external_rpyc,
             instrument_provider=instrument_provider,
         ),
     },
     exec_clients={
         "MT5": MetaTrader5ExecClientConfig(
-            mt5_host="127.0.0.1",
-            mt5_port=18812,
-            mt5_client_id=1,
-            account_id=os.getenv(
-                "MT5_ACCOUNT_NUMBER"
-            ),  # This must match with the MT5 Terminal node is connecting to
+            client_id=1,
+            account_id=os.getenv("MT5_ACCOUNT_NUMBER"),
+            terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
+            external_rpyc=external_rpyc,
             instrument_provider=instrument_provider,
             routing=RoutingConfig(
                 default=True,
@@ -101,8 +99,8 @@ strategy = SubscribeStrategy(config=strategy_config)
 node.trader.add_strategy(strategy)
 
 # Register your client factories with the node (can take user-defined factories)
-node.add_data_client_factory("MT5", MetaTrader5LiveDataClientFactory)
-node.add_exec_client_factory("MT5", MetaTrader5LiveExecClientFactory)
+node.add_data_client_factory("MT5", MT5LiveDataClientFactory)
+node.add_exec_client_factory("MT5", MT5LiveExecClientFactory)
 node.build()
 
 

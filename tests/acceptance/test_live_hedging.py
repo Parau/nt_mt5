@@ -94,7 +94,7 @@ class HedgingStrategy(Strategy):
 
 
 @pytest.mark.asyncio
-@patch('nautilus_mt5.factories.get_cached_mt5_client')
+@patch('nautilus_mt5.factories.get_resolved_mt5_client')
 async def test_live_hedging_suite(mock_client_factory):
     # Skip full execution suite on mock environment, we mainly want to test smoke/transform symbology locally without a real windows VM
     pytest.skip("Skipping full live suite due to mock connection constraints.")
