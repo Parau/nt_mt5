@@ -23,7 +23,7 @@ def mock_components():
     msgbus = MagicMock(spec=MessageBus)
     cache = MagicMock(spec=Cache)
     return {
-        "loop": asyncio.get_event_loop(),
+        "loop": asyncio.new_event_loop(),
         "msgbus": msgbus,
         "cache": cache,
         "clock": clock,
@@ -130,20 +130,13 @@ def test_managed_terminal_wiring_distinct(mock_components):
 
 def test_reject_legacy_dockerized_gateway_with_managed(mock_components):
     """
-    Verify rejection of legacy top-level dockerized_gateway when using MANAGED_TERMINAL.
+    Verify that the legacy top-level 'dockerized_gateway' field no longer exists
+    on MetaTrader5DataClientConfig. Passing it raises TypeError at construction,
+    which is stronger than the previous runtime ValueError guard.
     """
-    config = MetaTrader5DataClientConfig(
-        terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
-        managed_terminal=ManagedTerminalConfig(backend=ManagedTerminalBackend.DOCKERIZED),
-        dockerized_gateway=DockerizedMT5TerminalConfig(),
-    )
-
-    with pytest.raises(ValueError, match="dockerized_gateway config at top-level is legacy"):
-        MT5LiveDataClientFactory.create(
-            loop=mock_components["loop"],
-            name="MT5_DATA",
-            config=config,
-            msgbus=mock_components["msgbus"],
-            cache=mock_components["cache"],
-            clock=mock_components["clock"],
+    with pytest.raises(TypeError, match="dockerized_gateway"):
+        MetaTrader5DataClientConfig(
+            terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
+            managed_terminal=ManagedTerminalConfig(backend=ManagedTerminalBackend.DOCKERIZED),
+            dockerized_gateway=DockerizedMT5TerminalConfig(),
         )

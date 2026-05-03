@@ -41,7 +41,7 @@ def nautilus_components():
     clock = LiveClock()
     msgbus = MessageBus(TraderId("TEST-TRADER"), clock)
     cache = Cache()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
     return loop, clock, msgbus, cache
 
 def test_data_client_via_factory_uses_external_rpyc(mock_rpyc_connect, nautilus_components):

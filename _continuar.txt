@@ -1,0 +1,72 @@
+
+
+Fetched https://nautilustrader.io/docs/latest/developer_guide/adapters/
+
+Compacted conversationTambém vou buscar o spec de execução: 
+
+
+
+Fetched https://nautilustrader.io/docs/latest/developer_guide/spec_exec_testing
+
+Aqui está a análise completa com base no que a documentação oficial diz:
+
+---
+
+## O que a documentação oficial diz
+
+O NT define o `ExecTester` como a estratégia padrão de compliance para adapters — ela testa o adapter **através do framework completo** (data engine, execution engine, risk engine). O princípio central é:
+
+> *"Each adapter must pass the **subset of tests matching its supported capabilities**."*
+
+Ou seja, não há expectativa de implementar tudo — cada test card tem um campo `Skip when` explícito.
+
+O `ExecTester` é concebido para **testes live contra demo/testnet**, não para o nosso fake bridge de CI. Ele corresponde ao nível de **acceptance/smoke**, enquanto nossos testes determinísticos em test_execution_lifecycle_external_rpyc.py correspondem ao nível de **integration tests** com mock server — exatamente o padrão descrito no Phase 7 do guia de adapters.
+
+---
+
+## Mapeamento do nosso adapter vs o spec oficial
+
+| Grupo | TCs relevantes | Status no nosso adapter |
+|---|---|---|
+| **G1 Market** | TC-E01/02/03/04 | Cobertos (TC-EL-20 + validation) |
+| **G2 Limit** | TC-E10/11/12 GTC | Cobertos (TC-EL-18/19) |
+| **G2 Limit** | TC-E13/14 IOC, TC-E15/16 FOK | **Gap**: falta teste de submit |
+| **G2 Limit** | TC-E17/18 GTD | Skip — GTD não é suportado |
+| **G3 Stop** | TC-E20/21 StopMarket, TC-E22/23 StopLimit | **Gap principal**: STOP_MARKET e STOP_LIMIT estão em `SUPPORTED_ORDER_TYPES` mas não têm testes de submit |
+| **G3 Stop** | TC-E24-27 MIT/LIT | Skip — não suportados |
+| **G4 Modify** | TC-E32/33 Cancel-replace | **Gap**: cancel-replace BUY/SELL (skip when "never" = sempre relevante) |
+| **G4 Modify** | TC-E36 Modify rejected | **Gap**: verificar emissão de `OrderModifyRejected` |
+| **G5 Cancel** | TC-E40/41/42 | Cobertos (TC-EL-15) |
+| **G5 Cancel** | TC-E43 Batch cancel | Skip — MT5 não tem batch cancel API |
+| **G5 Cancel** | TC-E44 Cancel already-canceled | **Gap**: caminho de rejeição |
+| **G6 Bracket** | TC-E50-53 | **Skip explícito** — fora de escopo, usar `emulation_trigger` |
+| **G8 Rejection** | TC-E72/73 | Cobertos (TC-EL-13/14) |
+| **G9 Lifecycle** | TC-E81/82 | Cobertos (TC-EL-15/16) |
+| **G9 Reconcile** | TC-E84-87 | **Gap significativo**: `generate_order_status_reports`, `generate_position_status_reports` não têm cobertura determinística |
+
+---
+
+## Sobre bracket / SL / stop gain via NT
+
+**Bracket orders (TC-E50-53)**: Não. O adapter já rejeita `_submit_order_list` com mensagem explicando o uso de `emulation_trigger`. Bracket = entrada + TP + SL como **OrderList** — isso é de responsabilidade do `OrderEmulator` interno do NT, não do adapter. Testes de bracket testariam o NT, não o nosso código.
+
+**Stop loss / stop gain como ordens independentes (TC-E20-23)**: **Sim, há uma lacuna real.** `STOP_MARKET` e `STOP_LIMIT` constam em `SUPPORTED_ORDER_TYPES`, o mapeamento MT5 está implementado (`BUY_STOP`/`SELL_STOP`/`BUY_STOP_LIMIT`/`SELL_STOP_LIMIT`, `action=5`), mas não existem testes que verificam que o adapter os transmite corretamente ao bridge. Esse é o gap mais valioso a preencher.
+
+**SL/TP nativos MT5 (`TRADE_ACTION_SLTP`)**: Esse é um conceito MT5-específico (modificar SL/TP de uma posição aberta, não uma ordem separada). Não tem equivalente no modelo NT — seria uma feature de adapter separada, não coberta pelo `ExecTester`.
+
+---
+
+## O que vale a pena adicionar (em ordem de prioridade)
+
+1. **TC-E20-23 equivalentes**: Submit de stop orders (BUY/SELL STOP_MARKET, BUY/SELL STOP_LIMIT) → verificar `action=5`, `type` correto, `retcode=10008` → `OrderAccepted`
+2. **TC-E44 equivalente**: Cancel de ordem já cancelada → verifica `OrderCancelRejected`, não crash
+3. **TC-E32/33 equivalentes**: Cancel-replace (o spec diz "Skip when: Never" — é sempre esperado)
+4. **TC-E36 equivalente**: `ModifyOrder` → `OrderModifyRejected` (já implementado no adapter, falta validação)
+5. **TC-E84-87 equivalentes (longo prazo)**: Reconciliação — `generate_order_status_reports` e `generate_position_status_reports` com fake bridge retornando estado pré-existente
+
+O que **não** vale adicionar: brackets, SL/TP nativos MT5, iceberg, post-only, reduce-only, opções — nenhum desses tem suporte no adapter ou no modelo MT5 relevante aqui.
+
+
+=====================
+
+quem sabe o brackets apenas como stress de operacoes para ver se o adaptador da conta de executar esta operação que sera controlada pelo proprio NT.

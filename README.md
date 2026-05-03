@@ -4,14 +4,21 @@ This adapter allows for seamless integration between NautilusTrader and MetaTrad
 
 ## Terminal Access Modes 🛠️
 
-The adapter architecture distinguishes between two main access modes:
+The adapter architecture distinguishes between three main access modes:
 
 1. **External RPyC Mode (`EXTERNAL_RPYC`)** 🌐 — **Currently Supported**
    - Connects to an existing MT5 RPyC bridge (e.g., running on a remote Windows machine or a separate container).
    - The adapter does not manage the lifecycle of the terminal; it assumes the bridge is already operational.
    - This is the recommended path for immediate use and remote terminal access.
 
-2. **Managed Terminal Mode (`MANAGED_TERMINAL`)** 📦 — **Planned**
+2. **Local Python Mode (`LOCAL_PYTHON`)** 🖥️ — **Planned / In Implementation**
+   - Uses the official `MetaTrader5` Python package installed directly on the local machine (normally Windows).
+   - No RPyC gateway or external bridge is involved; the adapter calls MT5 functions directly.
+   - Expected to work only on platforms where the `MetaTrader5` package is available.
+   - Will fail with an explicit, controlled error on incompatible platforms or if the package is not installed.
+   - **Note:** Full end-to-end test coverage is pending and will be completed in subsequent implementation phases.
+
+3. **Managed Terminal Mode (`MANAGED_TERMINAL`)** 📦 — **Planned**
    - Designed for scenarios where the adapter manages the terminal lifecycle (starting, health-checking, and stopping).
    - Will support different backends, such as `DOCKERIZED` (internal strategy for running MT5 in a container).
    - **Note:** This mode is currently under development and not yet operational (raises `RuntimeError`).

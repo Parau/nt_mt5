@@ -14,8 +14,8 @@ from nautilus_trader.live.node import TradingNode
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.client.client import MetaTrader5Client
 from nautilus_mt5.providers import MetaTrader5InstrumentProviderConfig
-from nautilus_mt5.config import TerminalConnectionMode, RpycConnectionConfig
-from nautilus_mt5.config import MetaTrader5DataClientConfig, MetaTrader5ExecClientConfig
+from nautilus_mt5.client.types import MT5TerminalAccessMode
+from nautilus_mt5.config import ExternalRPyCTerminalConfig, MetaTrader5DataClientConfig, MetaTrader5ExecClientConfig
 from nautilus_mt5.factories import MT5LiveDataClientFactory, MT5LiveExecClientFactory
 
 import os
@@ -94,6 +94,7 @@ class HedgingStrategy(Strategy):
 
 
 @pytest.mark.asyncio
+@pytest.mark.live
 @patch('nautilus_mt5.factories.get_resolved_mt5_client')
 async def test_live_hedging_suite(mock_client_factory):
     # Skip full execution suite on mock environment, we mainly want to test smoke/transform symbology locally without a real windows VM
@@ -101,7 +102,7 @@ async def test_live_hedging_suite(mock_client_factory):
 
     logger.info(f"=== Iniciando Teste de Hedging MT5 ===")
 
-    rpyc_config = RpycConnectionConfig(host=HOST, port=PORT)
+    rpyc_config = ExternalRPyCTerminalConfig(host=HOST, port=PORT)
     inst_provider_config = MetaTrader5InstrumentProviderConfig(
         load_all=False,
         load_symbols=frozenset([MT5Symbol(symbol=SYMBOL_STR)])
@@ -109,15 +110,15 @@ async def test_live_hedging_suite(mock_client_factory):
 
     data_config = MetaTrader5DataClientConfig(
         client_id=1,
-        mode=TerminalConnectionMode.IPC,
-        rpyc_config=rpyc_config,
+        terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
+        external_rpyc=rpyc_config,
         instrument_provider=inst_provider_config,
     )
 
     exec_config = MetaTrader5ExecClientConfig(
         client_id=1,
-        mode=TerminalConnectionMode.IPC,
-        rpyc_config=rpyc_config,
+        terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
+        external_rpyc=rpyc_config,
         instrument_provider=inst_provider_config,
         account_id=ACCOUNT_NUMBER,
     )

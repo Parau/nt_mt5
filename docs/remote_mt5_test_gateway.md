@@ -63,14 +63,27 @@ MT5_ENABLE_LIVE_EXECUTION=1
 Variáveis típicas para validação live incluem:
 
 ```text
-MT5_HOST
-MT5_PORT
-MT5_ACCOUNT_NUMBER
-MT5_SERVER
-MT5_TEST_SYMBOL
-MT5_TEST_ORDER_QTY
-MT5_ENABLE_LIVE_EXECUTION
+MT5_HOST                    # endereço do gateway RPyC (ex: 127.0.0.1)
+MT5_PORT                    # porta do gateway RPyC (padrão: 18812)
+MT5_ACCOUNT_NUMBER          # login da conta MT5; validado contra account_info().login
+MT5_SERVER                  # servidor do broker (opcional, informativo)
+MT5_TEST_SYMBOL             # símbolo alvo; padrão USTEC
+MT5_TEST_ORDER_QTY          # volume da ordem de smoke; DEVE ser informado explicitamente
+MT5_ENABLE_LIVE_EXECUTION   # deve ser "1" para qualquer envio de ordem
 ```
+
+### Travas de segurança do smoke de execução
+
+O arquivo `tests/live/test_external_rpyc_exec_smoke.py` implementa as seguintes travas, todas obrigatórias antes de qualquer ordem ser enviada:
+
+| Trava | Verificação |
+|---|---|
+| Opt-in explícito | `MT5_ENABLE_LIVE_EXECUTION == "1"` |
+| Volume explícito | `MT5_TEST_ORDER_QTY` deve estar definido; sem valor padrão |
+| Conta demo | `account_info().trade_mode == 0` (ACCOUNT_TRADE_MODE_DEMO) |
+| Login correto | Se `MT5_ACCOUNT_NUMBER` estiver definido, `account_info().login` deve corresponder |
+| Símbolo válido | `symbol_info().volume_min > 0` e tick atual `ask > 0` |
+| Volume mínimo | `MT5_TEST_ORDER_QTY >= symbol_info().volume_min` |
 
 O comando padrão de regressão deve continuar excluindo testes live, por exemplo:
 

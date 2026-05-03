@@ -4,14 +4,22 @@ This document defines the stable contract for accessing the MetaTrader 5 (MT5) t
 
 ## Public Access Modes
 
-The adapter supports two primary public modes for terminal access, represented by the `MT5TerminalAccessMode` enum:
+The adapter supports three primary public modes for terminal access, represented by the `MT5TerminalAccessMode` enum:
 
 1.  **`EXTERNAL_RPYC`**:
     - The adapter connects to an existing, externally managed RPyC gateway.
     - The adapter is **not** responsible for starting, supervising, or stopping the terminal or the gateway.
     - This is the primary mode for connecting to remote or pre-existing MT5 environments.
 
-2.  **`MANAGED_TERMINAL`**:
+2.  **`LOCAL_PYTHON`**:
+    - The adapter uses the official `MetaTrader5` Python package installed directly on the local machine.
+    - Expected to work only on platforms where the `MetaTrader5` package is available (normally Windows).
+    - The adapter is **not** responsible for launching an external gateway or RPyC bridge.
+    - The only lifecycle it controls is the normal `MetaTrader5.initialize()` / `shutdown()` cycle.
+    - If the `MetaTrader5` package is not installed or the platform is incompatible, the adapter must fail with a controlled, explicit error.
+    - *Note: This mode is planned/in implementation. Full end-to-end test coverage is pending the tasks that follow the governance phase.*
+
+3.  **`MANAGED_TERMINAL`**:
     - The adapter is responsible for the full lifecycle of the terminal environment.
     - This includes starting the terminal, performing health checks, and ensuring a clean shutdown.
     - *Note: In the current phase, the managed runtime may not be fully implemented. If called when unimplemented, it must fail with a controlled and explicit `RuntimeError`.*
@@ -30,6 +38,10 @@ To ensure architectural consistency, the following validation rules apply to ada
 - **Mode `EXTERNAL_RPYC`**:
     - Requires an `external_rpyc` configuration block.
     - Must **reject** any `managed_terminal` configuration block.
+- **Mode `LOCAL_PYTHON`**:
+    - Does not require an `external_rpyc` or `managed_terminal` configuration block.
+    - May accept optional `local_python` configuration (e.g., `MT5_LOCAL_PATH`, `MT5_LOCAL_PORTABLE`).
+    - Must **reject** any `external_rpyc` or `managed_terminal` configuration block.
 - **Mode `MANAGED_TERMINAL`**:
     - Requires a `managed_terminal` configuration block.
     - Must **reject** any `external_rpyc` configuration block.
@@ -59,6 +71,40 @@ Any external gateway (used in `EXTERNAL_RPYC` mode) must expose at least the fol
 - `version`
 - `shutdown`
 - `get_constant`
+
+### Terminal and Account State
+- `terminal_info`
+- `account_info`
+
+### Symbol Management
+- `symbols_get`
+- `symbol_info`
+- `symbol_info_tick`
+- `symbol_select`
+
+### Market Data and History
+- `copy_rates_from_pos`
+- `copy_ticks_range`
+- `copy_ticks_from`
+
+### Execution and Operational History
+- `order_send`
+- `positions_get`
+- `history_orders_total`
+- `history_orders_get`
+- `history_deals_total`
+- `history_deals_get`
+
+## LOCAL_PYTHON Direct API Surface
+
+In `LOCAL_PYTHON` mode, the adapter calls the following MT5-native functions directly on the locally installed `MetaTrader5` module (no RPyC layer):
+
+### Session and Diagnostics
+- `initialize`
+- `login`
+- `last_error`
+- `version`
+- `shutdown`
 
 ### Terminal and Account State
 - `terminal_info`

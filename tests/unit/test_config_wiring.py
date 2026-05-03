@@ -3,21 +3,19 @@ import pytest
 from unittest.mock import MagicMock
 from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock, MessageBus
-from nautilus_mt5.client.types import MT5TerminalAccessMode, TerminalConnectionMode
+from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     MetaTrader5DataClientConfig,
     ExternalRPyCTerminalConfig,
     ManagedTerminalConfig,
     ManagedTerminalBackend,
-    DockerizedMT5TerminalConfig,
-    RpycConnectionConfig,
 )
 from nautilus_mt5.factories import get_resolved_mt5_client
 
 @pytest.fixture
 def mock_components():
     return {
-        "loop": asyncio.get_event_loop(),
+        "loop": asyncio.new_event_loop(),
         "msgbus": MagicMock(spec=MessageBus),
         "cache": MagicMock(spec=Cache),
         "clock": MagicMock(spec=LiveClock),
@@ -105,26 +103,6 @@ def test_get_resolved_mt5_client_managed_terminal_not_implemented(mock_component
             config,
         )
 
-def test_get_resolved_mt5_client_managed_terminal_with_legacy_gateway_fails(mock_components):
-    # Rule: MANAGED_TERMINAL must not use legacy top-level dockerized_gateway
-    config = MetaTrader5DataClientConfig(
-        terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
-        managed_terminal=ManagedTerminalConfig(backend=ManagedTerminalBackend.DOCKERIZED),
-        dockerized_gateway=DockerizedMT5TerminalConfig(),
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="dockerized_gateway config at top-level is legacy. Use managed_terminal.dockerized instead",
-    ):
-        get_resolved_mt5_client(
-            mock_components["loop"],
-            mock_components["msgbus"],
-            mock_components["cache"],
-            mock_components["clock"],
-            config,
-        )
-
 def test_get_resolved_mt5_client_external_rpyc_with_managed_config_raises_error(mock_components):
     config = MetaTrader5DataClientConfig(
         terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
@@ -190,7 +168,6 @@ def test_get_resolved_mt5_client_managed_terminal_missing_config(mock_components
     config = MetaTrader5DataClientConfig(
         terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
         managed_terminal=None,
-        dockerized_gateway=None,
     )
 
     with pytest.raises(ValueError, match="managed_terminal config is required for MANAGED_TERMINAL terminal access."):

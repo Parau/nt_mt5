@@ -67,8 +67,9 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - README, configs, factories, examples, and exported names must stay mutually consistent.
 
 ### 10. Terminal Access Model
-- The adapter adopts `EXTERNAL_RPYC` and `MANAGED_TERMINAL` as public access modes.
-- `EXTERNAL_RPYC` is for existing/external terminals.
+- The adapter adopts `EXTERNAL_RPYC`, `LOCAL_PYTHON`, and `MANAGED_TERMINAL` as public access modes.
+- `EXTERNAL_RPYC` is for existing/external terminals accessed via RPyC gateway.
+- `LOCAL_PYTHON` is for direct local access using the official `MetaTrader5` Python package installed on the local machine.
 - `MANAGED_TERMINAL` is for when the adapter controls the terminal lifecycle.
 - Internally, `DOCKERIZED` is a backend for `MANAGED_TERMINAL`, not a top-level access mode.
 
@@ -105,6 +106,16 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - If MT5/gateway data can provide last-trade semantics suitable for Nautilus `TradeTick`, the adapter should implement and test that mapping before declaring trade ticks supported.
 - If the available MT5 data is quote-only or does not provide a reliable trade-tick semantic for a given asset class, the limitation must be documented in `docs/data_capability_matrix.md` and related docs.
 - Do not treat quote ticks as trade ticks without an explicit documented mapping decision.
+
+### 16. LOCAL_PYTHON terminal access
+- `LOCAL_PYTHON` is a third public access mode alongside `EXTERNAL_RPYC` and `MANAGED_TERMINAL`.
+- It uses the official `MetaTrader5` Python package installed directly on the local machine (normally Windows).
+- It calls MT5-native functions (`initialize`, `login`, `terminal_info`, `account_info`, `symbol_info`, `symbol_info_tick`, `copy_rates_*`, `copy_ticks_*`, `order_send`, `positions_get`, `history_orders_get`, `history_deals_get`) on the locally imported module.
+- It does not manage an external gateway process, RPyC connection, or Docker container.
+- The only lifecycle it controls is the normal `MetaTrader5.initialize()` / `shutdown()` cycle.
+- It must fail with a controlled, explicit error when used on an incompatible platform or when the `MetaTrader5` package is not installed.
+- This mode is intentionally separate from `EXTERNAL_RPYC` and must not silently fall back to RPyC behavior.
+- `DOCKERIZED` is not affected by this decision; it remains an internal backend of `MANAGED_TERMINAL` only.
 
 ## How to use this file
 

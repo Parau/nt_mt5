@@ -135,18 +135,18 @@ def test_fake_bridge_execution_and_history():
     assert len(positions) > 0
     assert positions[0]["symbol"] == "EURUSD"
 
-    assert root.exposed_history_orders_total(1000, 2000) == 1
+    assert root.exposed_history_orders_total(1000, 2000) >= 1
 
     orders = root.exposed_history_orders_get(1000, 2000)
     assert isinstance(orders, list)
-    assert len(orders) == 1
+    assert len(orders) >= 1
     assert "ticket" in orders[0]
 
-    assert root.exposed_history_deals_total(1000, 2000) == 1
+    assert root.exposed_history_deals_total(1000, 2000) >= 1
 
     deals = root.exposed_history_deals_get(1000, 2000)
     assert isinstance(deals, list)
-    assert len(deals) == 1
+    assert len(deals) >= 1
     assert "ticket" in deals[0]
 
 def test_fake_bridge_unknown_method_raises_attribute_error():

@@ -31,12 +31,12 @@ Auditado contra `docs/data_capability_matrix.md`.
 
 | Capability | Gateway RPC disponível | Adapter suporta hoje | Teste determinístico existe | Status/documentação |
 |---|---|---|---|---|
-| **Instruments** | `symbols_get`, `symbol_info`, `symbol_select` | Sim, parcial/indireto via provider | Sim (`tests/integration/test_external_rpyc_data_flow.py`), mas deve evoluir para cobertura Nautilus-level/DataTester explícita | **Partial** |
-| **Quotes/ticks** | `symbol_info_tick` | Sim, via polling/background path | Sim (`tests/integration/test_external_rpyc_data_flow.py`), mas ainda deve provar fluxo completo via `MetaTrader5DataClient`/DataTester | **Partial** |
-| **Historical ticks** | `copy_ticks_range`, `copy_ticks_from` | Sim, por superfície RPC/wrapper | Sim (`tests/integration/test_external_rpyc_data_flow.py`), mas ainda deve provar request flow e conversão Nautilus-level | **Partial** |
-| **Trade ticks** | Depende do mapeamento MT5 disponível em `copy_ticks_*` ou equivalente | Decisão explícita ainda necessária | Não há cobertura conclusiva de `TradeTick` Nautilus-level | **Partial** |
-| **Bars** | `copy_rates_from_pos`, `copy_rates_range` | Sim, por superfície RPC/wrapper | Sim (`tests/integration/test_external_rpyc_data_flow.py`), mas timestamp semantics e fluxo Nautilus-level/DataTester precisam ficar explícitos | **Partial** |
-| **Order book** | `market_book_get` (disponível no wrapper) | Não | Não | **Unsupported** |
+| **Instruments** | `symbols_get`, `symbol_info`, `symbol_select` | Sim, parcial/indireto via provider | ✅ TC-D01, TC-D03 em `test_data_tester_matrix_external_rpyc.py`; validado live em `test_external_rpyc_data_tester.py` (USTEC, Tickmill-Demo) | **Partial** |
+| **Quotes/ticks** | `symbol_info_tick` | Sim, via polling/background path | ✅ TC-D20 em `test_data_tester_matrix_external_rpyc.py`; bid/ask live confirmados em `test_external_rpyc_data_tester.py` | **Partial** |
+| **Historical ticks** | `copy_ticks_range`, `copy_ticks_from` | Sim, por superfície RPC/wrapper | ✅ TC-D21 em `test_data_tester_matrix_external_rpyc.py`. **Atenção**: gateway RPyC rejeita `datetime` com `(-2, Invalid arguments)` — passar Unix timestamp `int` como `date_from` | **Partial** |
+| **Trade ticks** | `copy_ticks_*` expõe campo `last`, mas `last=0.0` sempre para CFD indexes (USTEC/Tickmill) | Decisão documentada: `copy_ticks_*` tem semântica QuoteTick, não TradeTick | ✅ TC-D30 XFAIL em `test_external_rpyc_data_tester.py` confirma `last=0.0` live. TC-D30 documentado em `test_data_tester_matrix_external_rpyc.py` | **Partial** — não promover para Supported sem mapeamento MT5-native de TradeTick |
+| **Bars** | `copy_rates_from_pos`, `copy_rates_range` | Sim, por superfície RPC/wrapper | ✅ TC-D40, TC-D41 em `test_data_tester_matrix_external_rpyc.py`; M1 e M5 validados live em `test_external_rpyc_data_tester.py` (USTEC) | **Partial** |
+| **Order book** | `market_book_get` (disponível no wrapper) | Não — rejeição segura implementada | ✅ TC-D10 em `test_data_tester_matrix_external_rpyc.py` valida log de warning ao tentar subscribe | **Unsupported** |
 | **Instrument status** | N/A | Não | Não | **Unsupported** |
 | **Lifecycle** | `shutdown` | Sim, parcial para stop/unsubscribe | Parcial; lifecycle de cada subscription/request suportado ainda deve ter cobertura explícita | **Partial** |
 
@@ -64,8 +64,8 @@ Auditado contra `docs/execution_capability_matrix.md`.
 Os seguintes itens representam lacunas conhecidas entre a superfície RPC e o suporte efetivo do adapter, mapeados para planejamento futuro:
 
 - **Order Book**: Embora o wrapper `MetaTrader5.py` exponha `market_book_get`, o adapter Nautilus não possui o componente de Order Book provider/subscriber implementado para MT5. Permanece como **Unsupported**.
-- **Trade ticks**: O projeto precisa decidir explicitamente se dados de `copy_ticks_*` ou outro mecanismo MT5 representam semântica suficiente para `TradeTick` Nautilus. Até essa decisão, a capability permanece **Partial**.
-- **Bars em nível Nautilus**: A superfície RPC existe, mas a validação deve cobrir fluxo de request/subscription do data client, conversão para `Bar` Nautilus e semântica de timestamp/timeframe.
+- **Trade ticks**: **Decisão documentada (Step 06)**: para CFD indexes como USTEC no Tickmill-Demo, o campo `last` de `copy_ticks_*` é sempre `0.0`. Portanto `copy_ticks_*` fornece semântica de QuoteTick, não TradeTick. A capability permanece **Partial** até que um mapeamento MT5-native de TradeTick seja explicitamente definido e testado.
+- **Bars em nível Nautilus**: TC-D40/D41 validados live (M1: 5 bars, M5: 10 bars do USTEC). Falta cobertura do fluxo Nautilus-level completo: parsing → `Bar` → handler. **Nota operacional**: gateway RPyC retorna `np.void` (numpy structured array) — usar indexação por nome (`bar["open"]`) em vez de `getattr`.
 - **Modify Orders**: O gateway pode suportar modificação via `order_send`, mas o fluxo Nautilus operacional de modificação ainda não está suportado. Permanece como **Unsupported**.
 - **Cancelamento em nível Nautilus**: O cancelamento unitário via ticket está funcional em nível parcial, mas o cancelamento em massa (`cancel_all_orders`), cancel-on-stop e rejeições de cancelamento ainda requerem cobertura mais robusta.
 - **Lifecycle de market/limit orders**: `order_send` funcionando não prova, sozinho, o ciclo Nautilus completo de ordem submetida, aceita, preenchida, cancelada ou rejeitada.

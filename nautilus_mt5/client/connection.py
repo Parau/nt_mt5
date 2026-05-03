@@ -4,7 +4,7 @@ from typing import Dict, Union
 from nautilus_trader.common.enums import LogColor
 
 from nautilus_mt5.constants import NO_VALID_ID, TERMINAL_CONNECT_FAIL
-from nautilus_mt5.metatrader5 import MetaTrader5, EAClient
+from nautilus_mt5.metatrader5 import MetaTrader5, EAClient, LocalPythonMT5
 from nautilus_mt5.common import BaseMixin
 from nautilus_mt5.client.types import (
     ErrorInfo,
@@ -88,8 +88,20 @@ class MetaTrader5ClientConnectionMixin(BaseMixin):
             raise ValueError(f"Invalid connection mode: {self._terminal_connection_mode}")
         return clients
 
-    def _create_ipc_client(self) -> MetaTrader5:
+    def _create_ipc_client(self) -> MetaTrader5 | LocalPythonMT5:
         """Create an IPC-based MetaTrader5 client."""
+        if self._terminal_access == MT5TerminalAccessMode.LOCAL_PYTHON:
+            config = self._mt5_config['local_python']
+            self._log.info("Connecting via LOCAL_PYTHON (official MetaTrader5 package)")
+            return LocalPythonMT5(
+                path=config.path,
+                login=config.login,
+                password=config.password,
+                server=config.server,
+                timeout=config.timeout,
+                portable=config.portable,
+            )
+
         if self._terminal_access == MT5TerminalAccessMode.EXTERNAL_RPYC:
             config = self._mt5_config['rpyc']
             self._log.info(f"Connecting to External RPYC host: {config.host}, port: {config.port}")

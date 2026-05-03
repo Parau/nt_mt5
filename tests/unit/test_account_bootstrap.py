@@ -98,3 +98,71 @@ async def test_generate_account_state_trigger():
     exec_client._on_account_summary("FullAvailableFunds", "800.0", "USD")
     # All required tags are now present, generate_account_state should be triggered
     assert exec_client.generate_account_state.called
+
+
+def _make_account_summary_client(total: float, locked: float):
+    """Helper: returns an exec_client instance with _on_account_summary ready to call."""
+    from nautilus_trader.model.objects import AccountBalance, MarginBalance, Money, Currency
+
+    exec_client = MetaTrader5ExecutionClient.__new__(MetaTrader5ExecutionClient)
+    exec_client._account_summary_tags = {
+        "NetLiquidation",
+        "FullAvailableFunds",
+        "FullInitMarginReq",
+        "FullMaintMarginReq",
+    }
+    exec_client._account_summary = {}
+    type(exec_client)._log = property(lambda self: MagicMock())
+
+    mock_clock = MagicMock()
+    mock_clock.timestamp_ns = MagicMock(return_value=0)
+    type(exec_client)._clock = property(lambda self: mock_clock)
+    type(exec_client)._cache = property(lambda self: MagicMock())
+
+    mock_account_id = MagicMock()
+    mock_account_id.get_id = MagicMock(return_value="MT5-TEST")
+    type(exec_client).account_id = property(lambda self: mock_account_id)
+    exec_client._account_summary_loaded = MagicMock()
+
+    captured = {}
+
+    def fake_generate_account_state(balances, margins, reported, ts_event):
+        captured["balance"] = balances[0]
+
+    exec_client.generate_account_state = fake_generate_account_state
+
+    exec_client._on_account_summary("FullInitMarginReq", "0.0", "USD")
+    exec_client._on_account_summary("FullMaintMarginReq", str(locked), "USD")
+    exec_client._on_account_summary("NetLiquidation", str(total), "USD")
+    exec_client._on_account_summary("FullAvailableFunds", "0.0", "USD")
+
+    return captured["balance"]
+
+
+def test_account_balance_normal_case():
+    """When total > locked, free = total - locked (positive, exact)."""
+    balance = _make_account_summary_client(total=1000.0, locked=200.0)
+    assert float(balance.total) == 1000.0
+    assert float(balance.locked) == 200.0
+    assert float(balance.free) == 800.0
+
+
+def test_account_balance_locked_exceeds_total_clamps_to_zero():
+    """
+    When locked > total (e.g. margin call scenario), AccountBalance enforces
+    total - locked == free, so free cannot be negative.
+    The adapter must clamp locked to total so free = 0 is valid.
+    Before the fix, a hardcoded 400000 was inserted, masking the real failure.
+    After the fix, locked is clamped and free = total - locked = 0.
+    """
+    balance = _make_account_summary_client(total=10.0, locked=50.0)
+    assert float(balance.total) == 10.0
+    # locked is clamped to total (10) so the AccountBalance invariant holds
+    assert float(balance.locked) == 10.0
+    assert float(balance.free) == 0.0
+
+
+def test_account_balance_exactly_equal_total_and_locked():
+    """When total == locked, free = 0.0 (no available funds)."""
+    balance = _make_account_summary_client(total=500.0, locked=500.0)
+    assert float(balance.free) == 0.0

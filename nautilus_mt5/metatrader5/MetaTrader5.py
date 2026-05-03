@@ -905,6 +905,18 @@ The value of the constant.
                 f"external_rpyc gateway does not expose required method: get_constant"
             ) from exc
 
+    def req_ids(self, *args, **kwargs) -> None:
+        """
+        No-op for MT5: order IDs are returned by order_send, not requested separately.
+        Silently forwards to the gateway if exposed, otherwise does nothing.
+        """
+        try:
+            exposed = getattr(self.__conn.root, "exposed_req_ids", None)
+            if exposed is not None:
+                exposed(*args, **kwargs)
+        except Exception:
+            pass
+
     def account_info(self,*args,**kwargs):
         r'''
 # account_info

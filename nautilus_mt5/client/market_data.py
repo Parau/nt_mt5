@@ -191,7 +191,21 @@ class MetaTrader5ClientMarketDataMixin:
                 ignore_size,
             )
         else:
-            self._log.warning("MT5 wrapper is missing tick streaming methods. Assuming polling is handled elsewhere.")
+            # Gateway does not expose req_tick_by_tick_data; register a no-op subscription
+            # so the polling loop in _run_terminal_incoming_msg_reader can find it by name
+            # and poll via symbol_info_tick.
+            self._log.debug(
+                f"MT5 gateway has no streaming tick method; registering polling subscription for {symbol}."
+            )
+            await self._subscribe(
+                name,
+                lambda req_id, sym, *a, **kw: None,  # no-op: polling loop does the actual work
+                lambda req_id, **kw: None,
+                symbol,
+                tick_type,
+                0,
+                ignore_size,
+            )
 
     async def unsubscribe_ticks(
         self, instrument_id: InstrumentId, tick_type: str
@@ -208,7 +222,10 @@ class MetaTrader5ClientMarketDataMixin:
 
         """
         name = (str(instrument_id), tick_type)
-        await self._unsubscribe(name, self._mt5_client['mt5'].cancel_tick_by_tick_data)
+        cancel_func = getattr(self._mt5_client['mt5'], "cancel_tick_by_tick_data", None)
+        if cancel_func is None:
+            cancel_func = lambda req_id, **kw: None  # no-op for polling-only gateways
+        await self._unsubscribe(name, cancel_func)
 
     async def subscribe_realtime_bars(
         self,
@@ -705,8 +722,19 @@ class MetaTrader5ClientMarketDataMixin:
         if not (subscription := self._subscriptions.get(req_id=req_id)):
             return
 
+        if bid_price <= 0.0 or ask_price <= 0.0:
+            self._log.debug(
+                f"Discarding invalid QuoteTick (bid={bid_price}, ask={ask_price}) for req_id={req_id}."
+            )
+            return
+
         instrument_id = InstrumentId.from_str(subscription.name[0])
         instrument = self._cache.instrument(instrument_id)
+        if instrument is None:
+            self._log.warning(
+                f"Instrument {instrument_id} not found in cache for req_id={req_id}. Skipping QuoteTick."
+            )
+            return
         ts_event = await self._convert_mt5_timestamp_to_pandas_timestamp(time)
 
         quote_tick = QuoteTick(

@@ -20,6 +20,7 @@ from nautilus_trader.execution.messages import CancelOrder
 from nautilus_trader.execution.messages import ModifyOrder
 from nautilus_trader.execution.messages import SubmitOrder
 from nautilus_trader.execution.messages import SubmitOrderList
+from nautilus_trader.execution.reports import ExecutionMassStatus
 from nautilus_trader.execution.reports import FillReport
 from nautilus_trader.execution.reports import OrderStatusReport
 from nautilus_trader.execution.reports import PositionStatusReport
@@ -64,7 +65,11 @@ from nautilus_mt5.parsing.execution import ORDER_TIME_SPECIFIED_DAY
 from nautilus_mt5.parsing.execution import MAP_ORDER_STATUS
 from nautilus_mt5.parsing.execution import MAP_TIME_IN_FORCE
 from nautilus_mt5.parsing.execution import MAP_TRIGGER_METHOD
+from nautilus_mt5.parsing.execution import TRADE_RETCODE_DONE
+from nautilus_mt5.parsing.execution import TRADE_RETCODE_PLACED
+from nautilus_mt5.parsing.execution import DEAL_TYPE_BUY
 from nautilus_mt5.parsing.execution import timestring_to_timestamp
+from nautilus_mt5.parsing.instruments import mt5_symbol_to_instrument_id_simplified_symbology
 from nautilus_mt5.providers import MetaTrader5InstrumentProvider
 
 
@@ -120,7 +125,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             loop=loop,
             client_id=ClientId(name or f"{MT5_VENUE.value}"),
             venue=MT5_VENUE,
-            oms_type=OmsType.NETTING,
+            oms_type=OmsType.HEDGING,
             instrument_provider=instrument_provider,
             account_type=AccountType.MARGIN,
             base_currency=None,  # MT5 accounts can be multi-currency | TODO: change this to USD
@@ -176,7 +181,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         actual_login = int(getattr(account_info, "login", 0))
 
         if expected_login != actual_login:
-            raise RuntimeError(
+            raise ConnectionError(
                 f"external_rpyc execution account mismatch: "
                 f"expected account {expected_login}, actual account {actual_login}"
             )
@@ -198,12 +203,83 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         self._set_connected(True)
 
     async def _disconnect(self):
+        if self._config.cancel_on_stop:
+            for order in self._cache.orders_open():
+                venue_order_id = order.venue_order_id
+                if venue_order_id:
+                    try:
+                        self._client.cancel_order(int(venue_order_id.value))
+                    except Exception as e:
+                        self._log.warning(
+                            f"cancel-on-stop: failed to cancel order {venue_order_id}: {e}"
+                        )
+                else:
+                    self._log.warning(
+                        f"cancel-on-stop: no venue_order_id for {order.client_order_id}; skipping"
+                    )
+
+        if self._config.close_on_stop:
+            await self._close_all_positions_on_stop()
+
         self._client.registered_nautilus_clients.discard(self.id)
         if (
             self._client.is_running
             and self._client.registered_nautilus_clients == set()
         ):
             self._client.stop()
+
+    async def _close_all_positions_on_stop(self) -> None:
+        """Send market close orders for every open MT5 position via the bridge."""
+        try:
+            mt5_raw = self._client._mt5_client.get("mt5")
+            if not mt5_raw:
+                self._log.warning("close-on-stop: no MT5 client available")
+                return
+            positions_fn = getattr(mt5_raw, "positions_get", None)
+            order_send_fn = getattr(mt5_raw, "order_send", None)
+            if not positions_fn or not order_send_fn:
+                self._log.warning("close-on-stop: bridge missing positions_get or order_send")
+                return
+            open_positions = await asyncio.to_thread(positions_fn)
+            if not open_positions:
+                return
+            for pos in open_positions:
+                if isinstance(pos, dict):
+                    ticket = int(pos.get("ticket", 0))
+                    pos_type = int(pos.get("type", -1))
+                    symbol = pos.get("symbol", "")
+                    volume = float(pos.get("volume", 0.0))
+                else:
+                    ticket = int(getattr(pos, "ticket", 0))
+                    pos_type = int(getattr(pos, "type", -1))
+                    symbol = getattr(pos, "symbol", "")
+                    volume = float(getattr(pos, "volume", 0.0))
+                if not ticket or not symbol or volume <= 0:
+                    continue
+                # Close BUY (type=0) with SELL (1); close SELL (type=1) with BUY (0)
+                close_order_type = 1 if pos_type == 0 else 0
+                req = {
+                    "action": 1,  # TRADE_ACTION_DEAL
+                    "symbol": symbol,
+                    "volume": volume,
+                    "type": close_order_type,
+                    "position": ticket,
+                    "deviation": 20,
+                    "magic": 234000,
+                    "comment": "close on stop",
+                    "type_filling": 2,  # ORDER_FILLING_RETURN
+                }
+                try:
+                    await asyncio.to_thread(order_send_fn, req)
+                    self._log.info(
+                        f"close-on-stop: closed position {ticket} ({symbol} vol={volume})"
+                    )
+                except Exception as e:
+                    self._log.warning(
+                        f"close-on-stop: failed to close position {ticket} ({symbol}): {e}"
+                    )
+        except Exception as e:
+            self._log.warning(f"close-on-stop: unexpected error: {e}")
 
     async def generate_order_status_report(self, command: GenerateOrderStatusReport) -> OrderStatusReport | None:
         instrument_id = command.instrument_id
@@ -373,7 +449,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         ts_init = self._clock.timestamp_ns()
         for position in positions:
             self._log.debug(
-                f"Infer OrderStatusReport from open position {position.symbol.__dict__}",
+                f"Infer OrderStatusReport from open position {position.symbol}",
             )
             if position.quantity > 0:
                 order_side = OrderSide.BUY
@@ -382,9 +458,11 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             else:
                 continue  # Skip closed positions
 
-            instrument = await self.instrument_provider.find_with_symbol_id(
-                position.symbol.symbol,
-            )
+            # Look up instrument from cache using symbol name
+            from nautilus_mt5.data_types import MT5Symbol as _MT5Sym
+            mt5_sym = _MT5Sym(symbol=position.symbol.symbol)
+            pos_instrument_id = mt5_symbol_to_instrument_id_simplified_symbology(mt5_sym)
+            instrument = self._cache.instrument(pos_instrument_id)
             if instrument is None:
                 self._log.error(
                     f"Cannot generate report: instrument not found for symbol {position.symbol.symbol}",
@@ -430,28 +508,97 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         start = command.start
         end = command.end
         """
-        Generate a list of `FillReport`s with optional query filters. The returned list
-        may be empty if no trades match the given parameters.
+        Generate a list of `FillReport`s from MT5 historical deals (`history_deals_get`).
 
         Parameters
         ----------
         instrument_id : InstrumentId, optional
-            The instrument ID query filter.
+            Filter by instrument.
         venue_order_id : VenueOrderId, optional
-            The venue order ID (assigned by the venue) query filter.
+            Filter by venue order ID (MT5 order ticket).
         start : pd.Timestamp, optional
-            The start datetime (UTC) query filter.
+            Start of the history window (UTC).
         end : pd.Timestamp, optional
-            The end datetime (UTC) query filter.
+            End of the history window (UTC).
 
         Returns
         -------
         list[FillReport]
-
         """
-        self._log.warning("Cannot generate `list[FillReport]`: not yet implemented.")
+        import time as _time
 
-        return []  # TODO: Implement
+        from_ts = int(start.timestamp()) if start is not None else 0
+        to_ts = int(end.timestamp()) if end is not None else int(_time.time())
+
+        raw_deals = await self._client.get_history_deals(from_ts=from_ts, to_ts=to_ts)
+        if not raw_deals:
+            return []
+
+        ts_init = self._clock.timestamp_ns()
+        reports: list[FillReport] = []
+
+        for deal in raw_deals:
+            if isinstance(deal, dict):
+                _g = deal.get
+            else:
+                _g = lambda key, default=None: getattr(deal, key, default)  # noqa: E731
+
+            deal_symbol = _g("symbol", "")
+            deal_volume = float(_g("volume", 0.0))
+            if not deal_symbol or deal_volume == 0.0:
+                continue
+
+            # Resolve instrument from cache using the symbol name
+            from nautilus_mt5.data_types import MT5Symbol as _MT5Sym
+            mt5_sym = _MT5Sym(symbol=deal_symbol)
+            deal_instrument_id = mt5_symbol_to_instrument_id_simplified_symbology(mt5_sym)
+
+            if instrument_id is not None and deal_instrument_id != instrument_id:
+                continue
+
+            deal_order = int(_g("order", 0))
+            if venue_order_id is not None and str(deal_order) != venue_order_id.value:
+                continue
+
+            instrument = self._cache.instrument(deal_instrument_id)
+            if instrument is None:
+                self._log.warning(
+                    f"Cannot generate FillReport for {deal_symbol}: instrument not in cache."
+                )
+                continue
+
+            deal_type = int(_g("type", 0))
+            deal_price = float(_g("price", 0.0))
+            deal_ticket = int(_g("ticket", 0))
+            deal_commission = float(_g("commission", 0.0))
+            deal_time_msc = int(_g("time_msc", int(_g("time", 0)) * 1000))
+
+            order_side = OrderSide.BUY if deal_type == DEAL_TYPE_BUY else OrderSide.SELL
+
+            # Commission: MT5 reports negative values; FillReport expects a Money amount
+            commission_currency = instrument.quote_currency
+            commission_money = Money(abs(deal_commission), commission_currency)
+
+            ts_event = deal_time_msc * 1_000_000  # milliseconds → nanoseconds
+
+            report = FillReport(
+                account_id=self.account_id,
+                instrument_id=deal_instrument_id,
+                venue_order_id=VenueOrderId(str(deal_order)),
+                trade_id=TradeId(str(deal_ticket)),
+                order_side=order_side,
+                last_qty=instrument.make_qty(deal_volume),
+                last_px=instrument.make_price(deal_price),
+                commission=commission_money,
+                liquidity_side=LiquiditySide.TAKER,
+                report_id=UUID4(),
+                ts_event=ts_event,
+                ts_init=ts_init,
+            )
+            self._log.debug(f"Generated {report!r}")
+            reports.append(report)
+
+        return reports
 
     async def generate_position_status_reports(self, command: GeneratePositionStatusReports) -> list[PositionStatusReport]:
         instrument_id = command.instrument_id
@@ -492,9 +639,15 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             else:
                 continue  # Skip closed positions
 
-            instrument = await self.instrument_provider.find_with_symbol_id(
-                position.symbol.symbol,
-            )
+            # Look up instrument from cache using symbol name
+            from nautilus_mt5.data_types import MT5Symbol as _MT5Sym
+            mt5_sym = _MT5Sym(symbol=position.symbol.symbol)
+            pos_instrument_id = mt5_symbol_to_instrument_id_simplified_symbology(mt5_sym)
+
+            if instrument_id is not None and pos_instrument_id != instrument_id:
+                continue
+
+            instrument = self._cache.instrument(pos_instrument_id)
             if instrument is None:
                 self._log.error(
                     f"Cannot generate report: instrument not found for symbol {position.symbol.symbol}",
@@ -518,6 +671,69 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
         return report
 
+    async def generate_mass_status(
+        self,
+        lookback_mins: int | None = None,
+    ) -> ExecutionMassStatus | None:
+        """
+        Generate an `ExecutionMassStatus` report.
+
+        MT5 does not expose a single mass-status endpoint. This method
+        builds the report by aggregating the individual
+        ``generate_order_status_reports``, ``generate_fill_reports``, and
+        ``generate_position_status_reports`` calls.
+        """
+        import datetime as _dt
+
+        now = _dt.datetime.now(_dt.timezone.utc)
+        start = (now - _dt.timedelta(minutes=lookback_mins)) if lookback_mins is not None else None
+        ts_init = self._clock.timestamp_ns()
+
+        order_cmd = GenerateOrderStatusReports(
+            instrument_id=None,
+            start=start,
+            end=now,
+            open_only=False,
+            command_id=UUID4(),
+            ts_init=ts_init,
+        )
+        fill_cmd = GenerateFillReports(
+            instrument_id=None,
+            venue_order_id=None,
+            start=start,
+            end=now,
+            command_id=UUID4(),
+            ts_init=ts_init,
+        )
+        position_cmd = GeneratePositionStatusReports(
+            instrument_id=None,
+            start=start,
+            end=now,
+            command_id=UUID4(),
+            ts_init=ts_init,
+        )
+
+        order_reports = await self.generate_order_status_reports(order_cmd)
+        fill_reports = await self.generate_fill_reports(fill_cmd)
+        position_reports = await self.generate_position_status_reports(position_cmd)
+
+        mass_status = ExecutionMassStatus(
+            client_id=self.id,
+            account_id=self.account_id,
+            venue=MT5_VENUE,
+            report_id=UUID4(),
+            ts_init=ts_init,
+        )
+        mass_status.add_order_reports(order_reports)
+        mass_status.add_fill_reports(fill_reports)
+        mass_status.add_position_reports(position_reports)
+
+        self._log.info(
+            f"generate_mass_status: {len(order_reports)} order(s), "
+            f"{len(fill_reports)} fill(s), {len(position_reports)} position(s)."
+        )
+        return mass_status
+
 
     def _transform_order_to_mt5_order(
         self,
@@ -528,15 +744,27 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
         mt5_order = MT5Order()
         mt5_order.orderRef = order.client_order_id.value
-        mt5_order.account = self.client_id.value
+        mt5_order.account = self.account_id.get_id()
         mt5_order.symbol = instrument.info["symbol"]["symbol"]
         mt5_order.volume = float(order.quantity.as_double())
 
-        action, mt5_type = map_order_type_and_action(order.type, order.side)
+        action, mt5_type = map_order_type_and_action(order.order_type, order.side)
         mt5_order.action = action
         mt5_order.type = mt5_type
 
-        if order.price:
+        if order.order_type == OrderType.STOP_MARKET:
+            # MT5 BUY_STOP / SELL_STOP: `price` is the stop trigger price.
+            trigger = getattr(order, "trigger_price", None)
+            mt5_order.price = float(trigger.as_double()) if trigger else 0.0
+        elif order.order_type == OrderType.STOP_LIMIT:
+            # MT5 BUY_STOP_LIMIT / SELL_STOP_LIMIT:
+            #   `price`  = stop trigger price (when to activate the limit)
+            #   `stoplimit` = limit price (the actual limit to fill at once triggered)
+            trigger = getattr(order, "trigger_price", None)
+            mt5_order.price = float(trigger.as_double()) if trigger else 0.0
+            limit = getattr(order, "price", None)
+            mt5_order.trigger_price = float(limit.as_double()) if limit else 0.0
+        elif getattr(order, "price", None):
             mt5_order.price = float(order.price.as_double())
         else:
             mt5_order.price = 0.0
@@ -552,11 +780,87 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
         PyCondition.type(command, SubmitOrder, "command")
         try:
+            from nautilus_mt5.parsing.execution import validate_order_pre_venue
+            validate_order_pre_venue(command.order.order_type, command.order.time_in_force)
+
             instrument = self._cache.instrument(command.order.instrument_id)
             mt5_order: MT5Order = self._transform_order_to_mt5_order(command.order, instrument)
             mt5_order.order_id = self._client.next_order_id()
-            self._client.place_order(mt5_order)
+
+            # Hedge account: for SELL orders, find the open BUY position ticket so MT5
+            # closes it instead of opening a new opposite position.
+            if command.order.side == OrderSide.SELL:
+                mt5_symbol = instrument.info["symbol"]["symbol"]
+                try:
+                    open_positions = await asyncio.to_thread(
+                        self._client._mt5_client["mt5"].positions_get, symbol=mt5_symbol
+                    )
+                    self._log.debug(
+                        f"Hedge close: positions_get(symbol={mt5_symbol}) returned "
+                        f"{len(open_positions) if open_positions else 0} positions, "
+                        f"type={type(open_positions[0]).__name__ if open_positions else 'n/a'}"
+                    )
+                    if open_positions:
+                        for pos in open_positions:
+                            # pos may be a namedtuple netref or a dict depending on normalize_rpyc_return
+                            if isinstance(pos, dict):
+                                pos_type = pos.get("type", -1)
+                                ticket = int(pos.get("ticket", 0))
+                            else:
+                                pos_type = int(getattr(pos, "type", -1))
+                                ticket = int(getattr(pos, "ticket", 0))
+                            if ticket and pos_type == 0:  # POSITION_TYPE_BUY = 0
+                                mt5_order.position_ticket = ticket
+                                self._log.debug(
+                                    f"Hedge close: using position ticket {mt5_order.position_ticket} for SELL"
+                                )
+                                break
+                except Exception as e:
+                    self._log.warning(f"Could not fetch open positions for hedge close: {e}")
+
+            result = self._client.place_order(mt5_order)
             self._handle_order_event(status=OrderStatus.SUBMITTED, order=command.order)
+
+            # Interpret retcode: success → ACCEPTED; error → REJECTED
+            if isinstance(result, dict):
+                retcode = result.get("retcode", 0)
+                if retcode in (TRADE_RETCODE_DONE, TRADE_RETCODE_PLACED):
+                    venue_order_id = result.get("order", 0)
+                    self._handle_order_event(
+                        status=OrderStatus.ACCEPTED,
+                        order=command.order,
+                        order_id=venue_order_id,
+                    )
+                    # If the order was immediately filled (DONE + deal present), emit fill now.
+                    if retcode == TRADE_RETCODE_DONE:
+                        deal_id = result.get("deal", 0)
+                        fill_price = result.get("price", 0.0)
+                        fill_volume = result.get("volume", 0.0)
+                        if deal_id and fill_price and fill_volume:
+                            instrument = self._cache.instrument(command.order.instrument_id)
+                            if instrument:
+                                self.generate_order_filled(
+                                    strategy_id=command.order.strategy_id,
+                                    instrument_id=command.order.instrument_id,
+                                    client_order_id=command.order.client_order_id,
+                                    venue_order_id=VenueOrderId(str(venue_order_id)),
+                                    venue_position_id=None,
+                                    trade_id=TradeId(str(deal_id)),
+                                    order_side=command.order.side,
+                                    order_type=command.order.order_type,
+                                    last_qty=instrument.make_qty(fill_volume),
+                                    last_px=instrument.make_price(fill_price),
+                                    quote_currency=instrument.quote_currency,
+                                    commission=Money(0, instrument.quote_currency),
+                                    liquidity_side=LiquiditySide.TAKER,
+                                    ts_event=self._clock.timestamp_ns(),
+                                )
+                elif retcode != 0:
+                    self._handle_order_event(
+                        status=OrderStatus.REJECTED,
+                        order=command.order,
+                        reason=result.get("comment", f"MT5 retcode: {retcode}"),
+                    )
         except ValueError as e:
             self._handle_order_event(
                 status=OrderStatus.REJECTED,
@@ -567,52 +871,21 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
     async def _submit_order_list(self, command: SubmitOrderList) -> None:
         PyCondition.type(command, SubmitOrderList, "command")
 
-        order_id_map = {}
-        client_id_to_orders = {}
-        mt5_orders = []
-
-        # Translate orders
+        # MT5 does not natively support contingent order lists (OTO/OCO/bracket).
+        # The correct approach for SL/TP emulation is to use emulation_trigger on
+        # child orders so the NT OrderEmulator handles contingency locally and
+        # submits plain MARKET orders to this adapter when triggered.
+        # See docs/execution_capability_matrix.md for supported order types.
+        reason = (
+            "MT5 adapter does not support order lists (bracket/OTO/OCO). "
+            "Use emulation_trigger on child orders for SL/TP emulation via NT OrderEmulator."
+        )
+        self._log.warning(f"SubmitOrderList rejected: {reason}")
         for order in command.order_list.orders:
-            order_id_map[order.client_order_id.value] = self._client.next_order_id()
-            client_id_to_orders[order.client_order_id.value] = order
-
-            try:
-                instrument = self._cache.instrument(order.instrument_id)
-                mt5_order = self._transform_order_to_mt5_order(order, instrument)
-                mt5_order.transmit = False
-                mt5_order.order_id = order_id_map[order.client_order_id.value]
-                mt5_orders.append(mt5_order)
-            except ValueError as e:
-                # All orders in the list are declined to prevent unintended side effects
-                for o in command.order_list.orders:
-                    if o == order:
-                        self._handle_order_event(
-                            status=OrderStatus.REJECTED,
-                            order=command.order,
-                            reason=str(e),
-                        )
-                    else:
-                        self._handle_order_event(
-                            status=OrderStatus.REJECTED,
-                            order=command.order,
-                            reason=f"The order has been rejected due to the rejection of the order with "
-                            f"{order.client_order_id!r} in the list",
-                        )
-                return
-
-        # Mark last order to transmit
-        mt5_orders[-1].transmit = True
-
-        for mt5_order in mt5_orders:
-            # Map the Parent Order Ids
-            if parent_id := order_id_map.get(mt5_order.parentId):
-                mt5_order.parentId = parent_id
-            # Place orders
-            order_ref = mt5_order.orderRef
-            self._client.place_order(mt5_order)
             self._handle_order_event(
-                status=OrderStatus.SUBMITTED,
-                order=client_id_to_orders[order_ref],
+                status=OrderStatus.REJECTED,
+                order=order,
+                reason=reason,
             )
 
     async def _modify_order(self, command: ModifyOrder) -> None:
@@ -697,8 +970,15 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
                 # free = self._account_summary[currency]["FullAvailableFunds"]
                 locked = self._account_summary[currency]["FullMaintMarginReq"]
                 total = self._account_summary[currency]["NetLiquidation"]
-                if total - locked < locked:
-                    total = 400000  # TODO: Bug; Cannot recalculate balance when no current balance
+                # AccountBalance enforces total - locked == free >= 0.
+                # When locked > total (e.g. extreme margin scenario), clamp locked
+                # to total so free = 0 satisfies the invariant without fabricating data.
+                if locked > total:
+                    self._log.warning(
+                        f"FullMaintMarginReq ({locked}) > NetLiquidation ({total}) "
+                        "for currency {currency}; clamping locked to total so free=0."
+                    )
+                    locked = total
                 free = total - locked
                 account_balance = AccountBalance(
                     total=Money(total, Currency.from_str(currency)),
@@ -759,8 +1039,11 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
                 self._log.debug(f"Order {order.client_order_id} already accepted.")
         elif status == OrderStatus.FILLED:
             if order.status != OrderStatus.FILLED:
-                # TODO: self.generate_order_filled
-                self._log.debug(f"Order {order.client_order_id} is filled.")
+                self._log.warning(
+                    f"Order {order.client_order_id} reached FILLED via status callback "
+                    "but fill details (price, qty, trade_id) are unavailable here. "
+                    "The fill event must be emitted by _submit_order or _on_exec_details."
+                )
         elif status == OrderStatus.PENDING_CANCEL:
             # TODO: self.generate_order_pending_cancel
             self._log.warning(f"Order {order.client_order_id} is {status.name}")

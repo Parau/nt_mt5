@@ -7,13 +7,40 @@ from nautilus_trader.model.objects import Quantity
 from nautilus_mt5.execution import MetaTrader5ExecutionClient
 from nautilus_mt5.data_types import MT5SymbolDetails
 
+# Preserve original class-level descriptors so that monkeypatching in tests
+# (type(exec_client).account_id = ...) can be undone, preventing pollution of
+# later tests that use real MetaTrader5ExecutionClient instances.
+_ORIGINAL_ACCOUNT_ID_DESCRIPTOR = MetaTrader5ExecutionClient.__dict__.get("account_id")
+_ORIGINAL_CLIENT_ID_DESCRIPTOR = MetaTrader5ExecutionClient.__dict__.get("client_id")
+
+
+@pytest.fixture(autouse=True)
+def _restore_exec_client_class_descriptors():
+    """Restore class-level property descriptors after each test in this module."""
+    yield
+    if _ORIGINAL_ACCOUNT_ID_DESCRIPTOR is not None:
+        MetaTrader5ExecutionClient.account_id = _ORIGINAL_ACCOUNT_ID_DESCRIPTOR
+    elif hasattr(MetaTrader5ExecutionClient, "account_id"):
+        try:
+            delattr(MetaTrader5ExecutionClient, "account_id")
+        except AttributeError:
+            pass
+    if _ORIGINAL_CLIENT_ID_DESCRIPTOR is not None:
+        MetaTrader5ExecutionClient.client_id = _ORIGINAL_CLIENT_ID_DESCRIPTOR
+    elif hasattr(MetaTrader5ExecutionClient, "client_id"):
+        try:
+            delattr(MetaTrader5ExecutionClient, "client_id")
+        except AttributeError:
+            pass
+
+
 class MockOrder:
     def __init__(self):
         self.instrument_id = InstrumentId(Symbol("EURUSD"), Venue("METATRADER_5"))
         self.quantity = Quantity.from_int(100)
         self.client_order_id = ClientOrderId("client1")
         self.side = OrderSide.BUY
-        self.type = OrderType.MARKET
+        self.order_type = OrderType.MARKET
         self.price = None
         self.time_in_force = TimeInForce.GTC
         self.is_post_only = False
@@ -58,7 +85,7 @@ def test_transform_limit_order_mocked():
     from nautilus_trader.model.objects import Price
 
     order = MockOrder()
-    order.type = OrderType.LIMIT
+    order.order_type = OrderType.LIMIT
     order.price = Price.from_str("1.1500")
 
     provider_mock = MagicMock()

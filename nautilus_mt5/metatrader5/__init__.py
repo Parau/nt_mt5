@@ -5,14 +5,14 @@ from nautilus_mt5.metatrader5.config import RpycConnectionConfig, EAConnectionCo
 from nautilus_mt5.metatrader5.ea_client import EAClient
 from nautilus_mt5.metatrader5.ea_sockets import EASocketConnection
 from nautilus_mt5.metatrader5.errors import EA_ERROR_DICT
+from nautilus_mt5.metatrader5.local_python import LocalPythonMT5
 
 current_dir = os.path.dirname(__file__)
 
+# RPyC-based MetaTrader5 wrapper (used by EXTERNAL_RPYC mode)
+# Always importable regardless of platform — it is a pure Python RPyC client.
 with suppress(ImportError):
-    if platform.system() == "Windows":
-        import MetaTrader5
-    else:
-        from .MetaTrader5 import MetaTrader5
+    from .MetaTrader5 import MetaTrader5
 
 try:
     from .MetaTrader5 import MetaTrader5
@@ -21,6 +21,7 @@ except ImportError:
 
 __all__ = [
     "MetaTrader5",
+    "LocalPythonMT5",
     "RpycConnectionConfig",
     "EAConnectionConfig",
     "EAClient",

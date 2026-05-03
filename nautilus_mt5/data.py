@@ -11,7 +11,6 @@ from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.data import TradeTick
 from nautilus_trader.model.identifiers import ClientId
-from nautilus_trader.model.instruments.currency_pair import CurrencyPair
 
 from nautilus_mt5.client.client import MetaTrader5Client
 from nautilus_mt5.constants import MT5_VENUE
@@ -19,6 +18,7 @@ from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.config import MetaTrader5DataClientConfig
 from nautilus_mt5.parsing.data import timedelta_to_duration_str
 from nautilus_mt5.providers import MetaTrader5InstrumentProvider
+from nautilus_mt5.venue_profile import CapabilityStatus
 
 from nautilus_trader.data.messages import SubscribeData
 from nautilus_trader.data.messages import SubscribeInstruments
@@ -99,12 +99,20 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         self._handle_revised_bars = config.handle_revised_bars
         self._use_regular_trading_hours = config.use_regular_trading_hours
         self._ignore_quote_tick_size_updates = config.ignore_quote_tick_size_updates
+        self._venue_profile = config.venue_profile
 
     @property
     def instrument_provider(self) -> MetaTrader5InstrumentProvider:
         return self._instrument_provider  # type: ignore
 
     async def _connect(self):
+        if self._venue_profile is None:
+            raise ValueError(
+                "MetaTrader5DataClient requires a 'venue_profile' to be configured. "
+                "Use a pre-built profile (e.g., from nautilus_mt5 import TICKMILL_DEMO_PROFILE) "
+                "or define a custom VenueProfile. "
+                "Set it via MetaTrader5DataClientConfig(venue_profile=...)."
+            )
         # Connect client
         await self._client._connect()
         self._client.registered_nautilus_clients.add(self.id)
@@ -167,6 +175,27 @@ class MetaTrader5DataClient(LiveMarketDataClient):
                 f"Cannot subscribe to TradeTicks for {instrument_id}, Instrument not found.",
             )
             return
+
+        calc_mode = instrument.info.get("trade_calc_mode", 0) if isinstance(instrument.info, dict) else 0
+        try:
+            status = self._venue_profile.check_capability(calc_mode, "trade_ticks")
+        except ValueError as e:
+            self._log.error(str(e))
+            return
+
+        if status == CapabilityStatus.UNSUPPORTED:
+            self._log.warning(
+                f"TradeTicks for {instrument_id} (trade_calc_mode={calc_mode}) are UNSUPPORTED "
+                f"per VenueProfile '{self._venue_profile.name}'. Subscription rejected."
+            )
+            return
+
+        if status in (CapabilityStatus.ASSUMED, CapabilityStatus.OBSERVED):
+            self._log.warning(
+                f"TradeTicks for {instrument_id} (trade_calc_mode={calc_mode}): "
+                f"capability status is {status.value!r} in VenueProfile "
+                f"'{self._venue_profile.name}' — behavior not yet verified."
+            )
 
         await self._client.subscribe_ticks(
             instrument_id=instrument_id,
@@ -242,7 +271,7 @@ class MetaTrader5DataClient(LiveMarketDataClient):
 
     async def _request_instrument(self, request: RequestInstrument) -> None:
         instrument_id = request.instrument_id
-        correlation_id = request.correlation_id
+        correlation_id = request.correlation_id or request.id
         start = request.start
         end = request.end
         if start is not None:
@@ -261,7 +290,7 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         else:
             self._log.warning(f"{instrument_id} not available.")
             return
-        self._handle_instrument(instrument, correlation_id)
+        self._handle_instrument(instrument, correlation_id, start, end, None)
 
     async def _request_instruments(self, request: RequestInstruments) -> None:
         self._log.warning("MetaTrader5 adapter does not support _request_instruments.")
@@ -303,11 +332,26 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             )
             return
 
-        if isinstance(instrument, CurrencyPair):
-            self._log.error(
-                "MetaTrader5 doesn't support Trade Ticks for CurrencyPair.",
+        calc_mode = instrument.info.get("trade_calc_mode", 0) if isinstance(instrument.info, dict) else 0
+        try:
+            status = self._venue_profile.check_capability(calc_mode, "trade_ticks")
+        except ValueError as e:
+            self._log.error(str(e))
+            return
+
+        if status == CapabilityStatus.UNSUPPORTED:
+            self._log.warning(
+                f"TradeTicks for {instrument_id} (trade_calc_mode={calc_mode}) are UNSUPPORTED "
+                f"per VenueProfile '{self._venue_profile.name}'. Request rejected."
             )
             return
+
+        if status in (CapabilityStatus.ASSUMED, CapabilityStatus.OBSERVED):
+            self._log.warning(
+                f"TradeTicks for {instrument_id} (trade_calc_mode={calc_mode}): "
+                f"capability status is {status.value!r} in VenueProfile "
+                f"'{self._venue_profile.name}' — behavior not yet verified."
+            )
 
         ticks = await self._handle_ticks_request(
             MT5Symbol(**instrument.info["symbol"]),

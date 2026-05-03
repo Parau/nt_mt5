@@ -12,7 +12,6 @@ from nautilus_mt5.config import (
     MetaTrader5ExecClientConfig,
     ExternalRPyCTerminalConfig,
     ManagedTerminalConfig,
-    DockerizedMT5TerminalConfig,
 )
 from nautilus_mt5.factories import get_resolved_mt5_client
 
@@ -78,16 +77,6 @@ class TestTerminalAccessValidation:
         with pytest.raises(ValueError, match="external_rpyc.*None|external_rpyc.*ausente"):
             get_resolved_mt5_client(**mock_components, config=config)
 
-    def test_managed_terminal_with_legacy_gateway_fails(self, config_cls, mock_components):
-        # 5. MANAGED_TERMINAL com dockerized_gateway top-level legado
-        config = config_cls(
-            terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
-            managed_terminal=ManagedTerminalConfig(backend=ManagedTerminalBackend.DOCKERIZED),
-            dockerized_gateway=DockerizedMT5TerminalConfig(),
-        )
-        with pytest.raises(ValueError, match="dockerized_gateway.*legacy|dockerized_gateway.*legado"):
-            get_resolved_mt5_client(**mock_components, config=config)
-
     def test_managed_terminal_not_implemented_raises_runtime_error(self, config_cls, mock_components):
         # 6. MANAGED_TERMINAL válido estruturalmente, mas backend ainda não implementado
         config = config_cls(
@@ -108,33 +97,4 @@ class TestTerminalAccessValidation:
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr("nautilus_mt5.factories.MetaTrader5Client", MagicMock())
             # Should not raise any validation error
-            get_resolved_mt5_client(**mock_components, config=config)
-
-    def test_external_rpyc_with_legacy_rpyc_config_fails(self, config_cls, mock_components):
-        from nautilus_mt5.metatrader5 import RpycConnectionConfig
-        config = config_cls(
-            terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
-            external_rpyc=ExternalRPyCTerminalConfig(host="127.0.0.1", port=18812),
-            rpyc_config=RpycConnectionConfig(host="127.0.0.1", port=18812),
-        )
-        with pytest.raises(ValueError, match="rpyc_config.*legacy|rpyc_config.*legado"):
-            get_resolved_mt5_client(**mock_components, config=config)
-
-    def test_managed_terminal_with_legacy_rpyc_config_fails(self, config_cls, mock_components):
-        from nautilus_mt5.metatrader5 import RpycConnectionConfig
-        config = config_cls(
-            terminal_access=MT5TerminalAccessMode.MANAGED_TERMINAL,
-            managed_terminal=ManagedTerminalConfig(backend=ManagedTerminalBackend.DOCKERIZED),
-            rpyc_config=RpycConnectionConfig(host="127.0.0.1", port=18812),
-        )
-        with pytest.raises(ValueError, match="rpyc_config.*legacy|rpyc_config.*legado"):
-            get_resolved_mt5_client(**mock_components, config=config)
-
-    def test_external_rpyc_with_legacy_gateway_fails(self, config_cls, mock_components):
-        config = config_cls(
-            terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
-            external_rpyc=ExternalRPyCTerminalConfig(host="127.0.0.1", port=18812),
-            dockerized_gateway=DockerizedMT5TerminalConfig(),
-        )
-        with pytest.raises(ValueError, match="dockerized_gateway.*legacy|dockerized_gateway.*legado"):
             get_resolved_mt5_client(**mock_components, config=config)

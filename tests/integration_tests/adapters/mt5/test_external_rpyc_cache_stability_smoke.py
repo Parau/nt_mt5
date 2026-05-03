@@ -46,7 +46,7 @@ def clear_mt5_clients():
 @pytest.fixture
 def mock_components():
     return {
-        "loop": asyncio.get_event_loop(),
+        "loop": asyncio.new_event_loop(),
         "msgbus": MagicMock(spec=MessageBus),
         "cache": MagicMock(spec=Cache),
         "clock": MagicMock(spec=LiveClock),

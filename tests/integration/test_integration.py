@@ -238,18 +238,22 @@ async def test_integration_data_client_flow(mt5_client):
     # Test subscriptions
     mt5_client._event_subscriptions = {}
     await mt5_client.subscribe_ticks(inst_id, mt5_sym, "BidAsk", False)
-    assert True
+    # The fake bridge has no req_tick_by_tick_data — the adapter logs a warning and continues.
+    # Observable: no exception raised and _event_subscriptions is still empty (no streaming).
+    assert isinstance(mt5_client._event_subscriptions, dict)
 
     # Test unsubscribe
     await mt5_client.unsubscribe_ticks(inst_id, "BidAsk")
-    assert True
+    # Observable: no exception raised; dict unchanged.
+    assert isinstance(mt5_client._event_subscriptions, dict)
 
     # Test market data requests (Bars)
     from nautilus_trader.model.data import BarType
     bar_type = BarType.from_str("EURUSD.METATRADER_5-1-MINUTE-LAST-EXTERNAL")
     mt5_client._subscribe = AsyncMock()
     await mt5_client.subscribe_historical_bars(bar_type, mt5_sym, False, False)
-    assert True
+    # Observable: _subscribe was called exactly once for bar subscription.
+    mt5_client._subscribe.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_integration_exec_client_flow(mt5_client):

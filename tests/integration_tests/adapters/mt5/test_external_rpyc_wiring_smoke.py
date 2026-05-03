@@ -53,7 +53,7 @@ def test_dummy_client_mocking(monkeypatch):
     """
     monkeypatch.setattr("nautilus_mt5.factories.MetaTrader5Client", DummyMT5Client)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
     msgbus = MagicMock(spec=MessageBus)
     cache = MagicMock(spec=Cache)
     clock = MagicMock(spec=LiveClock)
@@ -75,7 +75,7 @@ def test_external_rpyc_wiring_performance_identical_configs(monkeypatch):
     """
     monkeypatch.setattr("nautilus_mt5.factories.MetaTrader5Client", DummyMT5Client)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
     msgbus = MagicMock(spec=MessageBus)
     cache = MagicMock(spec=Cache)
     clock = MagicMock(spec=LiveClock)
@@ -105,7 +105,7 @@ def test_external_rpyc_wiring_performance_distinct_configs(monkeypatch):
     """
     monkeypatch.setattr("nautilus_mt5.factories.MetaTrader5Client", DummyMT5Client)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
     msgbus = MagicMock(spec=MessageBus)
     cache = MagicMock(spec=Cache)
     clock = MagicMock(spec=LiveClock)
@@ -137,7 +137,7 @@ def test_external_rpyc_factory_performance(monkeypatch):
     # This avoids Cython type issues with MessageBus and other components when creating real Data/Exec clients
     monkeypatch.setattr("nautilus_mt5.factories.MetaTrader5Client", DummyMT5Client)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
     msgbus = MagicMock(spec=MessageBus)
     cache = MagicMock(spec=Cache)
     clock = MagicMock(spec=LiveClock)

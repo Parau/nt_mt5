@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import re
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -10,11 +13,14 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import Symbol
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.instruments import Cfd
+from nautilus_trader.model.instruments import CurrencyPair
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Currency
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
 
+if TYPE_CHECKING:
+    from nautilus_mt5.venue_profile import VenueProfile
 
 from nautilus_mt5.data_types import MT5Symbol, MT5SymbolDetails
 from nautilus_mt5.metatrader5.models import SymbolInfo
@@ -49,23 +55,65 @@ def _tick_size_to_precision(tick_size: float | Decimal) -> int:
     return len(tick_size_str.partition(".")[2].rstrip("0"))
 
 
-def sec_type_to_asset_class(sec_type: str) -> AssetClass:
-    sec_type = sec_type if "INDICES" not in sec_type else "INDEXES"
-    sec_type = "FOREX" if "FOREX" in sec_type else sec_type
+def sec_type_to_asset_class(sec_type: str | None) -> AssetClass:
+    if not sec_type:
+        return asset_class_from_str("INDEX")
 
-    # Map and return the corresponding asset class
+    # Normalize common variants
+    upper = sec_type.upper()
+    if "INDICES" in upper or "INDEXES" in upper or "INDEX" in upper:
+        return asset_class_from_str("INDEX")
+    if "FOREX" in upper or "FX" in upper:
+        return asset_class_from_str("FX")
+    if "METAL" in upper:
+        return asset_class_from_str("COMMODITY")
+    if "COMMODITY" in upper or "COMMODIT" in upper:
+        return asset_class_from_str("COMMODITY")
+    if "CRYPTO" in upper:
+        return asset_class_from_str("CRYPTOCURRENCY")
+    if "EQUIT" in upper or "STOCK" in upper or "SHARE" in upper:
+        return asset_class_from_str("EQUITY")
+    if "BOND" in upper or "DEBT" in upper:
+        return asset_class_from_str("BOND")
+    if "ENERGY" in upper:
+        return asset_class_from_str("COMMODITY")
+    # Broker-specific CFD path prefixes (e.g. "CFD-2", "CFD1", "CFDS") → INDEX
+    if upper.startswith("CFD"):
+        return asset_class_from_str("INDEX")
+
+    # Exact mapping for any remaining known values
     mapping = {"INDEXES": "INDEX", "FOREX": "FX", "METALS": "COMMODITY"}
-    return asset_class_from_str(mapping.get(sec_type, sec_type))
+    mapped = mapping.get(upper, upper)
+    try:
+        return asset_class_from_str(mapped)
+    except Exception:
+        return asset_class_from_str("INDEX")
 
 
 def parse_instrument(
     symbol_details: MT5SymbolDetails,
     strict_symbology: bool = False,
+    venue_profile: VenueProfile | None = None,
 ) -> Instrument:
     instrument_id = mt5_symbol_to_instrument_id(
         symbol=symbol_details.symbol,
         strict_symbology=strict_symbology,
     )
+
+    if venue_profile is not None:
+        calc_mode = getattr(symbol_details, "trade_calc_mode", 0)
+        cap = venue_profile.get_capability(calc_mode)
+        target_type = cap.nautilus_instrument_type
+        if target_type is CurrencyPair:
+            return parse_currency_pair_contract(details=symbol_details, instrument_id=instrument_id)
+        elif target_type is Cfd:
+            return parse_cfd_contract(details=symbol_details, instrument_id=instrument_id)
+        else:
+            raise ValueError(
+                f"Instrument type '{target_type.__name__}' for trade_calc_mode={calc_mode} "
+                "is declared in the profile but not yet implemented in the parser. "
+                "Only CurrencyPair and Cfd are currently supported."
+            )
 
     return parse_cfd_contract(details=symbol_details, instrument_id=instrument_id)
 
@@ -81,6 +129,41 @@ def symbol_details_to_dict(details: MT5SymbolDetails) -> dict:
     else:
         dict_details["symbol"] = dict(getattr(details.symbol, '__dict__', {}))
     return dict_details
+
+
+def parse_currency_pair_contract(
+    details: MT5SymbolDetails,
+    instrument_id: InstrumentId,
+) -> CurrencyPair:
+    """Parse a CurrencyPair instrument from MT5 symbol details (SYMBOL_CALC_MODE_FOREX)."""
+    price_precision: int = details.digits
+    size_precision: int = _tick_size_to_precision(details.volume_step)
+    timestamp = details.time
+
+    return CurrencyPair(
+        instrument_id=instrument_id,
+        raw_symbol=Symbol(details.symbol.symbol),
+        base_currency=Currency.from_str(details.currency_base),
+        quote_currency=Currency.from_str(details.currency_profit),
+        price_precision=price_precision,
+        size_precision=size_precision,
+        price_increment=Price(details.trade_tick_size, price_precision),
+        size_increment=Quantity(details.volume_step, size_precision),
+        lot_size=None,
+        max_quantity=Quantity(details.volume_max, size_precision),
+        min_quantity=Quantity(details.volume_min, size_precision),
+        max_notional=None,
+        min_notional=None,
+        max_price=None,
+        min_price=None,
+        margin_init=Decimal(0),
+        margin_maint=Decimal(0),
+        maker_fee=Decimal(0),
+        taker_fee=Decimal(0),
+        ts_event=timestamp,
+        ts_init=timestamp,
+        info=symbol_details_to_dict(details),
+    )
 
 
 def parse_cfd_contract(
