@@ -165,10 +165,65 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
         if not all_positions:
             return None
         positions = []
-        for position in all_positions:
-            if position.account_id == account_id:
-                positions.append(position)
-        return positions
+        for pos in all_positions:
+            if isinstance(pos, dict):
+                # Raw dict from EXTERNAL_RPYC direct bridge call — convert to MT5Position.
+                symbol_str = pos.get("symbol", "")
+                if not symbol_str:
+                    continue
+                pos_type = pos.get("type", 0)  # 0=BUY, 1=SELL
+                volume = Decimal(str(pos.get("volume", 0.0)))
+                quantity = volume if pos_type == 0 else -volume
+                avg_cost = float(pos.get("price_open", 0.0))
+                commission = float(pos.get("commission", 0.0))
+                symbol = MT5Symbol(symbol=symbol_str)
+                positions.append(MT5Position(account_id, symbol, quantity, avg_cost, commission))
+            elif getattr(pos, "account_id", None) == account_id:
+                positions.append(pos)
+        return positions if positions else None
+
+    async def get_history_deals(
+        self,
+        from_ts: int = 0,
+        to_ts: int | None = None,
+    ) -> list[dict]:
+        """
+        Retrieve historical deal records from MT5.
+
+        Parameters
+        ----------
+        from_ts : int
+            Start of the range as a Unix timestamp (seconds). Defaults to 0.
+        to_ts : int, optional
+            End of the range as a Unix timestamp (seconds). Defaults to current time.
+
+        Returns
+        -------
+        list[dict]
+        """
+        import time as _time
+        import rpyc
+
+        if to_ts is None:
+            to_ts = int(_time.time())
+
+        try:
+            res = await asyncio.to_thread(
+                self._mt5_client["mt5"].history_deals_get, from_ts, to_ts
+            )
+            if res is None:
+                return []
+            res_local = rpyc.classic.obtain(res)
+            if isinstance(res_local, (list, tuple)):
+                return list(res_local)
+            # numpy structured array or similar
+            try:
+                return [dict(zip(res_local.dtype.names, row)) for row in res_local]
+            except Exception:
+                return list(res_local)
+        except Exception as e:
+            self._log.warning(f"Error fetching history deals: {e}")
+            return []
 
     async def process_account_summary(
         self,

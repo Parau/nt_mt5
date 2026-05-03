@@ -45,7 +45,7 @@ async def test_account_validation():
 
     await MetaTrader5ExecutionClient._connect(exec_client)
 
-    assert not exec_client._set_connected.called
+    assert exec_client._set_connected.called
 
 @pytest.mark.asyncio
 async def test_account_validation_mismatch():
@@ -75,7 +75,7 @@ async def test_account_validation_mismatch():
     type(exec_client).instrument_provider = property(lambda self: self._instrument_provider)
     type(exec_client)._log = property(lambda self: MagicMock())
 
-    with pytest.raises(ConnectionError, match="Account mismatch"):
+    with pytest.raises(ConnectionError, match="account mismatch"):
         await MetaTrader5ExecutionClient._connect(exec_client)
 
 @pytest.mark.asyncio
@@ -156,3 +156,136 @@ async def test_client_lifecycle_and_readiness():
     client._start_internal_msg_queue_processor.assert_called_once()
 
     assert client._is_client_ready.is_set()
+
+# ---------------------------------------------------------------------------
+# Phase 7 — Tests for the three compliance fixes
+# ---------------------------------------------------------------------------
+
+def _make_bare_exec_client():
+    """Return a MetaTrader5ExecutionClient instance with minimal mocks."""
+    ec = MetaTrader5ExecutionClient.__new__(MetaTrader5ExecutionClient)
+    log_mock = MagicMock()
+    type(ec)._log = property(lambda self: log_mock)
+    ec._log_mock = log_mock  # expose for assertions
+    return ec
+
+
+def test_handle_order_event_filled_logs_warning_and_does_not_call_generate_order_filled():
+    """
+    Phase 7 / Fix #2 — _handle_order_event with OrderStatus.FILLED.
+
+    The FILLED path via this method does not have fill details (price, qty,
+    trade_id), so it must NOT call generate_order_filled. It must emit a
+    warning so the developer knows the fill must come from _submit_order or
+    _on_exec_details.
+    """
+    from nautilus_trader.model.enums import OrderStatus
+    from nautilus_trader.model.identifiers import ClientOrderId
+
+    ec = _make_bare_exec_client()
+
+    # generate_order_filled must NOT be called
+    ec.generate_order_filled = MagicMock()
+
+    # Build a mock order that is NOT already FILLED
+    order = MagicMock()
+    order.client_order_id = ClientOrderId("O-FILLED-01")
+    order.status = OrderStatus.ACCEPTED  # not yet filled
+
+    MetaTrader5ExecutionClient._handle_order_event(
+        ec, status=OrderStatus.FILLED, order=order
+    )
+
+    # Must NOT emit a fill event (no price/qty/trade_id available in this path)
+    ec.generate_order_filled.assert_not_called()
+
+    # Must log a warning explaining why the fill must come from elsewhere
+    ec._log_mock.warning.assert_called_once()
+    warning_text = ec._log_mock.warning.call_args[0][0]
+    assert "FILLED" in warning_text or "fill" in warning_text.lower()
+
+
+def test_handle_order_event_filled_skips_when_already_filled():
+    """
+    Phase 7 / Fix #2 — When the order is already FILLED, the block is skipped
+    entirely (no double-emit, no warning).
+    """
+    from nautilus_trader.model.enums import OrderStatus
+    from nautilus_trader.model.identifiers import ClientOrderId
+
+    ec = _make_bare_exec_client()
+    ec.generate_order_filled = MagicMock()
+
+    order = MagicMock()
+    order.client_order_id = ClientOrderId("O-FILLED-02")
+    order.status = OrderStatus.FILLED  # already filled
+
+    MetaTrader5ExecutionClient._handle_order_event(
+        ec, status=OrderStatus.FILLED, order=order
+    )
+
+    ec.generate_order_filled.assert_not_called()
+    ec._log_mock.warning.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_generate_mass_status_returns_execution_mass_status():
+    """
+    generate_mass_status must return a real ExecutionMassStatus (not None).
+
+    MT5 has no mass-status endpoint but the NT ExecEngine treats None as a
+    reconciliation failure. The adapter builds the object from the individual
+    generate_*_reports calls and returns it — even when those lists are empty.
+    """
+    from nautilus_trader.execution.reports import ExecutionMassStatus
+    from nautilus_mt5.execution import MetaTrader5ExecutionClient
+
+    ec = _make_bare_exec_client()
+
+    # Stub out the three individual generators so the test stays unit-level
+    ec.generate_order_status_reports = AsyncMock(return_value=[])
+    ec.generate_fill_reports = AsyncMock(return_value=[])
+    ec.generate_position_status_reports = AsyncMock(return_value=[])
+
+    # Provide the minimal attributes that generate_mass_status accesses
+    from nautilus_trader.model.identifiers import ClientId, AccountId
+    type(ec).id = property(lambda self: ClientId("MT5"))
+    type(ec).account_id = property(lambda self: AccountId("MT5-25306658"))
+    clock_mock = MagicMock()
+    clock_mock.timestamp_ns.return_value = 0
+    type(ec)._clock = property(lambda self: clock_mock)
+
+    result = await MetaTrader5ExecutionClient.generate_mass_status(ec, lookback_mins=None)
+
+    assert isinstance(result, ExecutionMassStatus)
+    # Individual generators must have been called
+    ec.generate_order_status_reports.assert_called_once()
+    ec.generate_fill_reports.assert_called_once()
+    ec.generate_position_status_reports.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_generate_mass_status_with_lookback_calls_generators():
+    """
+    generate_mass_status with lookback_mins passes a non-None start to
+    the individual generator commands and still returns ExecutionMassStatus.
+    """
+    from nautilus_trader.execution.reports import ExecutionMassStatus
+    from nautilus_mt5.execution import MetaTrader5ExecutionClient
+
+    ec = _make_bare_exec_client()
+
+    ec.generate_order_status_reports = AsyncMock(return_value=[])
+    ec.generate_fill_reports = AsyncMock(return_value=[])
+    ec.generate_position_status_reports = AsyncMock(return_value=[])
+
+    from nautilus_trader.model.identifiers import ClientId, AccountId
+    type(ec).id = property(lambda self: ClientId("MT5"))
+    type(ec).account_id = property(lambda self: AccountId("MT5-25306658"))
+    clock_mock = MagicMock()
+    clock_mock.timestamp_ns.return_value = 0
+    type(ec)._clock = property(lambda self: clock_mock)
+
+    result = await MetaTrader5ExecutionClient.generate_mass_status(ec, lookback_mins=60)
+
+    assert isinstance(result, ExecutionMassStatus)

@@ -22,6 +22,7 @@ class MetaTrader5InstrumentProvider(InstrumentProvider):
         self,
         client: MetaTrader5Client,
         config: MetaTrader5InstrumentProviderConfig,
+        venue_profile=None,
     ) -> None:
         """
         Initialize a new instance of the ``MetaTrader5InstrumentProvider`` class.
@@ -32,6 +33,9 @@ class MetaTrader5InstrumentProvider(InstrumentProvider):
             The MetaTrader 5 client.
         config : MetaTrader5InstrumentProviderConfig
             The instrument provider config
+        venue_profile : VenueProfile, optional
+            Broker capability profile. When provided, ``parse_instrument`` uses
+            ``trade_calc_mode`` to select the correct Nautilus instrument type.
 
         """
         super().__init__(config=config)
@@ -41,10 +45,16 @@ class MetaTrader5InstrumentProvider(InstrumentProvider):
             set(config.load_symbols) if hasattr(config, "load_symbols") and config.load_symbols is not None else None
         )
         self._cache_validity_days = config.cache_validity_days
-        # TODO: If cache_validity_days > 0 and Catalog is provided
+        if self._cache_validity_days is not None:
+            self._log.warning(
+                f"cache_validity_days={self._cache_validity_days} is configured but instrument "
+                "caching by validity period is not yet implemented in this adapter. "
+                "Instruments will be fetched from the terminal on every startup."
+            )
 
         self._client = client
         self.config = config
+        self._venue_profile = venue_profile
         self.symbol_details: dict[str, MT5SymbolDetails] = {}
         self.symbol_id_to_instrument_id: dict[int, InstrumentId] = {}
 
@@ -170,6 +180,7 @@ class MetaTrader5InstrumentProvider(InstrumentProvider):
                 instrument: Instrument = parse_instrument(
                     symbol_details=details,
                     strict_symbology=self.config.strict_symbology,
+                    venue_profile=self._venue_profile,
                 )
             except ValueError as e:
                 self._log.error(

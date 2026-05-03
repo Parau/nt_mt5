@@ -18,13 +18,14 @@ from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.config import (
     DockerizedMT5TerminalConfig,
     ExternalRPyCTerminalConfig,
+    LocalPythonTerminalConfig,
     ManagedTerminalConfig,
     MetaTrader5DataClientConfig,
     MetaTrader5ExecClientConfig,
     MetaTrader5InstrumentProviderConfig,
-    RpycConnectionConfig,
     EAConnectionConfig,
 )
+from nautilus_mt5.metatrader5 import RpycConnectionConfig
 from nautilus_mt5.data import MetaTrader5DataClient
 from nautilus_mt5.execution import MetaTrader5ExecutionClient
 from nautilus_mt5.providers import MetaTrader5InstrumentProvider
@@ -61,7 +62,7 @@ def get_resolved_mt5_client(
     """
     terminal_access = config.terminal_access
     client_id = config.client_id
-    connection_mode = config.mode
+    connection_mode = TerminalConnectionMode.IPC
     ea_config = config.ea_config or EAConnectionConfig()
 
     rpyc_host: str | None = None
@@ -69,19 +70,27 @@ def get_resolved_mt5_client(
     rpyc_keep_alive: bool = False
     rpyc_timeout_secs: float | None = None
     managed_backend: str | None = None
+    local_python_config: LocalPythonTerminalConfig | None = None
 
-    if terminal_access == MT5TerminalAccessMode.EXTERNAL_RPYC:
+    if terminal_access == MT5TerminalAccessMode.LOCAL_PYTHON:
+        if config.external_rpyc is not None:
+            raise ValueError(
+                "external_rpyc config must be None for LOCAL_PYTHON terminal access."
+            )
+        if config.managed_terminal is not None:
+            raise ValueError(
+                "managed_terminal config must be None for LOCAL_PYTHON terminal access."
+            )
+        local_python_config = getattr(config, "local_python", None)
+        if local_python_config is None:
+            raise ValueError(
+                "local_python config is required for LOCAL_PYTHON terminal access."
+            )
+
+    elif terminal_access == MT5TerminalAccessMode.EXTERNAL_RPYC:
         if config.managed_terminal is not None:
             raise ValueError(
                 "managed_terminal config must be None for EXTERNAL_RPYC terminal access."
-            )
-        if config.dockerized_gateway is not None:
-            raise ValueError(
-                "dockerized_gateway config at top-level is legacy. Use managed_terminal.dockerized instead for MANAGED_TERMINAL access."
-            )
-        if getattr(config, "rpyc_config", None) is not None:
-            raise ValueError(
-                "rpyc_config config at top-level is legacy. Use external_rpyc instead for EXTERNAL_RPYC access."
             )
         external_rpyc = config.external_rpyc
         if external_rpyc is None:
@@ -98,14 +107,6 @@ def get_resolved_mt5_client(
             raise ValueError(
                 "external_rpyc config must be None for MANAGED_TERMINAL terminal access."
             )
-        if config.dockerized_gateway is not None:
-            raise ValueError(
-                "dockerized_gateway config at top-level is legacy. Use managed_terminal.dockerized instead for MANAGED_TERMINAL access."
-            )
-        if getattr(config, "rpyc_config", None) is not None:
-            raise ValueError(
-                "rpyc_config config at top-level is legacy. Use external_rpyc instead for EXTERNAL_RPYC access."
-            )
         managed_terminal = config.managed_terminal
         if managed_terminal is None:
             raise ValueError(
@@ -119,27 +120,51 @@ def get_resolved_mt5_client(
     else:
         raise ValueError(f"Unsupported or missing terminal_access mode: {terminal_access}")
 
-    # Re-wrap as RpycConnectionConfig for internal use
-    resolved_rpyc_config = RpycConnectionConfig(
-        host=rpyc_host,
-        port=rpyc_port,
-        keep_alive=rpyc_keep_alive,
-        timeout_secs=rpyc_timeout_secs,
-    )
-
-    client_key = (
-        terminal_access,
-        connection_mode,
-        client_id,
-        rpyc_host,
-        rpyc_port,
-        rpyc_keep_alive,
-        rpyc_timeout_secs,
-        managed_backend,
-        ea_config.host,
-        ea_config.rest_port,
-        ea_config.stream_port,
-    )
+    if terminal_access == MT5TerminalAccessMode.LOCAL_PYTHON:
+        # For LOCAL_PYTHON, the cache key is based on the local python config fields
+        lp = local_python_config
+        client_key = (
+            terminal_access,
+            connection_mode,
+            client_id,
+            lp.path if lp is not None else None,
+            lp.login if lp is not None else None,
+            lp.server if lp is not None else None,
+            lp.timeout if lp is not None else None,
+            lp.portable if lp is not None else None,
+            ea_config.host,
+            ea_config.rest_port,
+            ea_config.stream_port,
+        )
+        mt5_config_payload: dict = {
+            "local_python": local_python_config,
+            "ea": ea_config,
+        }
+    else:
+        # Re-wrap as RpycConnectionConfig for internal use (EXTERNAL_RPYC)
+        resolved_rpyc_config = RpycConnectionConfig(
+            host=rpyc_host,
+            port=rpyc_port,
+            keep_alive=rpyc_keep_alive,
+            timeout_secs=rpyc_timeout_secs,
+        )
+        client_key = (
+            terminal_access,
+            connection_mode,
+            client_id,
+            rpyc_host,
+            rpyc_port,
+            rpyc_keep_alive,
+            rpyc_timeout_secs,
+            managed_backend,
+            ea_config.host,
+            ea_config.rest_port,
+            ea_config.stream_port,
+        )
+        mt5_config_payload = {
+            "rpyc": resolved_rpyc_config,
+            "ea": ea_config,
+        }
 
     if client_key not in MT5_CLIENTS:
         client = MetaTrader5Client(
@@ -148,10 +173,7 @@ def get_resolved_mt5_client(
             cache=cache,
             clock=clock,
             connection_mode=connection_mode,
-            mt5_config={
-                "rpyc": resolved_rpyc_config,
-                "ea": ea_config,
-            },
+            mt5_config=mt5_config_payload,
             client_id=client_id,
             terminal_access=terminal_access,
         )
@@ -163,6 +185,7 @@ def get_resolved_mt5_client(
 def get_cached_mt5_instrument_provider(
     client: MetaTrader5Client,
     config: MetaTrader5InstrumentProviderConfig,
+    venue_profile=None,
 ) -> MetaTrader5InstrumentProvider:
     """
     Cache and return a MetaTrader5InstrumentProvider.
@@ -175,13 +198,15 @@ def get_cached_mt5_instrument_provider(
         The client for the instrument provider.
     config: MetaTrader5InstrumentProviderConfig
         The instrument provider config.
+    venue_profile : VenueProfile, optional
+        Broker capability profile forwarded from the data client config.
 
     Returns
     -------
     MetaTrader5InstrumentProvider
 
     """
-    return MetaTrader5InstrumentProvider(client=client, config=config)
+    return MetaTrader5InstrumentProvider(client=client, config=config, venue_profile=venue_profile)
 
 
 class MT5LiveDataClientFactory(LiveDataClientFactory):
@@ -233,6 +258,7 @@ class MT5LiveDataClientFactory(LiveDataClientFactory):
         provider = get_cached_mt5_instrument_provider(
             client=client,
             config=config.instrument_provider,
+            venue_profile=config.venue_profile,
         )
 
         # Create client
@@ -299,7 +325,7 @@ class MT5LiveExecClientFactory(LiveExecClientFactory):
         provider = get_cached_mt5_instrument_provider(
             client=client,
             config=config.instrument_provider,
-        )
+        )  # ExecClient has no venue_profile — data client owns it
 
         # Set account ID
         mt5_account = config.account_id or os.environ.get("MT5_ACCOUNT_NUMBER")

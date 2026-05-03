@@ -9,14 +9,19 @@ from nautilus_trader.model.enums import TimeInForce
 # MT5 Trade actions
 TRADE_ACTION_DEAL = 1
 TRADE_ACTION_PENDING = 5
-TRADE_ACTION_SLTP = 6
-TRADE_ACTION_MODIFY = 7
-TRADE_ACTION_REMOVE = 8
-TRADE_ACTION_CLOSE_BY = 10
+
+# MT5 Trade retcodes
+TRADE_RETCODE_PLACED = 10008       # order placed (pending), not yet executed
+TRADE_RETCODE_DONE = 10009         # request completed (market order filled / pending placed)
+TRADE_RETCODE_DONE_PARTIAL = 10010 # only part of the request was completed
 
 # MT5 Deal types
 DEAL_TYPE_BUY = 0
 DEAL_TYPE_SELL = 1
+TRADE_ACTION_SLTP = 6
+TRADE_ACTION_MODIFY = 7
+TRADE_ACTION_REMOVE = 8
+TRADE_ACTION_CLOSE_BY = 10
 
 # MT5 Order types
 ORDER_TYPE_BUY = 0
@@ -46,6 +51,59 @@ MAP_TIME_IN_FORCE: dict[int, int] = {
     TimeInForce.FOK: ORDER_TIME_GTC,  # Handled via type_filling
     TimeInForce.IOC: ORDER_TIME_GTC,  # Handled via type_filling
 }
+
+# ---------------------------------------------------------------------------
+# Pre-venue validation
+# ---------------------------------------------------------------------------
+
+# Order types that this adapter can translate to MT5 native requests.
+# Anything outside this set must be rejected before hitting the bridge.
+SUPPORTED_ORDER_TYPES: frozenset[OrderType] = frozenset({
+    OrderType.MARKET,
+    OrderType.LIMIT,
+    OrderType.STOP_MARKET,
+    OrderType.STOP_LIMIT,
+})
+
+# Time-in-force values that this adapter maps correctly to MT5 semantics.
+# GTD, AT_THE_OPEN, AT_THE_CLOSE, ON_CLOSE, etc. are not supported.
+SUPPORTED_TIME_IN_FORCE: frozenset[TimeInForce] = frozenset({
+    TimeInForce.GTC,
+    TimeInForce.DAY,
+    TimeInForce.FOK,
+    TimeInForce.IOC,
+})
+
+
+def validate_order_pre_venue(order_type: OrderType, time_in_force: TimeInForce) -> None:
+    """
+    Raise ``ValueError`` if ``order_type`` or ``time_in_force`` is not
+    supported by this adapter.  Call this before any bridge interaction so
+    the execution client can emit ``OrderRejected`` without touching MT5.
+
+    Parameters
+    ----------
+    order_type : OrderType
+    time_in_force : TimeInForce
+
+    Raises
+    ------
+    ValueError
+        If the order type or TIF is not in the supported set.
+    """
+    if order_type not in SUPPORTED_ORDER_TYPES:
+        supported = ", ".join(sorted(t.name for t in SUPPORTED_ORDER_TYPES))
+        raise ValueError(
+            f"MT5 adapter does not support OrderType.{order_type.name}. "
+            f"Supported types: {supported}."
+        )
+    if time_in_force not in SUPPORTED_TIME_IN_FORCE:
+        supported = ", ".join(sorted(t.name for t in SUPPORTED_TIME_IN_FORCE))
+        raise ValueError(
+            f"MT5 adapter does not support TimeInForce.{time_in_force.name}. "
+            f"Supported values: {supported}."
+        )
+
 
 def map_order_type_and_action(order_type: OrderType, side: OrderSide) -> tuple[int, int]:
     if order_type == OrderType.MARKET:

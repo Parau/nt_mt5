@@ -59,11 +59,15 @@ Protect the public terminal access model.
 ### Invariants
 
 - `MT5TerminalAccessMode` contains `EXTERNAL_RPYC`.
+- `MT5TerminalAccessMode` contains `LOCAL_PYTHON`.
 - `MT5TerminalAccessMode` contains `MANAGED_TERMINAL`.
 - `MT5TerminalAccessMode` does not contain `DOCKERIZED`.
 - `DOCKERIZED` appears only as a `ManagedTerminalBackend` or equivalent internal backend.
 - `EXTERNAL_RPYC` requires an `external_rpyc` config block.
 - `EXTERNAL_RPYC` rejects `managed_terminal`.
+- `LOCAL_PYTHON` does not require `external_rpyc` or `managed_terminal` config blocks.
+- `LOCAL_PYTHON` rejects `external_rpyc` and `managed_terminal` config blocks.
+- `LOCAL_PYTHON` fails with a controlled explicit error on incompatible platforms or when `MetaTrader5` is not installed.
 - `MANAGED_TERMINAL` requires a `managed_terminal` config block.
 - `MANAGED_TERMINAL` rejects `external_rpyc`.
 - Top-level `dockerized_gateway` is rejected as a legacy public path.
@@ -77,6 +81,10 @@ test_terminal_access_modes_are_stable
 test_dockerized_is_not_public_terminal_access_mode
 test_external_rpyc_requires_external_config
 test_external_rpyc_rejects_managed_terminal_config
+test_local_python_is_public_terminal_access_mode
+test_local_python_rejects_external_rpyc_config
+test_local_python_rejects_managed_terminal_config
+test_local_python_fails_explicitly_on_incompatible_platform
 test_managed_terminal_requires_managed_config
 test_managed_terminal_rejects_external_rpyc_config
 test_legacy_dockerized_gateway_is_rejected
@@ -163,6 +171,7 @@ Ensure public examples and docs remain aligned with the project architecture.
 - Public examples do not promote `dockerized_gateway` as the primary path.
 - README does not list `MT5TerminalAccessMode.DOCKERIZED`.
 - README documents `MANAGED_TERMINAL` as planned or not yet operational.
+- README documents `LOCAL_PYTHON` as planned or in implementation, without claiming full validation.
 - Examples that use `MANAGED_TERMINAL` clearly state that it is placeholder/future if backend is unimplemented.
 - Examples that may execute orders require explicit opt-in.
 - `.env.example` or equivalent documents required environment variables.
@@ -172,6 +181,7 @@ Ensure public examples and docs remain aligned with the project architecture.
 
 ```text
 test_readme_does_not_promote_dockerized_as_public_mode
+test_readme_mentions_local_python_as_planned_or_in_implementation
 test_external_rpyc_example_uses_current_public_path
 test_managed_terminal_example_is_marked_planned_or_placeholder
 test_examples_do_not_use_legacy_dockerized_gateway_as_primary_path
@@ -275,9 +285,10 @@ Ensure stable project decisions are visible and not silently contradicted.
   - canonical venue identity;
   - account validation source;
   - MT5-native bridge shape;
-  - terminal access model;
+  - terminal access model (including `LOCAL_PYTHON`);
   - ready-state semantics.
 - If `MANAGED_TERMINAL` appears in examples/docs, docs must state current implementation status.
+- If `LOCAL_PYTHON` appears in examples/docs, docs must state current implementation status.
 - If a capability matrix marks a major feature as `Supported`, the decision docs must not contradict it.
 
 ### Example test names
@@ -314,7 +325,10 @@ Recommended tests:
 
 ```text
 test_terminal_access_modes_are_stable
+test_local_python_is_public_terminal_access_mode
+test_dockerized_is_not_public_terminal_access_mode
 test_external_rpyc_requires_external_config
+test_local_python_rejects_external_rpyc_config
 test_managed_terminal_unimplemented_error_is_controlled
 ```
 

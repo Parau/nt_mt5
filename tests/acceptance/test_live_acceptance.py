@@ -22,13 +22,13 @@ from nautilus_trader.model.enums import OrderSide, OrderType, TimeInForce
 from nautilus_trader.live.node import TradingNode
 
 from nautilus_mt5.factories import MT5LiveDataClientFactory, MT5LiveExecClientFactory
-from nautilus_mt5.client.types import TerminalConnectionMode
+from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.config import (
+    ExternalRPyCTerminalConfig,
     MetaTrader5DataClientConfig,
     MetaTrader5ExecClientConfig,
     MetaTrader5InstrumentProviderConfig,
-    RpycConnectionConfig,
 )
 
 # Constantes do Teste
@@ -173,6 +173,7 @@ class SuiteStrategy(Strategy):
 
 
 @pytest.mark.asyncio
+@pytest.mark.live
 @patch('nautilus_mt5.factories.get_resolved_mt5_client')
 async def test_live_acceptance_suite(mock_client_factory):
     # Skip full execution suite on mock environment, we mainly want to test smoke/transform symbology locally without a real windows VM
@@ -181,7 +182,7 @@ async def test_live_acceptance_suite(mock_client_factory):
     logger.info(f"=== Iniciando Campanha de Testes de Aceitacao Live MT5 ===")
     logger.info(f"Target: tcp://{HOST}:{PORT} - Account: {ACCOUNT_NUMBER} - Symbol: {SYMBOL_STR}")
 
-    rpyc_config = RpycConnectionConfig(host=HOST, port=PORT)
+    rpyc_config = ExternalRPyCTerminalConfig(host=HOST, port=PORT)
     inst_provider_config = MetaTrader5InstrumentProviderConfig(
         load_all=False,
         load_symbols=frozenset([MT5Symbol(symbol=SYMBOL_STR)])
@@ -189,15 +190,15 @@ async def test_live_acceptance_suite(mock_client_factory):
 
     data_config = MetaTrader5DataClientConfig(
         client_id=CLIENT_ID,
-        mode=TerminalConnectionMode.IPC,
-        rpyc_config=rpyc_config,
+        terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
+        external_rpyc=rpyc_config,
         instrument_provider=inst_provider_config,
     )
 
     exec_config = MetaTrader5ExecClientConfig(
         client_id=CLIENT_ID,
-        mode=TerminalConnectionMode.IPC,
-        rpyc_config=rpyc_config,
+        terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
+        external_rpyc=rpyc_config,
         instrument_provider=inst_provider_config,
         account_id=ACCOUNT_NUMBER,
     )

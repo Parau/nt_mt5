@@ -43,6 +43,11 @@ class MetaTrader5ClientSymbolMixin:
                 if "name" not in info_dict:
                     info_dict["name"] = symbol.symbol
 
+                # Compute under_sec_type from path (e.g. "Indices\USTEC" → "INDICES")
+                if "under_sec_type" not in info_dict:
+                    raw_path = info_dict.get("path") or ""
+                    info_dict["under_sec_type"] = raw_path.split("\\")[0].upper() if raw_path else None
+
                 class _NormalizedInfo:
                     def __init__(self, **kwargs):
                         self.__dict__.update(kwargs)

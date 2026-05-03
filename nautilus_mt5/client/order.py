@@ -20,7 +20,7 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
 
     """
 
-    def place_order(self, order: MT5Order) -> None:
+    def place_order(self, order: MT5Order) -> dict | None:
         """
         Place an order through the MT5Client.
 
@@ -29,6 +29,12 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
         order : MT5Order
             The order object containing details such as the order ID, symbol
             details, and order specifics.
+
+        Returns
+        -------
+        dict or None
+            The raw MT5 ``order_send`` response dict, or ``None`` if the bridge
+            method was unavailable.
 
         """
         self._order_id_to_order_ref[order.order_id] = AccountOrderRef(
@@ -54,14 +60,27 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
                     "comment": getattr(order, "comment", "python script open"),
                     "type_time": getattr(order, "type_time", 0), # ORDER_TIME_GTC
                     "type_filling": getattr(order, "type_filling", 2), # ORDER_FILLING_RETURN (Default)
+                    "position": getattr(order, "position_ticket", 0), # hedge close ticket (0 = new position)
                 }
+                # For STOP_LIMIT orders, MT5 requires `stoplimit` (the limit price
+                # that activates once the stop trigger fires).  trigger_price on
+                # the MT5Order holds that value after _transform_order_to_mt5_order.
+                order_type = getattr(order, "type", 0)
+                # ORDER_TYPE_BUY_STOP_LIMIT = 6, ORDER_TYPE_SELL_STOP_LIMIT = 7
+                if order_type in (6, 7):
+                    stpx = getattr(order, "trigger_price", 0.0)
+                    if stpx:
+                        req["stoplimit"] = stpx
                 res = send_method(req)
                 self._log.info(f"MT5 order_send RESULT: {res}")
+                return res
             else:
                 res = send_method(order.order_id, order.symbol, order)
                 self._log.info(f"MT5 order_send RESULT: {res}")
+                return res
         else:
             self._log.warning("MT5Client has no method to send orders. (Missing order_send)")
+            return None
 
     def place_order_list(self, orders: list[MT5Order]) -> None:
         """

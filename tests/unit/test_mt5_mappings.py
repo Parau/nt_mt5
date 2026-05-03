@@ -2,6 +2,7 @@ import pytest
 
 from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.enums import OrderType
+from nautilus_trader.model.enums import TimeInForce
 
 from nautilus_mt5.parsing.execution import (
     MT5_ORDER_TYPE_TO_ORDER_SIDE,
@@ -16,6 +17,9 @@ from nautilus_mt5.parsing.execution import (
     ORDER_TYPE_SELL_STOP_LIMIT,
     ORDER_TIME_SPECIFIED,
     ORDER_TIME_SPECIFIED_DAY,
+    SUPPORTED_ORDER_TYPES,
+    SUPPORTED_TIME_IN_FORCE,
+    validate_order_pre_venue,
 )
 from nautilus_mt5.execution import MetaTrader5ExecutionClient
 from nautilus_mt5.metatrader5.models import Order as MT5Order
@@ -92,3 +96,47 @@ async def test_expire_time_parsing():
     mt5_order.type_time = 0 # ORDER_TIME_GTC
     report = await exec_client._parse_mt5_order_to_order_status_report(mt5_order)
     assert report.expire_time is None
+
+
+# ---------------------------------------------------------------------------
+# TC-E72 / TC-E73 — Pre-venue guard: validate_order_pre_venue
+# ---------------------------------------------------------------------------
+
+def test_validate_order_pre_venue_accepts_supported_types():
+    """All supported OrderType × TIF combinations pass without raising."""
+    for order_type in SUPPORTED_ORDER_TYPES:
+        for tif in SUPPORTED_TIME_IN_FORCE:
+            validate_order_pre_venue(order_type, tif)  # must not raise
+
+
+@pytest.mark.parametrize("order_type", [
+    OrderType.MARKET_TO_LIMIT,
+    OrderType.MARKET_IF_TOUCHED,
+    OrderType.LIMIT_IF_TOUCHED,
+    OrderType.TRAILING_STOP_MARKET,
+    OrderType.TRAILING_STOP_LIMIT,
+])
+def test_validate_order_pre_venue_rejects_unsupported_order_type(order_type):
+    """Unsupported OrderType raises ValueError before any bridge interaction."""
+    with pytest.raises(ValueError, match="MT5 adapter does not support OrderType"):
+        validate_order_pre_venue(order_type, TimeInForce.GTC)
+
+
+@pytest.mark.parametrize("tif", [
+    TimeInForce.GTD,
+    TimeInForce.AT_THE_OPEN,
+    TimeInForce.AT_THE_CLOSE,
+])
+def test_validate_order_pre_venue_rejects_unsupported_tif(tif):
+    """Unsupported TimeInForce raises ValueError before any bridge interaction."""
+    with pytest.raises(ValueError, match="MT5 adapter does not support TimeInForce"):
+        validate_order_pre_venue(OrderType.MARKET, tif)
+
+
+def test_validate_order_pre_venue_error_message_names_the_bad_value():
+    """Error message includes the name of the unsupported value for diagnostics."""
+    with pytest.raises(ValueError, match="TRAILING_STOP_MARKET"):
+        validate_order_pre_venue(OrderType.TRAILING_STOP_MARKET, TimeInForce.GTC)
+
+    with pytest.raises(ValueError, match="GTD"):
+        validate_order_pre_venue(OrderType.MARKET, TimeInForce.GTD)

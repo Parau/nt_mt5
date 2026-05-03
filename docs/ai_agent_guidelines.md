@@ -48,11 +48,13 @@ If a local document conflicts with official NautilusTrader behavior, upstream Na
 ### Terminal access
 
 - `EXTERNAL_RPYC` is the currently supported public terminal access path.
-- `MANAGED_TERMINAL` is a public future path and must fail with a controlled, explicit error until implemented.
+- `LOCAL_PYTHON` is a second public path for direct local access via the `MetaTrader5` Python package (planned/in implementation). It must fail with a controlled, explicit error on incompatible platforms or when the package is not installed.
+- `MANAGED_TERMINAL` is a third public path and must fail with a controlled, explicit error until implemented.
 - `DOCKERIZED` is not a top-level public terminal access mode.
 - `DOCKERIZED` is only a future backend strategy inside `MANAGED_TERMINAL`.
 - `EXTERNAL_RPYC` must not start, supervise, or stop the MT5 terminal or gateway process.
 - `EXTERNAL_RPYC` controls only the adapter connection to an already-running external gateway.
+- `LOCAL_PYTHON` must not use RPyC or manage an external gateway process. It controls only the `MetaTrader5.initialize()` / `shutdown()` cycle.
 
 ### Bridge and adapter boundaries
 

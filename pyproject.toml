@@ -60,6 +60,14 @@ filterwarnings = [
     "ignore::UserWarning",
     "ignore::DeprecationWarning",
 ]
+markers = [
+    "live: marks tests that require a live MT5 terminal or RPyC gateway (deselect with '-m not live')",
+    "external_rpyc: marks tests that use a real external RPyC gateway",
+    "local_python: marks tests that require the MetaTrader5 Python package on Windows",
+    "demo_execution: marks tests that may submit real orders (requires MT5_ENABLE_LIVE_EXECUTION=1)",
+    "data_tester: marks tests that implement the NautilusTrader DataTester spec",
+    "exec_tester: marks tests that implement the NautilusTrader ExecTester spec",
+]
 
 [tool.setuptools.packages.find]
 include = ["nautilus_mt5*"]

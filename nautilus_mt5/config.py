@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Any, Optional
 from nautilus_trader.common.config import NonNegativeInt
 from dataclasses import dataclass
 from nautilus_trader.config import InstrumentProviderConfig, LiveDataClientConfig, LiveExecClientConfig, NautilusConfig
@@ -7,10 +7,9 @@ from nautilus_mt5.client.types import (
     ManagedTerminalBackend,
     MarketDataSubscription,
     MT5TerminalAccessMode,
-    TerminalConnectionMode,
 )
 from nautilus_mt5.data_types import MT5Symbol
-from nautilus_mt5.metatrader5 import EAConnectionConfig, RpycConnectionConfig
+from nautilus_mt5.metatrader5 import EAConnectionConfig
 
 
 @dataclass(frozen=True)
@@ -49,6 +48,43 @@ class ManagedTerminalConfig:
     startup_timeout_secs: float | None = None
     shutdown_timeout_secs: float | None = None
     healthcheck_timeout_secs: float | None = None
+
+
+@dataclass(frozen=True)
+class LocalPythonTerminalConfig:
+    """
+    Configuration for LOCAL_PYTHON terminal access.
+
+    Uses the official MetaTrader5 Python package installed on the local machine (Windows only).
+    Does not use RPyC or manage an external gateway.
+
+    Attributes:
+        path (str | None): Optional path to the MetaTrader5 terminal executable
+            (mt5.exe / metatrader64.exe). If None, MT5 will find it automatically.
+        login (int | None): Optional trading account number for auto-login on initialize().
+        password (str | None): Optional trading account password for auto-login.
+        server (str | None): Optional trade server name for auto-login.
+        timeout (int): Timeout in milliseconds for initialize(). Default is 60000 (60 s).
+        portable (bool): Launch the terminal in portable mode. Default is False.
+        shutdown_on_disconnect (bool): Call MT5.shutdown() when the adapter disconnects.
+            Default is True.
+    """
+    path: str | None = None
+    login: int | None = None
+    password: str | None = None
+    server: str | None = None
+    timeout: int = 60_000
+    portable: bool = False
+    shutdown_on_disconnect: bool = True
+
+    def __repr__(self) -> str:
+        masked_password = DockerizedMT5TerminalConfig._mask_sensitive_info(self.password)
+        return (
+            f"LocalPythonTerminalConfig(path={self.path!r}, login={self.login!r}, "
+            f"password={masked_password}, server={self.server!r}, "
+            f"timeout={self.timeout}, portable={self.portable}, "
+            f"shutdown_on_disconnect={self.shutdown_on_disconnect})"
+        )
 
 
 class DockerizedMT5TerminalConfig(NautilusConfig, frozen=True):
@@ -128,11 +164,9 @@ class MetaTrader5DataClientConfig(LiveDataClientConfig, frozen=True):
         ignore_quote_tick_size_updates (bool): Whether to ignore quote tick size updates. Default is False.
         terminal_access (MT5TerminalAccessMode): The terminal access mode. Default is EXTERNAL_RPYC.
         external_rpyc (ExternalRPyCTerminalConfig | None): Configuration for external RPyC access. Default is None.
+        local_python (LocalPythonTerminalConfig | None): Configuration for LOCAL_PYTHON access. Default is None.
         managed_terminal (ManagedTerminalConfig | None): Configuration for managed terminal. Default is None.
-        mode (TerminalConnectionMode): [Legacy/Transitional] The connection mode (IPC/EA). Use `terminal_access` for access mode.
-        dockerized_gateway (DockerizedMT5TerminalConfig | None): [Legacy] Use `managed_terminal.dockerized` instead.
         ea_config (Optional[EAConnectionConfig]): Configuration for EAClient. Default is None.
-        rpyc_config (Optional[RpycConnectionConfig]): [Legacy] Use `external_rpyc` instead.
         instrument_provider (MetaTrader5InstrumentProviderConfig): Configuration for instrument provider.
     """
     client_id: int = 1
@@ -141,11 +175,11 @@ class MetaTrader5DataClientConfig(LiveDataClientConfig, frozen=True):
     ignore_quote_tick_size_updates: bool = False
     terminal_access: MT5TerminalAccessMode = MT5TerminalAccessMode.EXTERNAL_RPYC
     external_rpyc: ExternalRPyCTerminalConfig | None = None
+    local_python: LocalPythonTerminalConfig | None = None
     managed_terminal: ManagedTerminalConfig | None = None
-    mode: TerminalConnectionMode = TerminalConnectionMode.IPC
-    dockerized_gateway: DockerizedMT5TerminalConfig | None = None
     ea_config: Optional[EAConnectionConfig] = None
-    rpyc_config: Optional[RpycConnectionConfig] = None
+    venue_profile: Any = None
+    """VenueProfile for this broker. Required — adapter will refuse to connect without it."""
     instrument_provider: MetaTrader5InstrumentProviderConfig = (
         MetaTrader5InstrumentProviderConfig()
     )
@@ -160,24 +194,24 @@ class MetaTrader5ExecClientConfig(LiveExecClientConfig, frozen=True):
         account_id (str | None): The account ID for MetaTrader 5 instance. Default is None.
         terminal_access (MT5TerminalAccessMode): The terminal access mode. Default is EXTERNAL_RPYC.
         external_rpyc (ExternalRPyCTerminalConfig | None): Configuration for external RPyC access. Default is None.
+        local_python (LocalPythonTerminalConfig | None): Configuration for LOCAL_PYTHON access. Default is None.
         managed_terminal (ManagedTerminalConfig | None): Configuration for managed terminal. Default is None.
-        mode (TerminalConnectionMode): [Legacy/Transitional] The connection mode (IPC/EA). Use `terminal_access` for access mode.
-        dockerized_gateway (DockerizedMT5TerminalConfig | None): [Legacy] Use `managed_terminal.dockerized` instead.
         ea_config (Optional[EAConnectionConfig]): Configuration for EAClient. Default is None.
-        rpyc_config (Optional[RpycConnectionConfig]): [Legacy] Use `external_rpyc` instead.
         request_account_state_secs (NonNegativeInt): The request interval (seconds) for account state checks. Default is 300.
+        cancel_on_stop (bool): Cancel all open pending orders when the client disconnects. Default is True.
+        close_on_stop (bool): Close all open positions via market orders when the client disconnects. Default is False.
         instrument_provider (MetaTrader5InstrumentProviderConfig): Configuration for instrument provider.
     """
     client_id: int = 1
     account_id: str | None = None
     terminal_access: MT5TerminalAccessMode = MT5TerminalAccessMode.EXTERNAL_RPYC
     external_rpyc: ExternalRPyCTerminalConfig | None = None
+    local_python: LocalPythonTerminalConfig | None = None
     managed_terminal: ManagedTerminalConfig | None = None
-    mode: TerminalConnectionMode = TerminalConnectionMode.IPC
-    dockerized_gateway: DockerizedMT5TerminalConfig | None = None
     ea_config: Optional[EAConnectionConfig] = None
-    rpyc_config: Optional[RpycConnectionConfig] = None
     request_account_state_secs: NonNegativeInt = 300
+    cancel_on_stop: bool = True
+    close_on_stop: bool = False
     instrument_provider: MetaTrader5InstrumentProviderConfig = (
         MetaTrader5InstrumentProviderConfig()
     )

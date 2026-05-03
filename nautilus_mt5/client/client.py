@@ -554,29 +554,38 @@ class MetaTrader5Client(Component,
         try:
             while self._conn_state.value == TerminalConnectionState.CONNECTED.value:
                 # Poll market data for active subscriptions
-                # Poll market data for active subscriptions
-                # _subscriptions inherits from Base
-                for req_id in list(self._subscriptions._req_id_to_name.keys()):
+                sub_keys = list(self._subscriptions._req_id_to_name.keys())
+                self._log.debug(f"Polling loop: {len(sub_keys)} subscription(s) in registry.")
+                for req_id in sub_keys:
                     sub = self._subscriptions.get(req_id)
-                    if sub and isinstance(sub.name, tuple) and len(sub.name) > 1 and "tick" in sub.name[1].lower():
-                        # symbol is sub.args[0]
-                        symbol = sub.args[0]
-                        try:
-                            tick = await asyncio.to_thread(self._mt5_client['mt5'].symbol_info_tick, symbol.symbol)
-                            if tick:
-                                # RPyC sends Netrefs, so we need to extract attributes safely
-                                tick_dict = {
-                                    "time_msc": getattr(tick, "time_msc", 0),
-                                    "bid": getattr(tick, "bid", 0.0),
-                                    "ask": getattr(tick, "ask", 0.0),
-                                }
-                                # Create a mock dict representation similar to what would be received
-                                data = {"type": "tick", "data": tick_dict, "symbol": symbol.symbol}
-                                self._loop.call_soon_threadsafe(
-                                    self._internal_msg_queue.put_nowait, data
-                                )
-                        except Exception as e:
-                            self._log.warning(f"Failed to poll tick for {symbol}: {e}")
+                    if sub and isinstance(sub.name, tuple) and len(sub.name) > 1:
+                        name1 = sub.name[1].lower()
+                        if "tick" in name1 or "bid" in name1 or "ask" in name1:
+                            # symbol is at index 1 in the partial args (index 0 is req_id)
+                            symbol = sub.handle.args[1]
+                            try:
+                                # Call synchronously in the event loop thread to avoid RPyC thread-safety issues.
+                                # asyncio.to_thread would cause concurrent thread access on the same RPyC
+                                # connection (shared with exec client reconciliation), corrupting the stream.
+                                tick = self._mt5_client['mt5'].symbol_info_tick(symbol.symbol)
+                                self._log.debug(f"symbol_info_tick({symbol.symbol}) -> {tick}")
+                                if tick:
+                                    # RPyC may return a dict or a Netref object depending on the bridge.
+                                    # Use dict access when possible, fall back to getattr.
+                                    if isinstance(tick, dict):
+                                        time_msc = tick.get("time_msc", 0)
+                                        bid = tick.get("bid", 0.0)
+                                        ask = tick.get("ask", 0.0)
+                                    else:
+                                        time_msc = getattr(tick, "time_msc", 0)
+                                        bid = getattr(tick, "bid", 0.0)
+                                        ask = getattr(tick, "ask", 0.0)
+                                    tick_dict = {"time_msc": time_msc, "bid": bid, "ask": ask}
+                                    data = {"type": "tick", "data": tick_dict, "symbol": symbol.symbol}
+                                    self._internal_msg_queue.put_nowait(data)
+                                    self._log.debug(f"Queued tick for {symbol.symbol}: {tick_dict}")
+                            except Exception as e:
+                                self._log.warning(f"Failed to poll tick for {symbol}: {e}")
 
                 await asyncio.sleep(1.0)  # Throttle polling a bit more to avoid hammering over bridge
         except asyncio.CancelledError:
@@ -602,13 +611,21 @@ class MetaTrader5Client(Component,
             "Client internal message queue processor started.",
         )
         try:
-            while (
-                (self._mt5_client.get('mt5') and getattr(self._mt5_client['mt5'], 'is_connected', lambda: True)()) or not self._internal_msg_queue.empty()
-            ):
-                msg = await self._internal_msg_queue.get()
-                if not await self._process_message(msg):
-                    break
-                self._internal_msg_queue.task_done()
+            while True:
+                try:
+                    msg = await asyncio.wait_for(self._internal_msg_queue.get(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    if self._conn_state.value != TerminalConnectionState.CONNECTED.value:
+                        break
+                    continue
+                try:
+                    if not await self._process_message(msg):
+                        break
+                except Exception as e:
+                    self._log.exception("Unhandled exception in _process_message", e)
+                    # Do not break — continue processing subsequent messages
+                else:
+                    self._internal_msg_queue.task_done()
         except asyncio.CancelledError:
             log_msg = f"Internal message queue processing was cancelled. (qsize={self._internal_msg_queue.qsize()})."
             (
@@ -632,22 +649,27 @@ class MetaTrader5Client(Component,
                 symbol = msg.get("symbol")
                 # Route to the market data mixin
                 if hasattr(self, 'process_tick_by_tick_bid_ask'):
-                    # Match to the right subscription using symbol
-                    # `tick` is now a dict
-                    req_id = None
-                    for k, sub in self._subscriptions._name_to_obj.items():
-                        if sub.args and sub.args[0].symbol == symbol:
-                            req_id = sub.req_id
-                            break
+                    # Find the subscription for this symbol
+                    found_req_id = None
+                    for rid, name in self._subscriptions._req_id_to_name.items():
+                        if isinstance(name, tuple) and len(name) > 1:
+                            n1 = name[1].lower()
+                            if "tick" in n1 or "bid" in n1 or "ask" in n1:
+                                sub = self._subscriptions.get(rid)
+                                # handle.args = (req_id, symbol, tick_type, ...)
+                                if sub and len(sub.handle.args) > 1 and sub.handle.args[1].symbol == symbol:
+                                    found_req_id = rid
+                                    break
 
-                    if req_id is not None:
+                    if found_req_id is not None:
+                        from decimal import Decimal
                         await self.process_tick_by_tick_bid_ask(
-                            req_id=req_id,
+                            req_id=found_req_id,
                             time=tick["time_msc"],
                             bid_price=tick["bid"],
                             ask_price=tick["ask"],
-                            bid_size=0.0,
-                            ask_size=0.0,
+                            bid_size=Decimal(0),
+                            ask_size=Decimal(0),
                         )
         return True
 

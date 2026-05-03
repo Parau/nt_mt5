@@ -18,6 +18,7 @@ Read these documents in order before changing code:
 6. [`execution_capability_matrix.md`](execution_capability_matrix.md)
 7. [`terminal_access_capability_audit.md`](terminal_access_capability_audit.md)
 8. [`decisions.md`](decisions.md)
+9. [`venue_profile.md`](venue_profile.md)
 
 Use [`task_template.md`](task_template.md) when writing or assigning implementation tasks.
 
@@ -44,10 +45,12 @@ Defines the public terminal access architecture.
 Key rules:
 
 - `EXTERNAL_RPYC` is the current functional path.
-- `MANAGED_TERMINAL` is a future public path.
+- `LOCAL_PYTHON` is a second public path for direct local access via the `MetaTrader5` Python package (planned/in implementation).
+- `MANAGED_TERMINAL` is a third public path, planned for future terminal lifecycle management.
 - `DOCKERIZED` is not a top-level public mode.
 - `DOCKERIZED` is only a future backend of `MANAGED_TERMINAL`.
 - `EXTERNAL_RPYC` does not manage gateway or terminal lifecycle.
+- `LOCAL_PYTHON` does not use RPyC or manage an external gateway.
 
 ### [`testing_contract.md`](testing_contract.md)
 

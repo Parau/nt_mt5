@@ -119,8 +119,8 @@ async def test_external_rpyc_execution_flow(
 
         history_orders = mt5_client._mt5_client['mt5'].history_orders_get(from_date, to_date, group="*")
         assert history_orders is not None
-        assert len(history_orders) == 1
-        assert history_orders[0]['ticket'] == 1
+        assert len(history_orders) == 2
+        assert history_orders[0]['ticket'] == 1001  # USTEC is first in fake bridge
 
         history_calls = [c for c in fake_root.calls if c.method == "history_orders_get"]
         assert len(history_calls) == 1
@@ -130,7 +130,7 @@ async def test_external_rpyc_execution_flow(
         # CASE 4: Operational History (history_deals_total)
         fake_root.reset_calls()
         total_deals = mt5_client._mt5_client['mt5'].history_deals_total(from_date, to_date)
-        assert total_deals == 1
+        assert total_deals == 2
 
         total_calls = [c for c in fake_root.calls if c.method == "history_deals_total"]
         assert len(total_calls) == 1
@@ -140,8 +140,8 @@ async def test_external_rpyc_execution_flow(
         fake_root.reset_calls()
         history_deals = mt5_client._mt5_client['mt5'].history_deals_get(from_date, to_date)
         assert history_deals is not None
-        assert len(history_deals) == 1
-        assert history_deals[0]['ticket'] == 1
+        assert len(history_deals) == 2
+        assert history_deals[0]['ticket'] == 101  # USTEC deal is first in fake bridge
 
         deals_get_calls = [c for c in fake_root.calls if c.method == "history_deals_get"]
         assert len(deals_get_calls) == 1

@@ -13,7 +13,7 @@ from nautilus_mt5.factories import get_resolved_mt5_client
 @pytest.fixture
 def mock_components():
     return {
-        "loop": asyncio.get_event_loop(),
+        "loop": asyncio.new_event_loop(),
         "msgbus": MagicMock(spec=MessageBus),
         "cache": MagicMock(spec=Cache),
         "clock": MagicMock(spec=LiveClock),

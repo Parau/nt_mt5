@@ -65,6 +65,7 @@ class MT5TerminalAccessMode(Enum):
     MT5 Terminal Access Mode type.
     """
     EXTERNAL_RPYC = "external_rpyc"
+    LOCAL_PYTHON = "local_python"
     MANAGED_TERMINAL = "managed_terminal"
 
 
