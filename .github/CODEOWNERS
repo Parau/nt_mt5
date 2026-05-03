@@ -1,0 +1,16 @@
+# Linhas que começam com '#' são comentários.
+
+# Dono global (recebe revisão para qualquer alteração no repositório)
+*       @Parau
+
+# Especialistas para a parte de documentação
+# (Arquivos na pasta docs/ e arquivos .md na raiz)
+docs/   @Parau
+*.md    @Parau
+
+# Responsáveis pela lógica do adaptador do MetaTrader 5
+nautilus_mt5/   @Parau
+
+# Responsáveis pelos testes e exemplos
+tests/      @Parau
+examples/   @Parau
