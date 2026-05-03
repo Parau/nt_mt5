@@ -5,6 +5,7 @@
 >
 > “NautilusTrader” is used only to describe compatibility with the NautilusTrader open-source trading framework. This project is not an official NautilusTrader adapter, package, or integration.
 > 
+
 # Nautilus MetaTrader 5 Adapter 🌟
 
 This adapter allows for seamless integration between NautilusTrader and MetaTrader 5, providing capabilities for market data retrieval, order execution, and account management. It supports remote terminal access through a dedicated RPyC bridge and high-speed data streaming via MetaTrader 5 Expert Advisors (EA).
