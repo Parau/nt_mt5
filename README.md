@@ -1,6 +1,20 @@
+> [!IMPORTANT]
+> This is an independent MetaTrader 5 adapter intended for use with NautilusTrader-compatible workflows.
+>
+> This project is not affiliated with Nautech Systems Pty Ltd or the NautilusTrader project, is not endorsed by Nautech Systems Pty Ltd or the NautilusTrader project, and is not supported by Nautech Systems Pty Ltd or the NautilusTrader project.
+>
+> “NautilusTrader” is used only to describe compatibility with the NautilusTrader open-source trading framework. This project is not an official NautilusTrader adapter, package, or integration.
+> 
 # Nautilus MetaTrader 5 Adapter 🌟
 
 This adapter allows for seamless integration between NautilusTrader and MetaTrader 5, providing capabilities for market data retrieval, order execution, and account management. It supports remote terminal access through a dedicated RPyC bridge and high-speed data streaming via MetaTrader 5 Expert Advisors (EA).
+
+> [!WARNING]
+> This project is experimental and under development.
+>
+> It is provided for research, testing, and educational purposes only. It is not production-ready and should not be used in live trading environments, with live trading accounts, or with real funds.
+>
+> APIs, behavior, configuration, and compatibility may change without notice. No warranty is provided, and use of this project is entirely at your own risk.
 
 ## Terminal Access Modes 🛠️
 
@@ -11,12 +25,11 @@ The adapter architecture distinguishes between three main access modes:
    - The adapter does not manage the lifecycle of the terminal; it assumes the bridge is already operational.
    - This is the recommended path for immediate use and remote terminal access.
 
-2. **Local Python Mode (`LOCAL_PYTHON`)** 🖥️ — **Planned / In Implementation**
-   - Uses the official `MetaTrader5` Python package installed directly on the local machine (normally Windows).
+2. **Local Python Mode (`LOCAL_PYTHON`)** 🖥️ — **Supported**
+   - Uses the official `MetaTrader5` Python package installed directly on the local machine (Windows only).
    - No RPyC gateway or external bridge is involved; the adapter calls MT5 functions directly.
-   - Expected to work only on platforms where the `MetaTrader5` package is available.
-   - Will fail with an explicit, controlled error on incompatible platforms or if the package is not installed.
-   - **Note:** Full end-to-end test coverage is pending and will be completed in subsequent implementation phases.
+   - Fails with an explicit, controlled error on incompatible platforms or if the package is not installed.
+   - Use `LocalPythonTerminalConfig` to configure this mode.
 
 3. **Managed Terminal Mode (`MANAGED_TERMINAL`)** 📦 — **Planned**
    - Designed for scenarios where the adapter manages the terminal lifecycle (starting, health-checking, and stopping).
@@ -88,20 +101,38 @@ The project structure is organized as follows:
 
 ```
 nautilus_mt5/
+├── nautilus_mt5/            # Adapter source code
+│   ├── config.py            # Config classes (ExternalRPyCTerminalConfig, LocalPythonTerminalConfig, …)
+│   ├── factories.py         # MT5LiveDataClientFactory, MT5LiveExecClientFactory
+│   ├── data.py              # MetaTrader5DataClient
+│   ├── execution.py         # MetaTrader5ExecutionClient
+│   ├── providers.py         # MetaTrader5InstrumentProvider
+│   ├── venue_profile.py     # VenueProfile, TICKMILL_DEMO_PROFILE
+│   ├── client/              # Low-level MetaTrader5Client (connection, market data, orders)
+│   ├── metatrader5/         # RPyC client wrapper + LocalPythonMT5
+│   └── parsing/             # MT5 → Nautilus instrument/execution parsers
 ├── examples/
 │   ├── connect_with_external_rpyc.py
+│   ├── connect_with_terminal.py
+│   ├── capture_symbol_info_fixtures.py  # Capture real MT5 payloads for test fixtures
 │   ├── .env.example
-│   └── ...
-├── nautilus_mt5/    # Source code for the adapter
-├── tests/                   # Test cases
+│   └── …
+├── tests/
+│   ├── unit/                # Deterministic logic tests (no external deps)
+│   ├── integration/         # MetaTrader5Client tests via fake RPyC bridge
+│   ├── integration_tests/   # Full factory-stack integration tests
+│   ├── contracts/           # Architectural invariant tests
+│   ├── acceptance/          # Live Tier-2 tests (@pytest.mark.live, manual only)
+│   ├── performance/         # Hot-path benchmarks
+│   ├── memory/              # Memory-stability tests
+│   ├── support/             # Fake bridge, harnesses, shared helpers
+│   └── test_data/           # Real MT5 API payloads (JSON fixtures for unit tests)
 ├── MQL5/                    # MQL5 scripts and EA module
-├── docs/                    # Documentation files
+├── docs/                    # Architecture and testing contracts, capability matrices
 ├── pyproject.toml           # Project configuration
-├── uv.lock                  # Dependency lock file (using uv)
-├── build.py                 # Build script
-├── .gitignore               # Git ignore file
-├── LICENSE                  # License file
-├── README.md                # Project documentation
+├── uv.lock                  # Dependency lock file
+├── LICENSE
+└── README.md
 ```
 
 ## Project documentation 📚
@@ -136,10 +167,13 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Credits 🙏
 
+The first version of this project was based on a fork of a mirror of the original QuantsPub `nautilus_mt5` project.
+
+- Original project: [QuantsPub/nautilus_mt5](https://github.com/quantspub/nautilus_mt5) — no longer available
+- Public mirror used as reference: [webclinic017/nautilus_mt5](https://github.com/webclinic017/nautilus_mt5)
+
+Other resources:
+
 - [PyTrader Python MT4/MT5 Trading API Connector](https://github.com/TheSnowGuru/PyTrader-python-mt4-mt5-trading-api-connector-drag-n-drop) 🌟
 - [MQL5 Articles](https://www.mql5.com/en/articles/234) 📚
 - [MQL5 Forum](https://www.mql5.com/en/forum/244840) 💬
-
-## Support 📞
-
-If you encounter any issues or have questions, feel free to open an issue on the GitHub repository or contact the author via email at [quantspub@gmail.com](mailto:quantspub@gmail.com)
