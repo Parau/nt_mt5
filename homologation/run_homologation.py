@@ -23,6 +23,11 @@ HOMOLOG_STREAM_SECS        D02 stream duration in seconds (default: 120)
 HOMOLOG_STREAM_MAX_GAP_SECS  D02 max silent gap between ticks (default: 30)
 HOMOLOG_STREAM_MIN_TICKS   D02 minimum ticks during stream (default: 5)
 HOMOLOG_SKIP_STREAM        Set to "1" to skip D02 streaming scenario
+MT5_FEED_ENABLED           Set to "1" for WS live quotes (required for D02)
+MT5_FEED_HOST              WS server bind (default: 0.0.0.0)
+MT5_FEED_PORT              WS server port (default: 8765)
+MT5_FEED_PATH              WS path (default: /mt5-feed)
+MT5_FEED_HELLO_TIMEOUT_SECS  Wait for MQL5 Service hello (default: 30)
 HOMOLOG_TIMEOUT_SECS       Per-scenario timeout (default: 120)
 HOMOLOG_REPORT_JSON        Optional path to write JSON report
 
@@ -70,6 +75,12 @@ async def main() -> int:
         f"  Stream  : {cfg.stream_duration_secs:.0f}s "
         f"({'SKIP' if cfg.skip_stream else 'ENABLED'})"
     )
+    print(
+        f"  WS feed : {'ENABLED' if cfg.feed_enabled else 'DISABLED (D02 skipped)'} "
+        f"ws://{cfg.feed_host}:{cfg.feed_port}{cfg.feed_path}"
+    )
+    if cfg.feed_enabled and not cfg.skip_stream:
+        print("  Note    : start NT5TickFeedService in MT5 before D02")
     print("=" * 64)
 
     reset_mt5_client_cache()

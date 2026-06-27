@@ -130,6 +130,15 @@ Ordem: TradingNode sobe → DataClient `_connect` (RPyC + gateway WS) → Start 
 
 **Nota:** com `feed.enabled=True`, live quotes **não** usam poll RPyC; histórico (`_request_*`) continua via RPyC.
 
+## Fase 4 — desactivar poll RPyC live
+
+Com `feed.enabled=True`:
+
+- `MetaTrader5DataClient` usa só o gateway WS para quote ticks live.
+- `MetaTrader5Client.subscribe_ticks(BidAsk)` é ignorado (`live_quote_feed_enabled`).
+- O loop `symbol_info_tick` no client **não** corre para subscrições BidAsk.
+- RPyC continua activo para exec, instrumentos, barras e `_request_*` on-demand.
+
 ### Smoke test Phase 3 (TradingNode + QuoteTick)
 
 1. Bridge RPyC a correr (`18812`)
@@ -147,6 +156,22 @@ set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && set MT5_FEED_ENABLED=1 && set MT
 ```
 
 Sucesso: `TC-HOM-D02` PASS com ticks via `QuoteTick` (logs `Stream tick #N: bid=... ask=...`).
+
+## Fase 5 — homologação + capability matrix
+
+- **TC-HOM-D02** valida stream real via WS feed (`MT5_FEED_ENABLED=1` + Service MT5).
+- Sem feed activo, D02 faz **SKIP** no harness completo (`run_homologation.py`).
+- Smoke dedicado: `MQL5\refactoring\tools\run_feed_smoke.bat`
+- Matriz actualizada: `docs/data_capability_matrix.md` (Quote ticks, live WS path).
+- Decisão arquitectural: `docs/decisions.md` §17.
+
+Harness completo com feed:
+
+```cmd
+set MT5_FEED_ENABLED=1
+set MT5_SYMBOL=BTCUSD
+E:\miniconda\envs\trading\python.exe homologation\run_homologation.py
+```
 
 ---
 

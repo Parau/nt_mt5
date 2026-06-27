@@ -117,6 +117,12 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - This mode is intentionally separate from `EXTERNAL_RPYC` and must not silently fall back to RPyC behavior.
 - `DOCKERIZED` is not affected by this decision; it remains an internal backend of `MANAGED_TERMINAL` only.
 
+### 17. Live quote tick transport (WS feed)
+- Live quote ticks for `EXTERNAL_RPYC` deployments use an **MQL5 Service** (`CopyTicks` + cursor) pushing batches over **WebSocket** to an **InboundFeedGateway** in the Python adapter (`feed.enabled=True`).
+- RPyC **`symbol_info_tick` polling** is the legacy live path when `feed.enabled=False`; it returns snapshots (~1 Hz) and must not be used for homologation of tick-a-tick streaming (TC-HOM-D02).
+- Historical quote requests (`_request_quote_ticks`, `copy_ticks_*`) remain on-demand via RPyC regardless of feed mode.
+- Homologation **TC-HOM-D02** validates the WS feed path only; it requires `MT5_FEED_ENABLED=1` and a running `NT5TickFeedService`.
+
 ## How to use this file
 
 When changing the adapter, ask:

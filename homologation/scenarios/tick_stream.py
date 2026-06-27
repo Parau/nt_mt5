@@ -1,8 +1,11 @@
 """
-TC-HOM-D02: Sustained quote tick streaming.
+TC-HOM-D02: Sustained quote tick streaming (WS feed).
 
-Subscribes to live quote ticks for a configurable duration and verifies the
-bridge/adapter keep delivering data without long silent gaps.
+Subscribes to live quote ticks via the MQL5 Service → InboundFeedGateway path
+(``feed.enabled=True``). Validates tick-a-tick delivery without long silent gaps.
+
+Requires ``MT5_FEED_ENABLED=1`` and ``NT5TickFeedService`` running in MT5.
+Legacy RPyC ``symbol_info_tick`` polling is not validated by this scenario.
 """
 from __future__ import annotations
 
@@ -125,6 +128,15 @@ async def run_tick_stream(cfg: HomologationConfig, report: HomologationReport) -
         )
         return
 
+    if not cfg.feed_enabled:
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.SKIP,
+            "Set MT5_FEED_ENABLED=1 and start NT5TickFeedService for WS stream validation",
+        )
+        return
+
     done = threading.Event()
     outcome: dict = {"completed": False, "detail": ""}
     stop_gate_holder: list[NodeStopGate | None] = [None]
@@ -194,15 +206,18 @@ async def run_tick_stream(cfg: HomologationConfig, report: HomologationReport) -
         )
         return
 
+    feed_uri = f"ws://{cfg.feed_host}:{cfg.feed_port}{cfg.feed_path}"
     report.add(
         case_id,
         name,
         ScenarioStatus.PASS,
         (
             f"{ticks} ticks in {cfg.stream_duration_secs:.0f}s "
-            f"(max inter-tick gap {max_gap:.1f}s)"
+            f"(max inter-tick gap {max_gap:.1f}s, transport=ws_feed)"
         ),
         ticks=ticks,
         max_gap_secs=max_gap,
         duration_secs=cfg.stream_duration_secs,
+        transport="ws_feed",
+        feed_uri=feed_uri,
     )

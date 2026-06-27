@@ -21,6 +21,7 @@ from nautilus_trader.model.identifiers import InstrumentId
 
 
 from nautilus_mt5.data_types import MT5Symbol
+from nautilus_mt5.client.tick_poll import is_quote_tick_subscription
 from nautilus_mt5.common import Subscription
 from nautilus_mt5.parsing.data import bar_spec_to_bar_size
 from nautilus_mt5.parsing.data import what_to_show
@@ -173,6 +174,13 @@ class MetaTrader5ClientMarketDataMixin:
             Applicable to Bid_Ask data requests.
 
         """
+
+        if self.live_quote_feed_enabled and is_quote_tick_subscription(tick_type):
+            self._log.debug(
+                "Live quote feed enabled; ignoring RPyC quote tick subscription for "
+                f"{instrument_id} ({tick_type}).",
+            )
+            return
 
         name = (str(instrument_id), tick_type)
         # Hack for MetaTrader5 missing streaming tick subscription methods

@@ -195,3 +195,24 @@ async def test_feed_connect_starts_gateway_and_replays_pending(
     await data_client._connect()
     assert data_client._feed_gateway is fake
     assert fake.subscribed == ["BTCUSD"]
+
+
+@pytest.mark.asyncio
+async def test_feed_enabled_sets_client_live_quote_feed_flag(
+    clean_factory_cache,
+    nautilus_components,
+    nautilus_mt5_harness,
+):
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_feed_data_config("BTCUSD"),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+
+    assert data_client._client.live_quote_feed_enabled is True

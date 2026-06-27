@@ -1,5 +1,5 @@
 """
-WS feed smoke test — Phase 3 end-to-end (MQL5 Service → InboundFeedGateway → QuoteTick).
+WS feed smoke test — TC-HOM-D02 (MQL5 Service → InboundFeedGateway → QuoteTick).
 
 Prerequisites (manual):
   1. RPyC bridge running (port 18812)
@@ -43,7 +43,7 @@ async def main() -> int:
     report = HomologationReport()
 
     print("=" * 64)
-    print("  MT5 WS FEED SMOKE — Phase 3 (Service → QuoteTick)")
+    print("  MT5 WS FEED SMOKE — TC-HOM-D02 (Service → QuoteTick)")
     print(f"  RPyC    : {cfg.host}:{cfg.port}")
     print(f"  WS feed : ws://{cfg.feed_host}:{cfg.feed_port}{cfg.feed_path}")
     print(f"  Symbol  : {cfg.symbol}")
