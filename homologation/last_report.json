@@ -1,0 +1,58 @@
+{
+  "started_at": "2026-06-27T18:12:41.723839+00:00",
+  "summary": {
+    "total": 5,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 2,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=60418.5 ask=60428.5",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 60418.5,
+        "ask": 60428.5
+      }
+    },
+    {
+      "case_id": "TC-HOM-D01",
+      "name": "Quote ticks via TradingNode",
+      "status": "PASS",
+      "detail": "Received 3 ticks (last bid=60425.5 ask=60435.5)",
+      "metadata": {
+        "ticks": 3
+      }
+    },
+    {
+      "case_id": "TC-HOM-E01",
+      "name": "Market round-trip (BUY \u2192 SELL)",
+      "status": "SKIP",
+      "detail": "Set MT5_ENABLE_LIVE_EXECUTION=1 to run execution scenarios",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "PASS",
+      "detail": "30 ticks in 30s (max inter-tick gap 1.0s)",
+      "metadata": {
+        "ticks": 30,
+        "max_gap_secs": 1.028154399999039,
+        "duration_secs": 30.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-E02",
+      "name": "Stop / stop-limit pending orders",
+      "status": "SKIP",
+      "detail": "Set MT5_ENABLE_LIVE_EXECUTION=1 to run execution scenarios",
+      "metadata": {}
+    }
+  ]
+}

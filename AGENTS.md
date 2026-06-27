@@ -78,3 +78,35 @@
 - Separate implementation fixes from test-only fixes.
 - If a test reveals a production bug, fix the bug and mention it explicitly.
 - If coverage is still partial, say so clearly instead of implying the task is fully complete.
+
+## 7) Source of Truth
+For adapter development and testing protocols, you **must** strictly adhere to the official Nautilus Trader developer guidelines:
+
+* **Core Adapter Architecture:** [https://nautilustrader.io/docs/latest/developer_guide/adapters/](https://nautilustrader.io/docs/latest/developer_guide/adapters/)
+* **Data Client Specification & Testing:** [https://nautilustrader.io/docs/latest/developer_guide/spec_data_testing/](https://nautilustrader.io/docs/latest/developer_guide/spec_data_testing/)
+* **Execution Client Specification & Testing:** [https://nautilustrader.io/docs/latest/developer_guide/spec_exec_testing/](https://nautilustrader.io/docs/latest/developer_guide/spec_exec_testing/)
+
+> **Instruction:** Do not hallucinate class structures or test suites. Align the integration design exactly with the specifications detailed in these official documents.
+
+## 8) Running python
+To run python you must set the necessary enviroment variables and use the correct python enviroment with the proper packages installed for example set "MT5_HOST=127.0.0.1" && set "MT5_PORT=18812" && E:\miniconda\envs\trading\python.exe 
+
+
+Aqui está uma versão aprimorada para o seu `agents.md`. Ela corrige os erros ortográficos ("enviroment"), melhora a clareza dos comandos para o agente de IA e utiliza blocos de código isolados para garantir que a IA entenda a sintaxe exata da execução.
+
+---
+
+## 8) Python Execution Environment
+
+To execute any Python script in this project, you **must** explicitly configure the required environment variables and target the dedicated Conda interpreter to avoid global dependency conflicts.
+
+* **Minimum Required Variables:** `MT5_HOST` (MetaTrader gateway IP) and `MT5_PORT` (TCP socket port) to access the RPyC MT5 bridge.
+* **Target Interpreter:** Always use the absolute path of the `trading` environment.
+
+**Execution Template (Windows CMD):**
+
+```cmd
+set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && E:\miniconda\envs\trading\python.exe script_or_python_module.py
+```
+
+> **Instruction:** Never invoke a generic `python` command. You must explicitly pass the environment variables inline or verify their state before running any script.
