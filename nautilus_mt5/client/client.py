@@ -252,14 +252,19 @@ class MetaTrader5Client(Component,
         except Exception as e:
             self._log.exception(f"Error occurred while canceling tasks: {e}", e)
 
-        if self._mt5_client.get('mt5'):
-            if hasattr(self._mt5_client['mt5'], 'disconnect'):
-                self._mt5_client['mt5'].disconnect()
-            elif hasattr(self._mt5_client['mt5'], 'shutdown'):
+        mt5_wrapper = self._mt5_client.get('mt5')
+        if mt5_wrapper is not None:
+            if hasattr(mt5_wrapper, 'disconnect'):
                 try:
-                    self._mt5_client['mt5'].shutdown()
+                    mt5_wrapper.disconnect()
+                except Exception as e:
+                    self._log.warning(f"Error calling disconnect on mt5 client: {e}")
+            elif hasattr(mt5_wrapper, 'shutdown'):
+                try:
+                    mt5_wrapper.shutdown()
                 except Exception as e:
                     self._log.warning(f"Error calling shutdown on mt5 client: {e}")
+            self._mt5_client['mt5'] = None
         self._account_ids = set()
         self.registered_nautilus_clients = set()
 
