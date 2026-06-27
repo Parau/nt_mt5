@@ -108,7 +108,45 @@ Responde com:
 - `feito` — se compilou e vês `hello` + `ticks` no test server, ou
 - logs/erros do MetaEditor ou do terminal (Experts/Journal).
 
-Continuamos com testes automatizados (`nautilus_mt5/feed/`) e integração no adaptador.
+Continuamos com homologação end-to-end (Service + DataClient com `feed.enabled=True`).
+
+---
+
+## Fase 3 — DataClient + QuoteTick (branch cursor01-fase2)
+
+Activar no `MetaTrader5DataClientConfig`:
+
+```python
+feed=FeedGatewayConfig(
+    enabled=True,
+    host="0.0.0.0",
+    port=8765,
+    path="/mt5-feed",
+    hello_timeout_secs=30.0,
+)
+```
+
+Ordem: TradingNode sobe → DataClient `_connect` (RPyC + gateway WS) → Start Service MT5 → `hello` + `ticks` → `QuoteTick` no MessageBus.
+
+**Nota:** com `feed.enabled=True`, live quotes **não** usam poll RPyC; histórico (`_request_*`) continua via RPyC.
+
+### Smoke test Phase 3 (TradingNode + QuoteTick)
+
+1. Bridge RPyC a correr (`18812`)
+2. Start `NT5TickFeedService` no MT5 (`InpWsUrl=ws://127.0.0.1:8765/mt5-feed`, `InpSymbols=BTCUSD`)
+3. Correr:
+
+```cmd
+MQL5\refactoring\tools\run_feed_smoke.bat
+```
+
+Ou manualmente:
+
+```cmd
+set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && set MT5_FEED_ENABLED=1 && set MT5_SYMBOL=BTCUSD && set HOMOLOG_STREAM_SECS=30 && set HOMOLOG_STREAM_MIN_TICKS=3 && E:\miniconda\envs\trading\python.exe homologation\run_feed_smoke.py
+```
+
+Sucesso: `TC-HOM-D02` PASS com ticks via `QuoteTick` (logs `Stream tick #N: bid=... ask=...`).
 
 ---
 

@@ -9,6 +9,7 @@ from nautilus_mt5.client.types import (
     MT5TerminalAccessMode,
 )
 from nautilus_mt5.data_types import MT5Symbol
+from nautilus_mt5.feed.config import FeedGatewayConfig
 from nautilus_mt5.metatrader5 import EAConnectionConfig
 
 
@@ -167,6 +168,7 @@ class MetaTrader5DataClientConfig(LiveDataClientConfig, frozen=True):
         local_python (LocalPythonTerminalConfig | None): Configuration for LOCAL_PYTHON access. Default is None.
         managed_terminal (ManagedTerminalConfig | None): Configuration for managed terminal. Default is None.
         ea_config (Optional[EAConnectionConfig]): Configuration for EAClient. Default is None.
+        feed (FeedGatewayConfig): Inbound MQL5 tick feed WebSocket gateway. Default disabled.
         instrument_provider (MetaTrader5InstrumentProviderConfig): Configuration for instrument provider.
     """
     client_id: int = 1
@@ -178,6 +180,7 @@ class MetaTrader5DataClientConfig(LiveDataClientConfig, frozen=True):
     local_python: LocalPythonTerminalConfig | None = None
     managed_terminal: ManagedTerminalConfig | None = None
     ea_config: Optional[EAConnectionConfig] = None
+    feed: FeedGatewayConfig = FeedGatewayConfig()
     venue_profile: Any = None
     """VenueProfile for this broker. Required — adapter will refuse to connect without it."""
     instrument_provider: MetaTrader5InstrumentProviderConfig = (

@@ -11,11 +11,23 @@ from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.data import TradeTick
 from nautilus_trader.model.identifiers import ClientId
+from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.identifiers import Symbol
 
 from nautilus_mt5.client.client import MetaTrader5Client
 from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.config import MetaTrader5DataClientConfig
+from nautilus_mt5.feed.config import FeedGatewayConfig
+from nautilus_mt5.feed.converter import wire_tick_to_quote_tick
+from nautilus_mt5.feed.gateway import InboundFeedGateway
+from nautilus_mt5.feed.messages import (
+    ErrorMessage,
+    HelloMessage,
+    HeartbeatMessage,
+    PongMessage,
+    TickBatchMessage,
+)
 from nautilus_mt5.parsing.data import timedelta_to_duration_str
 from nautilus_mt5.providers import MetaTrader5InstrumentProvider
 from nautilus_mt5.venue_profile import CapabilityStatus
@@ -100,6 +112,13 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         self._use_regular_trading_hours = config.use_regular_trading_hours
         self._ignore_quote_tick_size_updates = config.ignore_quote_tick_size_updates
         self._venue_profile = config.venue_profile
+        self._feed_config: FeedGatewayConfig = config.feed
+        self._feed_gateway: InboundFeedGateway | None = None
+        self._feed_pending_symbols: set[str] = set()
+
+    @property
+    def feed_gateway(self) -> InboundFeedGateway | None:
+        return self._feed_gateway
 
     @property
     def instrument_provider(self) -> MetaTrader5InstrumentProvider:
@@ -124,8 +143,86 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         for instrument in self._instrument_provider.list_all():
             self._handle_data(instrument)
 
+        if self._feed_config.enabled:
+            await self._start_feed_gateway()
+
+    async def _start_feed_gateway(self) -> None:
+        self._feed_gateway = InboundFeedGateway(
+            config=self._feed_config,
+            on_event=self._handle_feed_event,
+        )
+        await self._feed_gateway.start()
+        try:
+            hello = await self._feed_gateway.wait_for_hello()
+        except TimeoutError as exc:
+            self._log.error(
+                "MQL5 feed service did not send hello within "
+                f"{self._feed_config.hello_timeout_secs}s",
+            )
+            await self._feed_gateway.stop()
+            self._feed_gateway = None
+            raise RuntimeError(
+                "MQL5 inbound feed handshake timed out waiting for hello",
+            ) from exc
+
+        self._log.info(
+            f"MQL5 feed hello session={hello.session} symbols={list(hello.symbols)}",
+        )
+
+        pending = set(self._feed_pending_symbols)
+        pending |= self._feed_gateway.handler.subscription_state.pending_subscribe
+        if pending:
+            await self._feed_gateway.subscribe(sorted(pending))
+
+    async def _handle_feed_event(self, event: object) -> None:
+        if isinstance(event, HelloMessage):
+            if self._feed_config.reconnect_notify:
+                self._log.info(
+                    f"MQL5 feed reconnected session={event.session} "
+                    f"symbols={list(event.symbols)}",
+                )
+            return
+
+        if isinstance(event, TickBatchMessage):
+            self._handle_feed_ticks(event)
+            return
+
+        if isinstance(event, ErrorMessage):
+            self._log.warning(
+                f"MQL5 feed service error code={event.code} message={event.message}",
+            )
+            return
+
+        if isinstance(event, (HeartbeatMessage, PongMessage)):
+            self._log.debug(f"MQL5 feed {event.__class__.__name__}")
+
+    def _handle_feed_ticks(self, batch: TickBatchMessage) -> None:
+        instrument_id = InstrumentId(Symbol(batch.symbol), MT5_VENUE)
+        instrument = self._cache.instrument(instrument_id)
+        if instrument is None:
+            self._log.debug(
+                f"No cached instrument for feed symbol {batch.symbol}; skipping ticks",
+            )
+            return
+
+        ts_init = self._clock.timestamp_ns()
+        for tick in batch.ticks:
+            quote_tick = wire_tick_to_quote_tick(instrument, tick, ts_init)
+            if quote_tick is not None:
+                self._handle_data(quote_tick)
+
+    def _mt5_symbol_from_instrument(self, instrument) -> str:
+        try:
+            sym_dict = instrument.info["symbol"]
+            return MT5Symbol(**sym_dict).symbol
+        except Exception:
+            return instrument.id.symbol.value
+
     async def _disconnect(self):
         self._client.registered_nautilus_clients.discard(self.id)
+        if self._feed_gateway is not None:
+            await self._feed_gateway.stop()
+            self._feed_gateway = None
         if (
             self._client.is_running
             and not self._client.registered_nautilus_clients
@@ -156,10 +253,16 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             return
 
         try:
-            sym_dict = instrument.info["symbol"]
-            sym = MT5Symbol(**sym_dict)
+            sym = MT5Symbol(**instrument.info["symbol"])
         except Exception:
             sym = MT5Symbol(symbol=instrument_id.symbol.value)
+
+        if self._feed_config.enabled:
+            mt5_symbol = sym.symbol
+            self._feed_pending_symbols.add(mt5_symbol)
+            if self._feed_gateway is not None:
+                await self._feed_gateway.subscribe([mt5_symbol])
+            return
 
         await self._client.subscribe_ticks(
             instrument_id=instrument_id,
@@ -247,6 +350,19 @@ class MetaTrader5DataClient(LiveMarketDataClient):
 
     async def _unsubscribe_quote_ticks(self, command: UnsubscribeQuoteTicks) -> None:
         instrument_id = command.instrument_id
+        if self._feed_config.enabled:
+            instrument = self._cache.instrument(instrument_id)
+            if instrument is None:
+                self._log.error(
+                    f"Cannot unsubscribe QuoteTicks for {instrument_id}, Instrument not found.",
+                )
+                return
+            mt5_symbol = self._mt5_symbol_from_instrument(instrument)
+            self._feed_pending_symbols.discard(mt5_symbol)
+            if self._feed_gateway is not None:
+                await self._feed_gateway.unsubscribe([mt5_symbol])
+            return
+
         await self._client.unsubscribe_ticks(instrument_id, "BidAsk")
 
     async def _unsubscribe_trade_ticks(self, command: UnsubscribeTradeTicks) -> None:
