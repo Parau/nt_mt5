@@ -1,0 +1,37 @@
+{
+  "started_at": "2026-06-28T02:43:41.665200+00:00",
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=60023.0 ask=60033.0",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 60023.0,
+        "ask": 60033.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D06",
+      "name": "WS feed stop/start + cursor dedup",
+      "status": "PASS",
+      "detail": "baseline=53 after_gateway=4 post=10 unique_ts=386 dup=0 service_restart=manual",
+      "metadata": {
+        "baseline_ticks": 53,
+        "post_phase_ticks": 10,
+        "unique_ts": 386,
+        "gateway_restart": true,
+        "service_restart": true
+      }
+    }
+  ]
+}

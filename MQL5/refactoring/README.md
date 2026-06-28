@@ -17,7 +17,21 @@ Spec: `res/especificacao_novo_adaptador_nautilus_mt5.md`
 
 ---
 
-## Revisão MQL5 (v1.02)
+## Revisão MQL5 (v1.04)
+
+| Alteração | Detalhe |
+|-----------|---------|
+| WS disconnect | `onDisconnect` desactiva subs de barra (`g_bars[].active=false`); adapter reenvia `subscribe_bars` no próximo `hello` |
+
+### v1.03
+
+| Alteração | Detalhe |
+|-----------|---------|
+| Barras fechadas via `CopyRates` | `shift=1` (última barra fechada); emite `op:bar` só quando `time` muda |
+| Wire | `subscribe_bars` / `unsubscribe_bars`; `hello.bars` = `["SYMBOL:M1", ...]` |
+| Inputs | `InpBarSpecs` (CSV `BTCUSD:M1`), `InpBarPollMs` (default 300 ms) |
+
+### v1.02
 
 | Problema | Correcção |
 |----------|-----------|
@@ -88,14 +102,17 @@ Se `WS open failed ... err=4014`:
 6. **Configurar inputs do Service** (Properties ao Add/Start):
    - `InpWsUrl` — **Windows nativo:** `ws://127.0.0.1:8765/mt5-feed` · **Docker:** `ws://host.docker.internal:8765/mt5-feed`
    - `InpSymbols` — ex. `BTCUSD`
+   - `InpBarSpecs` — ex. `BTCUSD:M1` (opcional; barras fechadas)
+   - `InpBarPollMs` — intervalo de poll de barras (default 300 ms)
    - `InpDebug` — `true` na primeira corrida
 
 7. **Arrancar Service:** Navigator → Services → `NT5TickFeedService` → Add → Start.
 
 8. **Verificar (Fase 1 OK):**
-   - **Um** `HELLO` no test server (sem flood)
+   - **Um** `HELLO` no test server (sem flood); campo `bars` se `InpBarSpecs` preenchido
    - Linhas **`TICKS symbol=BTCUSD cursor=... count=N`**
-   - Journal MT5: `[NT5Feed] sent N ticks for BTCUSD...`
+   - Com `InpBarSpecs=BTCUSD:M1`: **`BAR symbol=BTCUSD timeframe=M1 time=... close=...`** (primeira barra fechada ao ligar; nova linha a cada fecho de M1)
+   - Journal MT5: `[NT5Feed] sent N ticks...` / `[NT5Feed] sent bar...`
 
 9. **Bridge RPyC:** não alterar nesta fase. Manter a correr como hoje (`18812`).
 
@@ -178,5 +195,6 @@ E:\miniconda\envs\trading\python.exe homologation\run_homologation.py
 ## Notas técnicas
 
 - **Cursor:** `CopyTicks(..., last_msc + 1, ...)`. Primeiro batch usa `SymbolInfoTick` para seed.
+- **Barras:** `CopyRates(symbol, period, 1, 1, rates)` — shift 1 = última barra **fechada**; sem revisões da barra em formação.
 - **Compressão WS:** desactivada (`useCompression=false`) para compatibilidade com test server simples.
 - **Subscribe:** o adaptador envia `subscribe` quando o DataClient subscrever; o test server **só regista**, não ecoa.

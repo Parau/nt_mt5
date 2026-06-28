@@ -123,6 +123,20 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - Historical quote requests (`_request_quote_ticks`, `copy_ticks_*`) remain on-demand via RPyC regardless of feed mode.
 - Homologation **TC-HOM-D02** validates the WS feed path only; it requires `MT5_FEED_ENABLED=1` and a running `NT5TickFeedService`.
 
+### 18. Live bar transport (WS feed)
+- Live bar subscriptions (`SubscribeBars`) for supported timeframes (M1, M5, M15, M30, H1, H4, D1) use the same **MQL5 Service WebSocket** as quote ticks: adapter sends `subscribe_bars` / `unsubscribe_bars`; Service polls `CopyRates(shift=1)` and pushes closed bars as `op:bar`.
+- Requires `feed.enabled=True` on `MetaTrader5DataClientConfig`. Without the feed, live bar subscribe logs a warning and is ignored (no IB `req_real_time_bars` fallback).
+- Sub-second bar specs (e.g. 5s) are not on the WS wire and are rejected with a warning.
+- On-demand historical bars (`RequestBars` / `_request_bars`) use MT5-native **`copy_rates_*`** via RPyC (`copy_rates_from_pos` when `limit` is set; `copy_rates_range` when `start` is set). Legacy IB `req_historical_data` / `cancel_historical_data` removed from this path (D04b, 2026-06-27).
+- Homologation **TC-HOM-D03** validates live M1 bars via WS; run `homologation/run_bar_smoke.py` with `MT5_FEED_ENABLED=1`.
+- Homologation **TC-HOM-D04b** validates on-demand `RequestBars` via `_request_bars` → `copy_rates_from_pos` in `closed_market_suite.py`.
+- After WS disconnect, the MQL5 Service clears **bar** subscription state (`active=false`); quote symbol subs remain until explicit `unsubscribe`. The adapter replays pending quote and bar subs on the next `hello` after reconnect.
+
+### 19. RPyC bridge open orders (`orders_get`)
+- `EXTERNAL_RPYC` gateways must expose `exposed_orders_get` forwarding to MT5 `orders_get`.
+- Required for homologation **TC-HOM-E07** (modify volume verification) and for `generate_order_status_reports` when open pending orders exist.
+- Staging reference: `MQL5/refactoring/bridge/mt5_bridge_v007.py` (bridge v0.7).
+
 ## How to use this file
 
 When changing the adapter, ask:

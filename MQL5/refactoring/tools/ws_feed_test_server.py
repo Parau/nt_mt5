@@ -27,6 +27,7 @@ async def handle_client(ws: WebSocketServerProtocol) -> None:
     LOG.info("Service connected from %s", peer)
     tick_batches = 0
     tick_count = 0
+    bar_count = 0
 
     try:
         async for raw in ws:
@@ -39,10 +40,11 @@ async def handle_client(ws: WebSocketServerProtocol) -> None:
             op = msg.get("op")
             if op == "hello":
                 LOG.info(
-                    "HELLO session=%s account=%s symbols=%s",
+                    "HELLO session=%s account=%s symbols=%s bars=%s",
                     msg.get("session"),
                     msg.get("account"),
                     msg.get("symbols"),
+                    msg.get("bars"),
                 )
             elif op == "ticks":
                 batch = msg.get("data") or []
@@ -56,6 +58,28 @@ async def handle_client(ws: WebSocketServerProtocol) -> None:
                     n,
                     tick_batches,
                     tick_count,
+                )
+            elif op == "bar":
+                bar_count += 1
+                LOG.info(
+                    "BAR symbol=%s timeframe=%s time=%s close=%s (total_bars=%d)",
+                    msg.get("symbol"),
+                    msg.get("timeframe"),
+                    msg.get("time"),
+                    msg.get("close"),
+                    bar_count,
+                )
+            elif op == "subscribe_bars":
+                LOG.info(
+                    "SUBSCRIBE_BARS symbols=%s timeframe=%s",
+                    msg.get("symbols"),
+                    msg.get("timeframe"),
+                )
+            elif op == "unsubscribe_bars":
+                LOG.info(
+                    "UNSUBSCRIBE_BARS symbols=%s timeframe=%s",
+                    msg.get("symbols"),
+                    msg.get("timeframe"),
                 )
             elif op == "subscribe":
                 LOG.info("SUBSCRIBE from adapter/service echo symbols=%s", msg.get("symbols"))
@@ -71,11 +95,12 @@ async def handle_client(ws: WebSocketServerProtocol) -> None:
                 LOG.info("Message op=%s payload=%s", op, msg)
     except websockets.ConnectionClosed as exc:
         LOG.info(
-            "Service disconnected from %s (%s) batches=%d ticks=%d",
+            "Service disconnected from %s (%s) batches=%d ticks=%d bars=%d",
             peer,
             exc,
             tick_batches,
             tick_count,
+            bar_count,
         )
 
 

@@ -9,8 +9,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from nautilus_trader.core.uuid import UUID4
-from nautilus_trader.data.messages import SubscribeQuoteTicks
-from nautilus_trader.model.data import QuoteTick
+from nautilus_trader.data.messages import SubscribeBars, SubscribeQuoteTicks
+from nautilus_trader.model.data import Bar, BarAggregation, BarSpecification, BarType, QuoteTick
+from nautilus_trader.model.enums import AggregationSource, PriceType
 from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
 
 from nautilus_mt5.client.types import MT5TerminalAccessMode
@@ -22,7 +23,7 @@ from nautilus_mt5.config import (
 )
 from nautilus_mt5.data import MetaTrader5DataClient
 from nautilus_mt5.data_types import MT5Symbol
-from nautilus_mt5.feed.messages import HelloMessage, TickBatchMessage, WireTick
+from nautilus_mt5.feed.messages import BarMessage, HelloMessage, TickBatchMessage, WireBar, WireTick
 from nautilus_mt5.factories import MT5LiveDataClientFactory
 from nautilus_mt5.venue_profile import TICKMILL_DEMO_PROFILE
 
@@ -216,3 +217,107 @@ async def test_feed_enabled_sets_client_live_quote_feed_flag(
     )
 
     assert data_client._client.live_quote_feed_enabled is True
+
+
+_BTCUSD_M1 = BarType(
+    _BTCUSD_ID,
+    BarSpecification(1, BarAggregation.MINUTE, PriceType.LAST),
+    AggregationSource.EXTERNAL,
+)
+
+
+@pytest.mark.asyncio
+async def test_feed_subscribe_bars_uses_gateway(
+    clean_factory_cache,
+    nautilus_components,
+    nautilus_mt5_harness,
+    monkeypatch,
+):
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_feed_data_config("BTCUSD"),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+
+    async def _noop_feed_start(self: MetaTrader5DataClient) -> None:
+        return None
+
+    monkeypatch.setattr(MetaTrader5DataClient, "_start_feed_gateway", _noop_feed_start)
+    await data_client._connect()
+
+    mock_gateway = MagicMock()
+    mock_gateway.subscribe_bars = AsyncMock()
+    data_client._feed_gateway = mock_gateway
+
+    cmd = SubscribeBars(
+        bar_type=_BTCUSD_M1,
+        client_id=data_client.id,
+        venue=None,
+        command_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+    )
+    await data_client._subscribe_bars(cmd)
+
+    mock_gateway.subscribe_bars.assert_awaited_once_with(["BTCUSD"], "M1")
+
+
+@pytest.mark.asyncio
+async def test_feed_handle_bar_emits_bar(
+    clean_factory_cache,
+    nautilus_components,
+    nautilus_mt5_harness,
+    monkeypatch,
+):
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_feed_data_config("BTCUSD"),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+
+    async def _noop_feed_start(self: MetaTrader5DataClient) -> None:
+        return None
+
+    monkeypatch.setattr(MetaTrader5DataClient, "_start_feed_gateway", _noop_feed_start)
+    await data_client._connect()
+
+    data_client._feed_bar_types[("BTCUSD", "M1")] = _BTCUSD_M1
+
+    delivered: list[Bar] = []
+    original_handle = data_client._handle_data
+
+    def _capture(data):
+        if isinstance(data, Bar):
+            delivered.append(data)
+        original_handle(data)
+
+    data_client._handle_data = _capture
+
+    msg = BarMessage(
+        bar=WireBar(
+            symbol="BTCUSD",
+            timeframe="M1",
+            time=1_700_000_000,
+            open=60000.0,
+            high=60100.0,
+            low=59900.0,
+            close=60050.0,
+            tick_volume=10,
+        ),
+    )
+    await data_client._handle_feed_event(msg)
+
+    assert len(delivered) == 1
+    assert delivered[0].bar_type == _BTCUSD_M1
+    assert float(delivered[0].close) == 60050.0

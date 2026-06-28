@@ -1,10 +1,9 @@
 """
 TC-HOM-D03 + TC-HOM-D05: Live bar subscribe and unsubscribe-on-stop.
 
-Bar streaming still uses IB-style bridge hooks (``req_real_time_bars`` /
-``cancel_historical_data``). When the EXTERNAL_RPYC gateway does not expose
-those methods, D03/D05 (bars) fail with an explicit bridge-gap message.
-Quote-tick unsubscribe on stop (WS feed path) is exercised in D05 regardless.
+Bar streaming uses the MQL5 WS feed when ``MT5_FEED_ENABLED=1`` (``subscribe_bars`` /
+``unsubscribe_bars``). Without the feed, the legacy IB-style bridge hooks are probed
+(``req_real_time_bars`` / ``cancel_historical_data``).
 """
 from __future__ import annotations
 
@@ -20,7 +19,7 @@ from homologation.config import HomologationConfig
 from homologation.node_factory import build_trading_node, instrument_id
 from homologation.report import HomologationReport, ScenarioStatus
 from homologation.scenarios.node_runner import NodeStopGate, run_node_until
-from homologation.support.bridge_probe import bridge_bar_stream_ready
+from homologation.support.bridge_probe import bridge_bar_stream_ready, feed_bar_stream_ready
 
 
 def _m1_bar_type(symbol: str):
@@ -159,7 +158,10 @@ async def run_bar_subscribe(cfg: HomologationConfig, report: HomologationReport)
     case_id = "TC-HOM-D03"
     name = "Live bar subscribe M1"
 
-    ready, reason = bridge_bar_stream_ready(cfg.host, cfg.port)
+    if cfg.feed_enabled:
+        ready, reason = feed_bar_stream_ready(cfg.feed_enabled)
+    else:
+        ready, reason = bridge_bar_stream_ready(cfg.host, cfg.port)
     if not ready:
         report.add(
             case_id,
@@ -205,7 +207,14 @@ async def run_bar_subscribe(cfg: HomologationConfig, report: HomologationReport)
     bars = strategy.bar_count if strategy is not None else 0
 
     if outcome.get("completed") and bars >= 1:
-        report.add(case_id, name, ScenarioStatus.PASS, f"Received {bars} M1 bar(s)", bars=bars)
+        transport = "ws_feed" if cfg.feed_enabled else "bridge"
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.PASS,
+            f"Received {bars} M1 bar(s) (transport={transport})",
+            bars=bars,
+        )
     else:
         report.add(
             case_id,
@@ -230,7 +239,11 @@ async def run_unsubscribe_on_stop(cfg: HomologationConfig, report: HomologationR
         )
         return
 
-    bar_ready, bar_reason = bridge_bar_stream_ready(cfg.host, cfg.port)
+    bar_ready, bar_reason = (
+        feed_bar_stream_ready(cfg.feed_enabled)
+        if cfg.feed_enabled
+        else bridge_bar_stream_ready(cfg.host, cfg.port)
+    )
     done = threading.Event()
     outcome: dict = {"completed": False, "detail": ""}
     stop_gate_holder: list[NodeStopGate | None] = [None]

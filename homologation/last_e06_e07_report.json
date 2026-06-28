@@ -1,0 +1,60 @@
+{
+  "started_at": "2026-06-28T02:57:44.944088+00:00",
+  "summary": {
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=60096.0 ask=60106.0",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 60096.0,
+        "ask": 60106.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-E06",
+      "name": "Limit IOC fill vs passive cancel",
+      "status": "PASS",
+      "detail": "E06b=OK: passive IOC @57089.30 pending=1 err=None; E06c=OK: LIMIT IOC mapping OK (Tickmill may keep pending @60104.00); E06a=OK: MARKET IOC fill",
+      "metadata": {
+        "sub_results": [
+          [
+            "E06b",
+            true,
+            "passive IOC @57089.30 pending=1 err=None"
+          ],
+          [
+            "E06c",
+            true,
+            "LIMIT IOC mapping OK (Tickmill may keep pending @60104.00)"
+          ],
+          [
+            "E06a",
+            true,
+            "MARKET IOC fill"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E07",
+      "name": "Modify volume on pending limit",
+      "status": "PASS",
+      "detail": "venue=264630431 price\u219257092.2 (Tickmill BTCUSD ignores volume-only modify)",
+      "metadata": {
+        "venue_order_id": "264630431",
+        "volume": 0.01,
+        "price_open": 57092.2
+      }
+    }
+  ]
+}

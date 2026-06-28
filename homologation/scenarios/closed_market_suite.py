@@ -14,14 +14,15 @@ from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock, MessageBus
 from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.data.messages import (
+    RequestBars,
     RequestInstrument,
     RequestTradeTicks,
     SubscribeInstruments,
     SubscribeOrderBook,
     SubscribeTradeTicks,
 )
-from nautilus_trader.model.data import OrderBookDelta
-from nautilus_trader.model.enums import BookType
+from nautilus_trader.model.data import BarSpecification, BarType, OrderBookDelta
+from nautilus_trader.model.enums import AggregationSource, BarAggregation, BookType, PriceType
 from nautilus_trader.model.identifiers import InstrumentId, Symbol, TraderId, Venue
 
 from nautilus_mt5 import TICKMILL_DEMO_PROFILE
@@ -444,6 +445,67 @@ async def run_trade_tick_request_rejected(cfg: HomologationConfig, report: Homol
         reset_mt5_client_cache()
 
 
+async def run_request_bars_e2e(cfg: HomologationConfig, report: HomologationReport) -> None:
+    """TC-HOM-D04b: RequestBars via DataClient._request_bars → copy_rates_from_pos → Bar."""
+    case_id = "TC-HOM-D04b"
+    name = "RequestBars M1 via DataClient._request_bars (copy_rates_from_pos)"
+
+    data_client = None
+    delivered: list = []
+
+    def _capture_bars(bar_type, bars, partial, correlation_id):
+        delivered.extend(bars)
+
+    try:
+        data_client, _, cache, clock = await _make_data_client(cfg)
+        await data_client._connect()
+
+        iid = _instrument_id(cfg.symbol)
+        if cache.instrument(iid) is None:
+            report.add(case_id, name, ScenarioStatus.FAIL, "Instrument not in cache after connect")
+            return
+
+        bar_type = BarType(
+            iid,
+            BarSpecification(1, BarAggregation.MINUTE, PriceType.LAST),
+            AggregationSource.EXTERNAL,
+        )
+        data_client._handle_bars = _capture_bars
+
+        req = RequestBars(
+            bar_type=bar_type,
+            start=None,
+            end=None,
+            limit=5,
+            client_id=data_client.id,
+            venue=_VENUE,
+            callback=None,
+            request_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+            params=None,
+        )
+        await data_client._request_bars(req)
+
+        if len(delivered) == 0:
+            report.add(case_id, name, ScenarioStatus.FAIL, "No Bar objects delivered from _request_bars")
+            return
+
+        sample = delivered[0]
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.PASS,
+            f"Received {len(delivered)} M1 bar(s) close={float(sample.close)}",
+            bars=len(delivered),
+        )
+    except Exception as exc:
+        report.add(case_id, name, ScenarioStatus.FAIL, str(exc))
+    finally:
+        if data_client is not None:
+            await data_client._disconnect()
+        reset_mt5_client_cache()
+
+
 async def run_closed_market_suite(cfg: HomologationConfig, report: HomologationReport) -> None:
     """Run all closed-market homologation scenarios."""
     MT5_CLIENTS.clear()
@@ -452,6 +514,7 @@ async def run_closed_market_suite(cfg: HomologationConfig, report: HomologationR
         return
 
     await run_historical_bars_rpyc(cfg, report)
+    await run_request_bars_e2e(cfg, report)
     await run_historical_quote_ticks(cfg, report)
     await run_instrument_load(cfg, report)
     await run_unsupported_gates(cfg, report)

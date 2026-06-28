@@ -12,10 +12,13 @@ from websockets.exceptions import ConnectionClosed
 from nautilus_mt5.feed.config import FeedGatewayConfig
 from nautilus_mt5.feed.handler import InboundFeedHandler
 from nautilus_mt5.feed.messages import (
+    BarMessage,
     HelloMessage,
     TickBatchMessage,
     build_ping_command,
+    build_subscribe_bars_command,
     build_subscribe_command,
+    build_unsubscribe_bars_command,
     build_unsubscribe_command,
     parse_wire_message,
 )
@@ -144,6 +147,28 @@ class InboundFeedGateway:
         if self.is_service_connected:
             await self._send(build_unsubscribe_command(symbols))
 
+    async def subscribe_bars(
+        self,
+        symbols: list[str] | tuple[str, ...],
+        timeframe: str,
+    ) -> None:
+        if not symbols or not timeframe:
+            return
+        self._handler.subscription_state.mark_subscribe_bars(symbols, timeframe)
+        if self.is_service_connected:
+            await self._send(build_subscribe_bars_command(symbols, timeframe))
+
+    async def unsubscribe_bars(
+        self,
+        symbols: list[str] | tuple[str, ...],
+        timeframe: str,
+    ) -> None:
+        if not symbols or not timeframe:
+            return
+        self._handler.subscription_state.mark_unsubscribe_bars(symbols, timeframe)
+        if self.is_service_connected:
+            await self._send(build_unsubscribe_bars_command(symbols, timeframe))
+
     async def ping(self) -> None:
         await self._send(build_ping_command())
 
@@ -207,4 +232,13 @@ class InboundFeedGateway:
                 event.symbol,
                 event.cursor,
                 len(event.ticks),
+            )
+        elif isinstance(event, BarMessage):
+            bar = event.bar
+            self._log.debug(
+                "Feed bar %s:%s time=%s close=%s",
+                bar.symbol,
+                bar.timeframe,
+                bar.time,
+                bar.close,
             )

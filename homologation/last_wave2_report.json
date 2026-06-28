@@ -1,0 +1,53 @@
+{
+  "started_at": "2026-06-28T01:59:06.972464+00:00",
+  "summary": {
+    "total": 4,
+    "passed": 1,
+    "failed": 3,
+    "skipped": 0,
+    "ok": false
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=60121.5 ask=60131.5",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 60121.5,
+        "ask": 60131.5
+      }
+    },
+    {
+      "case_id": "TC-HOM-D07",
+      "name": "Multi-symbol WS quote stream",
+      "status": "FAIL",
+      "detail": "Node timeout; tick counts={'BTCUSD.METATRADER_5': 0, 'USTEC.METATRADER_5': 0}",
+      "metadata": {
+        "symbols": [
+          "BTCUSD",
+          "USTEC"
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10",
+      "name": "Multi-leg position reconcile (mass_status vs bridge)",
+      "status": "FAIL",
+      "detail": "bridge=1 L=0.01 S=0 reports=0 L=0.0 S=0.0",
+      "metadata": {
+        "bridge_count": 1,
+        "report_count": 0
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10b",
+      "name": "close_on_stop clears multi-leg book",
+      "status": "FAIL",
+      "detail": "Pre-flight not flat: positions_get(BTCUSD)=1 after cleanup",
+      "metadata": {}
+    }
+  ]
+}

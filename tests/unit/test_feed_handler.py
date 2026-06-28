@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from nautilus_mt5.feed.handler import InboundFeedHandler
-from nautilus_mt5.feed.messages import TickBatchMessage, WireTick, parse_wire_message
+from nautilus_mt5.feed.messages import BarMessage, TickBatchMessage, WireBar, WireTick, parse_wire_message
 
 
 def _batch(symbol: str, cursor: int, ticks: list[WireTick]) -> TickBatchMessage:
@@ -63,3 +63,23 @@ def test_invalid_bid_ask_filtered() -> None:
     bad = WireTick(time_msc=100, bid=0.0, ask=60478.0, flags=6)
     out = handler.handle_message(_batch("BTCUSD", 100, [bad]))
     assert out is None
+
+
+def test_bar_dedup_emits_once_per_close_time() -> None:
+    handler = InboundFeedHandler()
+    bar = WireBar(
+        symbol="BTCUSD",
+        timeframe="M1",
+        time=1730000000,
+        open=1.0,
+        high=2.0,
+        low=0.5,
+        close=1.5,
+    )
+    msg = BarMessage(bar=bar)
+
+    first = handler.handle_message(msg)
+    second = handler.handle_message(msg)
+
+    assert isinstance(first, BarMessage)
+    assert second is None

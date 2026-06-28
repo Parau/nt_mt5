@@ -110,3 +110,17 @@ set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && E:\miniconda\envs\trading\python
 ```
 
 > **Instruction:** Never invoke a generic `python` command. You must explicitly pass the environment variables inline or verify their state before running any script.
+
+## 9) Code Style and Annotations
+STRICT REQUIREMENT: All generated code comments, annotations, and docstrings MUST strictly adhere to the following language and framework-specific constraints. No generic placeholders or narrative comments are allowed.
+
+**Preserve Existing Documentation:** Never delete, strip, or overwrite existing comments within the codebase unless they are strictly deprecated, obsolete, or directly impacted/invalidated by the new code changes or refactoring.
+
+### **Python:** 
+ - MANDATORY: Use native type hints for all public functions, methods, and service/model boundaries.
+ - REQUIRED: Write concise Google Style docstrings for trading rules, side effects, non-obvious core logic, Application Service API boundaries, Provider SPI / Transport SPI boundaries, Integration Adapter boundaries, and other public boundary objects. When necessary add comments with architectural Notes.
+### **MQL5 Code**  
+ - **Document the "Why", Not the "What":** Avoid trivial or redundant comments (e.g., do not write `// loops through the array`). Instead, explicitly document the mathematical, quantitative, or networking intent (e.g., `// Reverses the array topology so index [0] strictly represents the forming candle`).
+  - **Network & Execution Critical Paths:** Every native socket operation (`SocketCreate`, `SocketReceive`) and structural trade submission (`OrderSend`) must feature brief inline comments detailing buffer allocations, state expectations, or specific error-handling reasons.
+  - **Zero AI Conversational Fillers:** Never insert generic placeholders, conversational markers, or useless templates (such as `// Add your logic here` or `// Prepared by AI`). Code must be production-ready and fully articulated.
+ 

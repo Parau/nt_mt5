@@ -26,10 +26,18 @@ def instrument_id(symbol: str) -> InstrumentId:
     return InstrumentId(Symbol(symbol), _VENUE)
 
 
-def build_trading_node(cfg: HomologationConfig, trader_id: str = "HOMOLOG-001") -> TradingNode:
+def build_trading_node(
+    cfg: HomologationConfig,
+    trader_id: str = "HOMOLOG-001",
+    *,
+    symbols: list[str] | None = None,
+) -> TradingNode:
     external_rpyc = ExternalRPyCTerminalConfig(host=cfg.host, port=cfg.port, keep_alive=True)
+    symbol_list = symbols if symbols is not None else [cfg.symbol]
     instrument_provider = MetaTrader5InstrumentProviderConfig(
-        load_symbols=frozenset([MT5Symbol(symbol=cfg.symbol, broker=cfg.broker)]),
+        load_symbols=frozenset(
+            MT5Symbol(symbol=sym, broker=cfg.broker) for sym in symbol_list
+        ),
     )
 
     feed_config = FeedGatewayConfig(

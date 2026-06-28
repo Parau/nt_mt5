@@ -1,4 +1,5 @@
 
+import asyncio
 import functools
 from collections.abc import Callable
 from decimal import Decimal
@@ -23,9 +24,14 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.client.tick_poll import is_quote_tick_subscription
 from nautilus_mt5.common import Subscription
-from nautilus_mt5.parsing.data import bar_spec_to_bar_size
 from nautilus_mt5.parsing.data import what_to_show
 from nautilus_mt5.parsing.instruments import mt5_symbol_to_instrument_id
+from nautilus_mt5.parsing.rates import (
+    bar_spec_to_mt5_timeframe,
+    ib_duration_to_timedelta,
+    mql_rate_row_to_bar_data,
+    timestamp_to_utc_datetime,
+)
 
 
 class MarketDataTypeEnum:
@@ -242,41 +248,21 @@ class MetaTrader5ClientMarketDataMixin:
         use_rth: bool,
     ) -> None:
         """
-        Subscribe to real-time bar data for a specified bar type.
+        Deprecated: live bars use the MQL5 WS feed (``feed.enabled=True``).
 
-        Parameters
-        ----------
-        bar_type : BarType
-            The type of bar to subscribe to.
-        symbol : MT5Symbol
-            The MetaTrader 5 symbol details for the instrument.
-        use_rth : bool
-            Whether to use regular trading hours (RTH) only.
-
+        IB ``req_real_time_bars`` is not supported on the MT5 RPyC bridge.
         """
-        name = str(bar_type)
-        await self._subscribe(
-            name,
-            self._mt5_client['mt5'].req_real_time_bars,
-            self._mt5_client['mt5'].cancel_real_time_bars,
-            symbol,
-            bar_type.spec.step,
-            what_to_show(bar_type),
-            use_rth,
+        self._log.warning(
+            "subscribe_realtime_bars is deprecated; enable feed.enabled on DataClientConfig "
+            f"and use SubscribeBars via NT5TickFeedService (ignored for {bar_type}).",
         )
 
     async def unsubscribe_realtime_bars(self, bar_type: BarType) -> None:
-        """
-        Unsubscribes from real-time bar data for a specified bar type.
-
-        Parameters
-        ----------
-        bar_type : BarType
-            The type of bar to unsubscribe from.
-
-        """
-        name = str(bar_type)
-        await self._unsubscribe(name, self._mt5_client['mt5'].cancel_real_time_bars)
+        """Deprecated — see ``subscribe_realtime_bars``."""
+        self._log.warning(
+            "unsubscribe_realtime_bars is deprecated; use feed.enabled WS path "
+            f"(ignored for {bar_type}).",
+        )
 
     async def subscribe_historical_bars(
         self,
@@ -286,70 +272,21 @@ class MetaTrader5ClientMarketDataMixin:
         handle_revised_bars: bool,
     ) -> None:
         """
-        Subscribe to historical bar data for a specified bar type and symbol. It
-        allows configuration for regular trading hours and handling of revised bars.
+        Deprecated: live bar subscribe uses WS ``subscribe_bars``, not IB hooks.
 
-        Parameters
-        ----------
-        bar_type : BarType
-            The type of bar to subscribe to.
-        symbol : MT5Symbol
-            The MetaTrader 5 symbol details for the instrument.
-        use_rth : bool
-            Whether to use regular trading hours (RTH) only.
-        handle_revised_bars : bool
-            Whether to handle revised bars or not.
-
+        Historical on-demand bars remain via ``get_historical_bars`` / ``copy_rates_*``.
         """
-
-        name = str(bar_type)
-        subscription = await self._subscribe(
-            name,
-            self.subscribe_historical_bars,
-            self._mt5_client['mt5'].cancel_historical_data,
-            bar_type=bar_type,
-            symbol=symbol,
-            use_rth=use_rth,
-            handle_revised_bars=handle_revised_bars,
-        )
-        if not subscription:
-            return
-
-        # Check and download the gaps or approx 300 bars whichever is less
-        # last_bar: Bar = self._cache.bar(bar_type)
-
-
-        # self._mt5_client['mt5'].req_historical_data(
-        #     req_id=subscription.req_id,
-        #     symbol=symbol,
-        #     end_datetime="",
-        #     duration_str=timedelta_to_duration_str(duration),
-        #     bar_size_setting=bar_size_setting,
-        #     what_to_show=what_to_show(bar_type),
-        #     use_rth=use_rth,
-        #     format_date=2,
-        #     keep_up_to_date=True,
-        # )
-        self._mt5_client['mt5'].req_real_time_bars(
-            req_id=subscription.req_id,
-            symbol=symbol,
-            bar_size="",
-            what_to_show=what_to_show(bar_type),
-            use_rth=use_rth,
+        self._log.warning(
+            "subscribe_historical_bars is deprecated; enable feed.enabled on DataClientConfig "
+            f"and use SubscribeBars via NT5TickFeedService (ignored for {bar_type}).",
         )
 
     async def unsubscribe_historical_bars(self, bar_type: BarType) -> None:
-        """
-        Unsubscribe from historical bar data for a specified bar type.
-
-        Parameters
-        ----------
-        bar_type : BarType
-            The type of bar to unsubscribe from.
-
-        """
-        name = str(bar_type)
-        await self._unsubscribe(name, self._mt5_client['mt5'].cancel_historical_data)
+        """Deprecated — see ``subscribe_historical_bars``."""
+        self._log.warning(
+            "unsubscribe_historical_bars is deprecated; use feed.enabled WS path "
+            f"(ignored for {bar_type}).",
+        )
 
     async def get_historical_bars(
         self,
@@ -357,69 +294,107 @@ class MetaTrader5ClientMarketDataMixin:
         symbol: MT5Symbol,
         use_rth: bool,
         end_date_time: pd.Timestamp,
-        duration: str,
+        duration: str = "7 D",
         timeout: int = 60,
+        *,
+        start_date_time: pd.Timestamp | None = None,
+        limit: int | None = None,
     ) -> list[Bar]:
         """
-        Request and retrieve historical bar data for a specified bar type.
+        Request historical bars via MT5-native ``copy_rates_*`` (RPyC bridge).
 
-        Parameters
-        ----------
-        bar_type : BarType
-            The type of bar for which historical data is requested.
-        symbol : MT5Symbol
-            The MetaTrader 5 symbol details for the instrument.
-        use_rth : bool
-            Whether to use regular trading hours (RTH) only for the data.
-        end_date_time : str
-            The end time for the historical data request, formatted "%Y%m%d-%H:%M:%S".
-        duration : str
-            The duration for which historical data is requested, formatted as a string.
-        timeout : int, optional
-            The maximum time in seconds to wait for the historical data response.
-
-        Returns
-        -------
-        list[Bar]
-
+        Uses ``copy_rates_range`` when ``start_date_time`` is set, otherwise
+        ``copy_rates_from_pos`` with ``limit`` (default 1000).
         """
-        # Ensure the requested `end_date_time` is in UTC and set formatDate=2 to ensure returned dates are in UTC.
+        del timeout  # synchronous copy_rates; kept for call-site compatibility
+
+        if use_rth:
+            self._log.debug(
+                f"use_rth=True ignored for MT5 copy_rates historical bars ({bar_type})",
+            )
+
         if end_date_time.tzinfo is None:
             end_date_time = end_date_time.replace(tzinfo=ZoneInfo("UTC"))
         else:
             end_date_time = end_date_time.astimezone(ZoneInfo("UTC"))
 
-        name = (bar_type, end_date_time)
-        if not (request := self._requests.get(name=name)):
-            req_id = self._next_req_id()
-            bar_size_setting = bar_spec_to_bar_size(bar_type.spec)
-            request = self._requests.add(
-                req_id=req_id,
-                name=name,
-                handle=functools.partial(
-                    self._mt5_client['mt5'].req_historical_data,
-                    req_id=req_id,
-                    symbol=symbol,
-                    end_datetime=end_date_time.strftime("%Y%m%d %H:%M:%S %Z"),
-                    duration_str=duration,
-                    bar_size_setting=bar_size_setting,
-                    what_to_show=what_to_show(bar_type),
-                    use_rth=use_rth,
-                    format_date=2,
-                    keep_up_to_date=False,
-                ),
-                cancel=functools.partial(
-                    self._mt5_client['mt5'].cancel_historical_data, req_id=req_id
+        mt5_symbol = symbol.symbol
+        timeframe = bar_spec_to_mt5_timeframe(bar_type.spec)
+        mt5 = self._mt5_client["mt5"]
+
+        try:
+            mt5.symbol_select(mt5_symbol, True)
+        except Exception as exc:
+            self._log.warning(f"symbol_select({mt5_symbol}) failed: {exc}")
+
+        rates = await asyncio.to_thread(
+            self._copy_rates,
+            mt5,
+            mt5_symbol,
+            timeframe,
+            end_date_time,
+            duration,
+            start_date_time,
+            limit,
+        )
+        if not rates:
+            return []
+
+        ts_init = self._clock.timestamp_ns()
+        bars: list[Bar] = []
+        for row in reversed(rates):
+            bar_data = mql_rate_row_to_bar_data(mt5_symbol, row)
+            if bar_data.time <= 0 or bar_data.close <= 0.0:
+                continue
+            bars.append(
+                await self._mt5_bar_to_nautilus_bar(
+                    bar_type=bar_type,
+                    bar=bar_data,
+                    ts_init=ts_init,
                 ),
             )
-            if not request:
-                return []
-            self._log.debug(f"req_historical_data: {request.req_id=}, {symbol=}")
-            request.handle()
-            return await self._await_request(request, timeout, default_value=[])
+        return bars
+
+    def _copy_rates(
+        self,
+        mt5: Any,
+        symbol: str,
+        timeframe: int,
+        end_date_time: pd.Timestamp,
+        duration: str,
+        start_date_time: pd.Timestamp | None,
+        limit: int | None,
+    ) -> list[Any]:
+        if start_date_time is not None:
+            if start_date_time.tzinfo is None:
+                start_date_time = start_date_time.tz_localize("UTC")
+            else:
+                start_date_time = start_date_time.tz_convert("UTC")
+            raw = mt5.copy_rates_range(
+                symbol,
+                timeframe,
+                timestamp_to_utc_datetime(start_date_time),
+                timestamp_to_utc_datetime(end_date_time),
+            )
         else:
-            self._log.info(f"Request already exist for {request}")
+            count = limit if limit is not None and limit > 0 else 1000
+            raw = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
+            if raw is None or len(raw) == 0:
+                delta = ib_duration_to_timedelta(duration)
+                date_from = end_date_time - delta
+                raw = mt5.copy_rates_range(
+                    symbol,
+                    timeframe,
+                    timestamp_to_utc_datetime(date_from),
+                    timestamp_to_utc_datetime(end_date_time),
+                )
+
+        if raw is None:
+            self._log.warning(
+                f"copy_rates returned None for {symbol} timeframe={timeframe}",
+            )
             return []
+        return list(raw)
 
     async def get_historical_ticks(
         self,

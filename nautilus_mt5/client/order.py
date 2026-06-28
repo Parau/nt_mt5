@@ -96,6 +96,29 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
             order.orderRef = f"{order.orderRef}:{order.order_id}"
             self._mt5_client["mt5"].order_send(order)
 
+    def modify_order(self, order: MT5Order) -> dict | None:
+        """Modify an open pending order via ``TRADE_ACTION_MODIFY``."""
+        send_method = getattr(self._mt5_client["mt5"], "order_send", None)
+        if not send_method:
+            self._log.warning("MT5Client has no method to modify orders. (Missing order_send)")
+            return None
+        req = {
+            "action": 7,  # TRADE_ACTION_MODIFY
+            "order": int(order.order_id),
+            "symbol": getattr(order, "symbol", ""),
+            "volume": float(getattr(order, "volume", 0.0)),
+            "price": float(getattr(order, "price", 0.0)),
+            "type": getattr(order, "type", 0),
+            "type_time": getattr(order, "type_time", 0),
+            "type_filling": getattr(order, "type_filling", 2),
+        }
+        stpx = getattr(order, "trigger_price", 0.0)
+        if stpx:
+            req["stoplimit"] = stpx
+        res = send_method(req)
+        self._log.info(f"MT5 order_send RESULT (MODIFY): {res}")
+        return res
+
     def cancel_order(self, order_id: int, manual_cancel_order_time: str = "") -> None:
         """
         Cancel an order through the MT5Client.

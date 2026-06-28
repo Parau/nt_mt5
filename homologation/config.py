@@ -27,6 +27,12 @@ class HomologationConfig:
     feed_path: str
     feed_hello_timeout_secs: float
 
+    @property
+    def multi_symbols(self) -> tuple[str, ...]:
+        raw = os.environ.get("HOMOLOG_MULTI_SYMBOLS", "BTCUSD,USTEC")
+        parts = tuple(s.strip() for s in raw.split(",") if s.strip())
+        return parts if parts else (self.symbol,)
+
     @classmethod
     def from_env(cls) -> HomologationConfig:
         host = os.environ.get("MT5_HOST", "127.0.0.1")

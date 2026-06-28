@@ -494,9 +494,13 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             report.append(order_status)
 
         # Create the Open OrderStatusReport from Open Orders
-        mt5_orders: list[MT5Order] = await self._client.get_open_orders(
-            self.account_id.get_id(),
-        )
+        try:
+            mt5_orders: list[MT5Order] = await self._client.get_open_orders(
+                self.account_id.get_id(),
+            )
+        except RuntimeError as exc:
+            self._log.warning(f"Open orders unavailable on bridge: {exc}")
+            mt5_orders = []
         for mt5_order in mt5_orders:
             order_status = await self._parse_mt5_order_to_order_status_report(mt5_order)
             report.append(order_status)
@@ -787,8 +791,8 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             mt5_order: MT5Order = self._transform_order_to_mt5_order(command.order, instrument)
             mt5_order.order_id = self._client.next_order_id()
 
-            # Hedge account: for SELL orders, find the open BUY position ticket so MT5
-            # closes it instead of opening a new opposite position.
+            # Hedge account: when exactly one open long leg exists, SELL closes it
+            # (round-trip / flatten). With multiple same-side legs, SELL opens a new short.
             if command.order.side == OrderSide.SELL:
                 mt5_symbol = instrument.info["symbol"]["symbol"]
                 try:
@@ -800,9 +804,9 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
                         f"{len(open_positions) if open_positions else 0} positions, "
                         f"type={type(open_positions[0]).__name__ if open_positions else 'n/a'}"
                     )
+                    buy_tickets: list[int] = []
                     if open_positions:
                         for pos in open_positions:
-                            # pos may be a namedtuple netref or a dict depending on normalize_rpyc_return
                             if isinstance(pos, dict):
                                 pos_type = pos.get("type", -1)
                                 ticket = int(pos.get("ticket", 0))
@@ -810,11 +814,12 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
                                 pos_type = int(getattr(pos, "type", -1))
                                 ticket = int(getattr(pos, "ticket", 0))
                             if ticket and pos_type == 0:  # POSITION_TYPE_BUY = 0
-                                mt5_order.position_ticket = ticket
-                                self._log.debug(
-                                    f"Hedge close: using position ticket {mt5_order.position_ticket} for SELL"
-                                )
-                                break
+                                buy_tickets.append(ticket)
+                    if len(buy_tickets) == 1:
+                        mt5_order.position_ticket = buy_tickets[0]
+                        self._log.debug(
+                            f"Hedge close: using position ticket {mt5_order.position_ticket} for SELL"
+                        )
                 except Exception as e:
                     self._log.warning(f"Could not fetch open positions for hedge close: {e}")
 
@@ -925,8 +930,8 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             None,
         ):
             mt5_order.trigger_price = command.trigger_price.as_double()
-        self._log.info(f"Placing {mt5_order!r}")
-        self._client.place_order(mt5_order)
+        self._log.info(f"Modifying {mt5_order!r}")
+        self._client.modify_order(mt5_order)
 
     async def _cancel_order(self, command: CancelOrder) -> None:
         PyCondition.not_none(command, "command")

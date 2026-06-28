@@ -10,7 +10,7 @@ from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock, MessageBus
 from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.execution.messages import SubmitOrder
-from nautilus_trader.model.enums import OrderSide, TimeInForce
+from nautilus_trader.model.enums import OrderSide, TimeInForce, TriggerType
 from nautilus_trader.model.events import OrderAccepted, OrderSubmitted
 from nautilus_trader.model.identifiers import (
     ClientOrderId,
@@ -22,7 +22,7 @@ from nautilus_trader.model.identifiers import (
     VenueOrderId,
 )
 from nautilus_trader.model.objects import Price, Quantity
-from nautilus_trader.model.orders import LimitOrder, MarketOrder
+from nautilus_trader.model.orders import LimitOrder, MarketOrder, StopMarketOrder
 
 from nautilus_mt5 import TICKMILL_DEMO_PROFILE
 from nautilus_mt5.client.types import MT5TerminalAccessMode
@@ -98,25 +98,37 @@ def _apply_accepted(order, cache, account_id, venue_order_id: str, clock) -> Non
 
 def _close_symbol_positions(host: str, port: int, symbol: str) -> None:
     mt5 = MetaTrader5(host=host, port=port)
-    positions = mt5.positions_get(symbol=symbol)
-    if not positions:
-        return
-    for pos in positions:
-        ticket = int(getattr(pos, "ticket", 0))
-        pos_type = int(getattr(pos, "type", -1))
-        volume = float(getattr(pos, "volume", 0.0))
-        if not ticket or volume <= 0:
-            continue
-        close_type = 1 if pos_type == 0 else 0
-        mt5.order_send({
-            "action": 1,
-            "symbol": symbol,
-            "volume": volume,
-            "type": close_type,
-            "position": ticket,
-            "deviation": 20,
-            "type_filling": 1,
-        })
+    for _ in range(5):
+        positions = mt5.positions_get(symbol=symbol)
+        if not positions:
+            return
+        closed_any = False
+        for pos in positions:
+            if isinstance(pos, dict):
+                ticket = int(pos.get("ticket", 0) or 0)
+                raw_type = pos.get("type")
+                pos_type = int(raw_type if raw_type is not None else -1)
+                volume = float(pos.get("volume", 0.0) or 0.0)
+            else:
+                ticket = int(getattr(pos, "ticket", 0) or 0)
+                raw_type = getattr(pos, "type", None)
+                pos_type = int(raw_type if raw_type is not None else -1)
+                volume = float(getattr(pos, "volume", 0.0) or 0.0)
+            if not ticket or volume <= 0:
+                continue
+            close_type = 1 if pos_type == 0 else 0
+            mt5.order_send({
+                "action": 1,
+                "symbol": symbol,
+                "volume": volume,
+                "type": close_type,
+                "position": ticket,
+                "deviation": 20,
+                "type_filling": 1,
+            })
+            closed_any = True
+        if not closed_any:
+            return
 
 
 async def _submit_and_accept(exec_client, cache, msgbus, clock, order) -> tuple[str | None, str | None]:
@@ -354,7 +366,10 @@ async def run_reconcile_mass_status(cfg: HomologationConfig, report: Homologatio
             report.add(case_id, name, ScenarioStatus.FAIL, "generate_mass_status returned None")
             return
 
-        report_positions = len(mass.position_reports)
+        all_position_reports = [
+            rep for reps in mass.position_reports.values() for rep in reps
+        ]
+        report_positions = len(all_position_reports)
         ok = report_positions >= bridge_positions
         report.add(
             case_id,
@@ -377,3 +392,88 @@ async def run_reconcile_mass_status(cfg: HomologationConfig, report: Homologatio
             await data_client._disconnect()
         except Exception:
             pass
+
+
+async def run_real_retcodes(cfg: HomologationConfig, report: HomologationReport) -> None:
+    """TC-HOM-E09: adapter rejects invalid volume and invalid stop triggers."""
+    case_id = "TC-HOM-E09"
+    name = "Real retcodes (invalid volume / stops)"
+
+    if not cfg.enable_execution:
+        report.add(case_id, name, ScenarioStatus.SKIP, "Set MT5_ENABLE_LIVE_EXECUTION=1")
+        return
+
+    reset_mt5_client_cache()
+    inst_id = InstrumentId(Symbol(cfg.symbol), _VENUE)
+    data_client, exec_client, msgbus, cache, clock = _exec_stack(
+        cfg, 6, cancel_on_stop=False, close_on_stop=False,
+    )
+    sub_results: list[tuple[str, bool, str]] = []
+
+    try:
+        await data_client._connect()
+        await exec_client._connect()
+        bid, _ask = _get_prices(cfg.host, cfg.port, cfg.symbol)
+
+        bad_vol = MarketOrder(
+            trader_id=msgbus.trader_id,
+            strategy_id=StrategyId("HOMOLOG-E09a"),
+            instrument_id=inst_id,
+            client_order_id=ClientOrderId("HOM-E09-VOL"),
+            order_side=OrderSide.BUY,
+            quantity=Quantity.from_str("0.001"),
+            time_in_force=TimeInForce.IOC,
+            init_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+        )
+        vol_vid, vol_err = await _submit_and_accept(
+            exec_client, cache, msgbus, clock, bad_vol,
+        )
+        vol_ok = vol_err is not None or vol_vid is None
+        if vol_vid == "FILLED":
+            vol_ok = False
+        sub_results.append(("E09a", vol_ok, f"invalid volume: {vol_err or vol_vid or 'rejected'}"))
+
+        invalid_stop_px = round(bid * 0.90, 2)
+        bad_stop = StopMarketOrder(
+            trader_id=msgbus.trader_id,
+            strategy_id=StrategyId("HOMOLOG-E09b"),
+            instrument_id=inst_id,
+            client_order_id=ClientOrderId("HOM-E09-STP"),
+            order_side=OrderSide.BUY,
+            quantity=Quantity.from_str("0.01"),
+            trigger_price=Price.from_str(f"{invalid_stop_px:.2f}"),
+            trigger_type=TriggerType.DEFAULT,
+            time_in_force=TimeInForce.GTC,
+            init_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+        )
+        stop_vid, stop_err = await _submit_and_accept(
+            exec_client, cache, msgbus, clock, bad_stop,
+        )
+        stop_ok = stop_err is not None or stop_vid is None
+        if stop_vid:
+            await asyncio.to_thread(rpyc_cancel_order, cfg.host, cfg.port, int(stop_vid))
+        sub_results.append((
+            "E09b",
+            stop_ok,
+            f"invalid BUY STOP @{invalid_stop_px:.2f}: {stop_err or stop_vid}",
+        ))
+    except Exception as exc:
+        sub_results.append(("E09", False, str(exc)))
+    finally:
+        try:
+            await exec_client._disconnect()
+            await data_client._disconnect()
+        except Exception:
+            pass
+
+    ok = all(r[1] for r in sub_results)
+    detail = "; ".join(f"{sid}={'OK' if ok_ else 'FAIL'}: {msg}" for sid, ok_, msg in sub_results)
+    report.add(
+        case_id,
+        name,
+        ScenarioStatus.PASS if ok else ScenarioStatus.FAIL,
+        detail,
+        sub_results=sub_results,
+    )

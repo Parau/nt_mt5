@@ -455,21 +455,27 @@ class MetaTrader5Client(Component,
             The asyncio Task that has been completed.
 
         """
-        if task.exception():
+        if task.cancelled():
+            self._log.debug(f"Task `{task.get_name()}` was cancelled.")
+            return
+
+        exc = task.exception()
+        if exc is not None:
             self._log.error(
-                f"Error on `{task.get_name()}`: {task.exception()!r}",
+                f"Error on `{task.get_name()}`: {exc!r}",
             )
-        else:
-            if actions:
-                try:
-                    actions()
-                except Exception as e:
-                    self._log.error(
-                        f"Failed triggering action {actions.__name__} on `{task.get_name()}`: "
-                        f"{e!r}",
-                    )
-            if success:
-                self._log.info(success, LogColor.GREEN)
+            return
+
+        if actions:
+            try:
+                actions()
+            except Exception as e:
+                self._log.error(
+                    f"Failed triggering action {actions.__name__} on `{task.get_name()}`: "
+                    f"{e!r}",
+                )
+        if success:
+            self._log.info(success, LogColor.GREEN)
 
     def subscribe_event(self, name: str, handler: Callable) -> None:
         """
