@@ -58,13 +58,13 @@ Ajustes pequenos no `entrypoint.sh`:
 ---
 
 ### Fase 4 — Bridge (desbloqueia o adaptador)
-**Ainda não existe no Docker.** Ordem sugerida:
 
-1. **Curto prazo:** bridge continua no **Windows** (`prepararRPyC.bat`) para testes do adaptador enquanto o Docker amadurece.
-2. **Médio prazo:** bridge **dentro do container** (Python + `MetaTrader5` sob Wine) — expor porta **18812/18813**.
-3. **Alternativa:** EA/WebSocket (já previsto no `nt_mt5`) se Wine+Python for instável.
+**4b ✅ (MT5-Docker):** automação no container:
+- `vendor/` bridge + MQL5 (sync de `nt_mt5`)
+- `deploy_mql5.sh`, `bootstrap_python.sh`, `start_bridge.sh`
+- `DEPLOY_MQL5`, `BOOTSTRAP_PYTHON`, `RUN_BRIDGE` no compose
 
-**Teste adaptador** (só após Fase 4):
+**Teste adaptador** (RPyC):
 ```cmd
 set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && ... homologation\run_closed_market.py
 ```

@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-06-28T13:04:40.518454+00:00",
+  "started_at": "2026-06-28T17:19:55.728579+00:00",
   "summary": {
     "total": 17,
     "passed": 17,
@@ -33,7 +33,7 @@
       "case_id": "TC-HOM-D04b",
       "name": "RequestBars M1 via DataClient._request_bars (copy_rates_from_pos)",
       "status": "PASS",
-      "detail": "Received 5 M1 bar(s) close=5176.0",
+      "detail": "Received 5 M1 bar(s) close=5177.0",
       "metadata": {
         "bars": 5
       }
@@ -114,14 +114,13 @@
       "case_id": "TC-HOM-D01-CM-XP",
       "name": "Multi-symbol instrument load (XP closed market)",
       "status": "PASS",
-      "detail": "WDON26(calc=33,mode=4), PETR4(calc=32,mode=4), DI1F27(calc=33,mode=4), WIN$(calc=33,mode=0), WINQ26(calc=33,mode=4)",
+      "detail": "WDON26(calc=33,mode=4), PETR4(calc=32,mode=4), DI1F27(calc=33,mode=4), WIN$(calc=33,mode=0)",
       "metadata": {
         "symbols": [
           "WDON26",
           "PETR4",
           "DI1F27",
-          "WIN$",
-          "WINQ26"
+          "WIN$"
         ]
       }
     },
@@ -129,7 +128,7 @@
       "case_id": "TC-HOM-D04c-XP",
       "name": "Historical ticks multi-symbol (XP)",
       "status": "PASS",
-      "detail": "WDON26=200(bid=5163.5,ask=5164.0,last=5163.5); PETR4=200(bid=38.83,ask=38.87,last=38.82); DI1F27=200(bid=14.255,ask=14.26,last=14.255); WIN$=200(bid=0.0,ask=0.0,last=171445.0); WINQ26=200(bid=171430.0,ask=171435.0,last=171425.0)",
+      "detail": "WDON26=200(bid=5163.5,ask=5164.0,last=5163.5); PETR4=200(bid=38.83,ask=38.87,last=38.82); DI1F27=200(bid=14.255,ask=14.26,last=14.255); WIN$=200(bid=0.0,ask=0.0,last=174115.0)",
       "metadata": {}
     },
     {
@@ -143,7 +142,7 @@
       "case_id": "TC-HOM-D21-T",
       "name": "RequestTradeTicks E2E (XP trade symbols)",
       "status": "PASS",
-      "detail": "TradeTicks OK for WIN$,WINQ26",
+      "detail": "TradeTicks OK for WIN$",
       "metadata": {}
     },
     {
