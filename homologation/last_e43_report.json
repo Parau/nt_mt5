@@ -1,0 +1,23 @@
+{
+  "started_at": "2026-06-28T03:41:58.969305+00:00",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-E43",
+      "name": "Cancel rejection (double-cancel \u2192 10013)",
+      "status": "PASS",
+      "detail": "venue=264631442 first_cancel=OK retry_retcode=10013 still_pending=False",
+      "metadata": {
+        "venue_order_id": "264631442",
+        "retry_retcode": 10013,
+        "still_pending": false
+      }
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import asyncio
 from decimal import Decimal
 
 from nautilus_mt5.data_types import CommissionReport, Execution, AccountOrderRef
@@ -96,6 +97,29 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
             order.orderRef = f"{order.orderRef}:{order.order_id}"
             self._mt5_client["mt5"].order_send(order)
 
+    def modify_order(self, order: MT5Order) -> dict | None:
+        """Modify an open pending order via ``TRADE_ACTION_MODIFY``."""
+        send_method = getattr(self._mt5_client["mt5"], "order_send", None)
+        if not send_method:
+            self._log.warning("MT5Client has no method to modify orders. (Missing order_send)")
+            return None
+        req = {
+            "action": 7,  # TRADE_ACTION_MODIFY
+            "order": int(order.order_id),
+            "symbol": getattr(order, "symbol", ""),
+            "volume": float(getattr(order, "volume", 0.0)),
+            "price": float(getattr(order, "price", 0.0)),
+            "type": getattr(order, "type", 0),
+            "type_time": getattr(order, "type_time", 0),
+            "type_filling": getattr(order, "type_filling", 2),
+        }
+        stpx = getattr(order, "trigger_price", 0.0)
+        if stpx:
+            req["stoplimit"] = stpx
+        res = send_method(req)
+        self._log.info(f"MT5 order_send RESULT (MODIFY): {res}")
+        return res
+
     def cancel_order(self, order_id: int, manual_cancel_order_time: str = "") -> None:
         """
         Cancel an order through the MT5Client.
@@ -143,23 +167,59 @@ class MetaTrader5ClientOrderMixin(BaseMixin):
         self._log.debug(f"Requesting open orders for {account_id}")
         name = "OpenOrders"
         if not (request := self._requests.get(name=name)):
+            async def _fetch():
+                import rpyc
+                try:
+                    res = await asyncio.to_thread(
+                        self._mt5_client["mt5"].orders_get,
+                    )
+                    if res is None:
+                        return []
+                    return rpyc.classic.obtain(list(res))
+                except Exception as e:
+                    self._log.warning(f"Error fetching open orders: {e}")
+                    return []
+
             request = self._requests.add(
                 req_id=self._next_req_id(),
                 name=name,
-                handle=getattr(self._mt5_client["mt5"], "orders_get", None),
+                handle=lambda: asyncio.create_task(_fetch()),
             )
             if not request:
                 return []
-            request.handle()
-
-        all_orders: list[MT5Order] | None = await self._await_request(request, 30)
-        if all_orders:
-            orders: list[MT5Order] = [
-                order for order in all_orders if order.account == account_id
-            ]
+            task = request.handle()
+            task.add_done_callback(
+                lambda t: self._loop.call_soon_threadsafe(
+                    request.future.set_result,
+                    t.result() if not t.exception() else [],
+                )
+            )
+            all_orders_raw = await self._await_request(request, 30)
         else:
-            orders = []
+            all_orders_raw = await self._await_request(request, 30)
 
+        if not all_orders_raw:
+            return []
+
+        orders: list[MT5Order] = []
+        for row in all_orders_raw:
+            if isinstance(row, dict):
+                ticket = int(row.get("ticket", 0) or 0)
+                if not ticket:
+                    continue
+                orders.append(MT5Order(
+                    order_id=ticket,
+                    symbol=str(row.get("symbol", "")),
+                    volume=float(row.get("volume_current") or row.get("volume") or 0.0),
+                    price=float(row.get("price_open") or row.get("price") or 0.0),
+                    type=int(row.get("type", 0) or 0),
+                    type_time=int(row.get("type_time", 0) or 0),
+                    type_filling=int(row.get("type_filling", 0) or 0),
+                    state=int(row.get("state", 1) or 1),
+                    account=str(account_id),
+                ))
+            elif getattr(row, "account", account_id) == account_id or not getattr(row, "account", ""):
+                orders.append(row)
         return orders
 
     def next_order_id(self) -> int:

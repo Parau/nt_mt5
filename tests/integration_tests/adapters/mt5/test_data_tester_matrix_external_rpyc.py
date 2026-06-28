@@ -18,8 +18,8 @@ TC coverage:
   TC-D21  Historical QuoteTicks — wiring + end-to-end: QuoteTick objects reach _handle_quote_ticks
   TC-D30  TradeTick — explicit capability decision documented
   TC-D40  Request historical bars — wiring + end-to-end: Bar objects reach _handle_bars
-  TC-D41  Subscribe bars — non-5s path (subscribe_historical_bars) + 5s path (subscribe_realtime_bars)
-  TC-D70  Unsubscribe on stop — _unsubscribe_quote_ticks / _unsubscribe_bars routes
+  TC-D41  Subscribe bars — WS feed subscribe_bars (feed.enabled) + unsupported 5s warning
+  TC-D70  Unsubscribe on stop — feed unsubscribe_bars / quote WS routes
   TC-D71  Custom subscribe params — explicitly not supported; documented
   TC-D72  Custom request params — explicitly not supported; documented
 
@@ -29,7 +29,7 @@ TC NOT covered (documented explicitly):
 Markers: @pytest.mark.data_tester
 """
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -53,6 +53,7 @@ from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
+    FeedGatewayConfig,
     MetaTrader5DataClientConfig,
     MetaTrader5InstrumentProviderConfig,
 )
@@ -79,6 +80,20 @@ def _data_config(*symbols: str) -> MetaTrader5DataClientConfig:
         terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
         external_rpyc=ExternalRPyCTerminalConfig(host="127.0.0.1", port=18812),
         venue_profile=TICKMILL_DEMO_PROFILE,
+        instrument_provider=MetaTrader5InstrumentProviderConfig(
+            load_symbols=load,
+        ),
+    )
+
+
+def _feed_data_config(*symbols: str) -> MetaTrader5DataClientConfig:
+    load = frozenset(MT5Symbol(symbol=s) for s in symbols) if symbols else None
+    return MetaTrader5DataClientConfig(
+        client_id=1,
+        terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
+        external_rpyc=ExternalRPyCTerminalConfig(host="127.0.0.1", port=18812),
+        venue_profile=TICKMILL_DEMO_PROFILE,
+        feed=FeedGatewayConfig(enabled=True, hello_timeout_secs=2.0),
         instrument_provider=MetaTrader5InstrumentProviderConfig(
             load_symbols=load,
         ),
@@ -634,13 +649,53 @@ async def test_tc_d40_request_historical_bars_reaches_mt5_client(
 
 @pytest.mark.asyncio
 @pytest.mark.data_tester
-async def test_tc_d41_subscribe_bars_reaches_mt5_client(
-    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+async def test_tc_d41_subscribe_bars_reaches_feed_gateway(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness, monkeypatch,
 ):
     """
-    TC-D41: _subscribe_bars() calls MT5Client.subscribe_historical_bars()
-    for non-5s bar types (the historical subscription path).
+    TC-D41: _subscribe_bars() with feed.enabled sends subscribe_bars on the WS gateway.
     """
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop, name="MT5", config=_feed_data_config("USTEC"),
+        msgbus=msgbus, cache=cache, clock=clock,
+    )
+
+    async def _noop_feed_start(self):
+        return None
+
+    monkeypatch.setattr(
+        data_client.__class__, "_start_feed_gateway", _noop_feed_start,
+    )
+    await data_client._connect()
+
+    mock_gateway = MagicMock()
+    mock_gateway.subscribe_bars = AsyncMock()
+    mock_gateway.is_service_connected = True
+    data_client._feed_gateway = mock_gateway
+
+    cmd = SubscribeBars(
+        bar_type=_BAR_TYPE,
+        client_id=data_client.id,
+        venue=None,
+        command_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+    )
+    await data_client._subscribe_bars(cmd)
+
+    mock_gateway.subscribe_bars.assert_awaited_once_with(["USTEC"], "M1")
+    assert ("USTEC", "M1") in data_client._feed_pending_bars
+    assert data_client._feed_bar_types[("USTEC", "M1")] == _BAR_TYPE
+
+
+@pytest.mark.asyncio
+@pytest.mark.data_tester
+async def test_tc_d41_subscribe_bars_without_feed_logs_warning(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness,
+):
+    """TC-D41: feed disabled → warning, no legacy IB subscribe."""
     msgbus, cache, clock = nautilus_components
     loop = asyncio.get_running_loop()
 
@@ -653,7 +708,7 @@ async def test_tc_d41_subscribe_bars_reaches_mt5_client(
     subscribe_bar_calls: list = []
 
     async def _spy_sub_bars(*args, **kwargs):
-        subscribe_bar_calls.append({"args": args, "kwargs": kwargs})
+        subscribe_bar_calls.append(kwargs)
 
     data_client._client.subscribe_historical_bars = _spy_sub_bars
 
@@ -666,13 +721,7 @@ async def test_tc_d41_subscribe_bars_reaches_mt5_client(
     )
     await data_client._subscribe_bars(cmd)
 
-    assert len(subscribe_bar_calls) == 1, (
-        "TC-D41: subscribe_historical_bars not called by _subscribe_bars()"
-    )
-    assert subscribe_bar_calls[0]["kwargs"].get("bar_type") == _BAR_TYPE or (
-        len(subscribe_bar_calls[0]["args"]) > 0
-        and subscribe_bar_calls[0]["args"][0] == _BAR_TYPE
-    ), "TC-D41: wrong bar_type passed to subscribe_historical_bars"
+    assert subscribe_bar_calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -764,7 +813,6 @@ async def test_tc_d40_request_historical_bars_delivers_bar_objects(
     and forwards them to _handle_bars.  Validates the dispatch path, not only
     that get_historical_bars is called.
     """
-    import pandas as pd
     from nautilus_trader.model.data import Bar, BarSpecification, BarType
     from nautilus_trader.model.enums import AggregationSource, BarAggregation, PriceType
 
@@ -828,21 +876,16 @@ async def test_tc_d40_request_historical_bars_delivers_bar_objects(
     assert delivered[0].bar_type == _BAR_TYPE, "TC-D40 (e2e): wrong bar_type on delivered Bar"
 
 
-# ---------------------------------------------------------------------------
-# TC-D41 (5s path): Subscribe bars → subscribe_realtime_bars for 5s bars
-# ---------------------------------------------------------------------------
-
 @pytest.mark.asyncio
 @pytest.mark.data_tester
-async def test_tc_d41_subscribe_5s_bars_uses_realtime_path(
-    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+async def test_tc_d40_request_historical_bars_via_copy_rates_fake_bridge(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness,
 ):
     """
-    TC-D41 (5s path): When bar_spec.timedelta == 5s, _subscribe_bars() must
-    dispatch to MT5Client.subscribe_realtime_bars(), not subscribe_historical_bars.
+    TC-D40 (fake bridge): _request_bars() end-to-end through real get_historical_bars
+    → copy_rates_from_pos on the fake RPyC bridge → Bar objects to _handle_bars.
     """
-    from nautilus_trader.model.data import BarSpecification, BarType
-    from nautilus_trader.model.enums import AggregationSource, BarAggregation, PriceType
+    from nautilus_trader.model.data import Bar
 
     msgbus, cache, clock = nautilus_components
     loop = asyncio.get_running_loop()
@@ -853,23 +896,74 @@ async def test_tc_d41_subscribe_5s_bars_uses_realtime_path(
     )
     await data_client._connect()
 
+    assert cache.instrument(_USTEC_ID) is not None, "USTEC must be in cache after connect"
+
+    delivered: list = []
+
+    def _capture_bars(bar_type, bars, partial, correlation_id):
+        delivered.extend(bars)
+
+    data_client._handle_bars = _capture_bars
+
+    req = RequestBars(
+        bar_type=_BAR_TYPE,
+        start=None,
+        end=None,
+        limit=3,
+        client_id=data_client.id,
+        venue=_VENUE,
+        callback=None,
+        request_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+        params=None,
+    )
+    await data_client._request_bars(req)
+
+    assert len(delivered) >= 1, (
+        "TC-D40 (fake bridge): expected Bar objects from copy_rates_from_pos path"
+    )
+    assert all(isinstance(b, Bar) for b in delivered)
+    assert delivered[0].bar_type == _BAR_TYPE
+
+
+# ---------------------------------------------------------------------------
+# TC-D41 (5s path): Subscribe bars → subscribe_realtime_bars for 5s bars
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+@pytest.mark.data_tester
+async def test_tc_d41_subscribe_5s_bars_unsupported_on_feed(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness, monkeypatch,
+):
+    """TC-D41 (5s): 5-second bars are not on the MQL5 WS wire; gateway not called."""
+    from nautilus_trader.model.data import BarSpecification, BarType
+    from nautilus_trader.model.enums import AggregationSource, BarAggregation, PriceType
+
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop, name="MT5", config=_feed_data_config("USTEC"),
+        msgbus=msgbus, cache=cache, clock=clock,
+    )
+
+    async def _noop_feed_start(self):
+        return None
+
+    monkeypatch.setattr(
+        data_client.__class__, "_start_feed_gateway", _noop_feed_start,
+    )
+    await data_client._connect()
+
+    mock_gateway = MagicMock()
+    mock_gateway.subscribe_bars = AsyncMock()
+    data_client._feed_gateway = mock_gateway
+
     _5S_BAR_TYPE = BarType(
         instrument_id=_USTEC_ID,
         bar_spec=BarSpecification(5, BarAggregation.SECOND, PriceType.BID),
         aggregation_source=AggregationSource.EXTERNAL,
     )
-
-    realtime_calls: list = []
-    historical_calls: list = []
-
-    async def _spy_realtime(**kwargs):
-        realtime_calls.append(kwargs)
-
-    async def _spy_historical(**kwargs):
-        historical_calls.append(kwargs)
-
-    data_client._client.subscribe_realtime_bars = _spy_realtime
-    data_client._client.subscribe_historical_bars = _spy_historical
 
     cmd = SubscribeBars(
         bar_type=_5S_BAR_TYPE,
@@ -880,12 +974,8 @@ async def test_tc_d41_subscribe_5s_bars_uses_realtime_path(
     )
     await data_client._subscribe_bars(cmd)
 
-    assert len(realtime_calls) == 1, (
-        "TC-D41 (5s): subscribe_realtime_bars should be called for 5s bar type"
-    )
-    assert len(historical_calls) == 0, (
-        "TC-D41 (5s): subscribe_historical_bars must NOT be called for 5s bar type"
-    )
+    mock_gateway.subscribe_bars.assert_not_called()
+    assert data_client._feed_pending_bars == set()
 
 
 # ===========================================================================
@@ -1223,36 +1313,34 @@ async def test_tc_d70_unsubscribe_quote_ticks_calls_unsubscribe_ticks(
 
 @pytest.mark.asyncio
 @pytest.mark.data_tester
-async def test_tc_d70_unsubscribe_bars_historical_path(
-    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+async def test_tc_d70_unsubscribe_bars_feed_path(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness, monkeypatch,
 ):
-    """
-    TC-D70: _unsubscribe_bars() calls MT5Client.unsubscribe_historical_bars()
-    for non-5s bar types.
-    """
+    """TC-D70: _unsubscribe_bars() with feed.enabled sends unsubscribe_bars on gateway."""
     msgbus, cache, clock = nautilus_components
     loop = asyncio.get_running_loop()
 
     data_client = MT5LiveDataClientFactory.create(
-        loop=loop, name="MT5", config=_data_config("USTEC"),
+        loop=loop, name="MT5", config=_feed_data_config("USTEC"),
         msgbus=msgbus, cache=cache, clock=clock,
+    )
+
+    async def _noop_feed_start(self):
+        return None
+
+    monkeypatch.setattr(
+        data_client.__class__, "_start_feed_gateway", _noop_feed_start,
     )
     await data_client._connect()
 
-    hist_unsub_calls: list = []
-    realtime_unsub_calls: list = []
-
-    async def _spy_hist(bar_type):
-        hist_unsub_calls.append(bar_type)
-
-    async def _spy_rt(bar_type):
-        realtime_unsub_calls.append(bar_type)
-
-    data_client._client.unsubscribe_historical_bars = _spy_hist
-    data_client._client.unsubscribe_realtime_bars = _spy_rt
+    mock_gateway = MagicMock()
+    mock_gateway.unsubscribe_bars = AsyncMock()
+    data_client._feed_gateway = mock_gateway
+    data_client._feed_pending_bars.add(("USTEC", "M1"))
+    data_client._feed_bar_types[("USTEC", "M1")] = _BAR_TYPE
 
     cmd = UnsubscribeBars(
-        bar_type=_BAR_TYPE,   # 1-minute — not 5s
+        bar_type=_BAR_TYPE,
         client_id=data_client.id,
         venue=None,
         command_id=UUID4(),
@@ -1260,24 +1348,16 @@ async def test_tc_d70_unsubscribe_bars_historical_path(
     )
     await data_client._unsubscribe_bars(cmd)
 
-    assert len(hist_unsub_calls) == 1, (
-        "TC-D70: unsubscribe_historical_bars not called for 1-minute bar"
-    )
-    assert hist_unsub_calls[0] == _BAR_TYPE
-    assert len(realtime_unsub_calls) == 0, (
-        "TC-D70: unsubscribe_realtime_bars must NOT be called for 1-minute bar"
-    )
+    mock_gateway.unsubscribe_bars.assert_awaited_once_with(["USTEC"], "M1")
+    assert ("USTEC", "M1") not in data_client._feed_pending_bars
 
 
 @pytest.mark.asyncio
 @pytest.mark.data_tester
-async def test_tc_d70_unsubscribe_bars_realtime_path(
-    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+async def test_tc_d70_unsubscribe_5s_bars_without_feed_no_legacy(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness,
 ):
-    """
-    TC-D70: _unsubscribe_bars() calls MT5Client.unsubscribe_realtime_bars()
-    for 5s bar types.
-    """
+    """TC-D70 (5s): feed disabled → no legacy IB unsubscribe."""
     from nautilus_trader.model.data import BarSpecification, BarType
     from nautilus_trader.model.enums import AggregationSource, BarAggregation, PriceType
 
@@ -1317,13 +1397,8 @@ async def test_tc_d70_unsubscribe_bars_realtime_path(
     )
     await data_client._unsubscribe_bars(cmd)
 
-    assert len(realtime_unsub_calls) == 1, (
-        "TC-D70: unsubscribe_realtime_bars should be called for 5s bar type"
-    )
-    assert realtime_unsub_calls[0] == _5S_BAR_TYPE
-    assert len(hist_unsub_calls) == 0, (
-        "TC-D70: unsubscribe_historical_bars must NOT be called for 5s bar type"
-    )
+    assert hist_unsub_calls == []
+    assert realtime_unsub_calls == []
 
 
 # ---------------------------------------------------------------------------

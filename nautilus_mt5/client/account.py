@@ -135,7 +135,9 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
             async def _fetch():
                 import rpyc
                 try:
-                    res = await asyncio.to_thread(self._mt5_client['mt5'].positions_get, group=f"*{account_id}*")
+                    res = await asyncio.to_thread(
+                        self._mt5_client["mt5"].positions_get,
+                    )
                     if res is None:
                         return []
                     # obtain local copy to avoid Netrefs
@@ -168,6 +170,9 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
         for pos in all_positions:
             if isinstance(pos, dict):
                 # Raw dict from EXTERNAL_RPYC direct bridge call — convert to MT5Position.
+                pos_login = pos.get("login")
+                if pos_login is not None and str(pos_login) != str(account_id):
+                    continue
                 symbol_str = pos.get("symbol", "")
                 if not symbol_str:
                     continue

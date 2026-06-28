@@ -9,6 +9,7 @@ from nautilus_mt5 import TICKMILL_DEMO_PROFILE
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
+    FeedGatewayConfig,
     MetaTrader5DataClientConfig,
     MetaTrader5ExecClientConfig,
     MetaTrader5InstrumentProviderConfig,
@@ -25,10 +26,26 @@ def instrument_id(symbol: str) -> InstrumentId:
     return InstrumentId(Symbol(symbol), _VENUE)
 
 
-def build_trading_node(cfg: HomologationConfig, trader_id: str = "HOMOLOG-001") -> TradingNode:
+def build_trading_node(
+    cfg: HomologationConfig,
+    trader_id: str = "HOMOLOG-001",
+    *,
+    symbols: list[str] | None = None,
+) -> TradingNode:
     external_rpyc = ExternalRPyCTerminalConfig(host=cfg.host, port=cfg.port, keep_alive=True)
+    symbol_list = symbols if symbols is not None else [cfg.symbol]
     instrument_provider = MetaTrader5InstrumentProviderConfig(
-        load_symbols=frozenset([MT5Symbol(symbol=cfg.symbol, broker=cfg.broker)]),
+        load_symbols=frozenset(
+            MT5Symbol(symbol=sym, broker=cfg.broker) for sym in symbol_list
+        ),
+    )
+
+    feed_config = FeedGatewayConfig(
+        enabled=cfg.feed_enabled,
+        host=cfg.feed_host,
+        port=cfg.feed_port,
+        path=cfg.feed_path,
+        hello_timeout_secs=cfg.feed_hello_timeout_secs,
     )
 
     config_node = TradingNodeConfig(
@@ -41,6 +58,7 @@ def build_trading_node(cfg: HomologationConfig, trader_id: str = "HOMOLOG-001") 
                 external_rpyc=external_rpyc,
                 instrument_provider=instrument_provider,
                 venue_profile=TICKMILL_DEMO_PROFILE,
+                feed=feed_config,
             ),
         },
         exec_clients={

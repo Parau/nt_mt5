@@ -295,8 +295,9 @@ JSON por mensagem WebSocket (text frame). Sem JSON-RPC pesado (1 cliente MQL5).
 
 | `op` | Campos | Descrição |
 |------|--------|-----------|
-| `hello` | `session`, `terminal`?, `account`?, `symbols[]` | Handshake após connect (`terminal`/`account` opcionais) |
+| `hello` | `session`, `terminal`?, `account`?, `symbols[]`, `bars[]`? | Handshake após connect (`bars` = `["SYMBOL:M1", …]`) |
 | `ticks` | `symbol`, `cursor`, `data[]` | Batch de ticks; `cursor` = `time_msc` do último tick do batch |
+| `bar` | `symbol`, `timeframe`, `time`, OHLC, volumes, `spread` | Última barra **fechada** (sem revisões da barra em formação) |
 | `heartbeat` | `ts_msc` | Keep-alive |
 | `pong` | — | Resposta a `ping` (opcional) |
 | `error` | `code`, `message` | Erro reportado pelo Service |
@@ -319,15 +320,19 @@ JSON por mensagem WebSocket (text frame). Sem JSON-RPC pesado (1 cliente MQL5).
 | `op` | Campos | Descrição |
 |------|--------|-----------|
 | `subscribe` | `symbols[]` | Activar CopyTicks para símbolos |
-| `unsubscribe` | `symbols[]` | Parar export |
+| `unsubscribe` | `symbols[]` | Parar export de ticks |
+| `subscribe_bars` | `symbols[]`, `timeframe` | Activar CopyRates poll (barra fechada) — ex. `M1`, `M5`, `H1`, `D1` |
+| `unsubscribe_bars` | `symbols[]`, `timeframe` | Parar export de barras |
 | `ping` | — | Resposta `pong` (opcional) |
 
 ### 9.3 Exemplos
 
 ```json
-{"op":"hello","session":"svc-1","symbols":["BTCUSD"]}
+{"op":"hello","session":"svc-1","symbols":["BTCUSD"],"bars":["BTCUSD:M1"]}
 {"op":"ticks","symbol":"BTCUSD","cursor":1730000000456,"data":[{"time_msc":1730000000123,"bid":95000.1,"ask":95000.3,"last":0,"volume":0,"flags":6}]}
+{"op":"bar","symbol":"BTCUSD","timeframe":"M1","time":1730000000,"open":95000.0,"high":95010.0,"low":94990.0,"close":95005.0,"tick_volume":42,"real_volume":0,"spread":1}
 {"op":"subscribe","symbols":["BTCUSD","EURUSD"]}
+{"op":"subscribe_bars","symbols":["BTCUSD"],"timeframe":"M1"}
 ```
 
 ### 9.4 Regras de robustez
@@ -365,6 +370,8 @@ Ordem inspirada em BitMEX `_connect`:
 |----------|-------|
 | `_subscribe_quote_ticks` | `feed_gateway.subscribe(symbol)` → WS `subscribe` |
 | `_unsubscribe_quote_ticks` | `feed_gateway.unsubscribe(symbol)` → WS `unsubscribe` |
+| `_subscribe_bars` | `feed_gateway.subscribe_bars(symbol, timeframe)` → WS `subscribe_bars` (requer `feed.enabled`) |
+| `_unsubscribe_bars` | `feed_gateway.unsubscribe_bars(symbol, timeframe)` → WS `unsubscribe_bars` |
 | `_request_quote_ticks` / `_request_bars` | RPyC on-demand (`copy_ticks_*`, `copy_rates_*`) — **não** poll |
 
 ### 10.4 `_handle_feed_msg`
@@ -372,6 +379,7 @@ Ordem inspirada em BitMEX `_connect`:
 Ponto único de entrada (estilo `BitmexDataClient._handle_msg`):
 
 - `ticks` → parse → dedup `time_msc` → `QuoteTick` → `_handle_data`.
+- `bar` → parse → dedup `time` (closed bar) → `Bar` → `_handle_data`.
 - `hello` / `heartbeat` → estado interno gateway.
 - `error` → log warning; não crash operacional.
 

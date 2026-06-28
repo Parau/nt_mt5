@@ -253,6 +253,8 @@ class MT5LiveDataClientFactory(LiveDataClientFactory):
             clock=clock,
             config=config,
         )
+        if config.feed.enabled:
+            client.live_quote_feed_enabled = True
 
         # Get instrument provider singleton
         provider = get_cached_mt5_instrument_provider(

@@ -23,6 +23,7 @@ from nautilus_mt5.client.market_data import MetaTrader5ClientMarketDataMixin
 from nautilus_mt5.client.order import MetaTrader5ClientOrderMixin
 from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.client.types import TerminalConnectionState
+from nautilus_mt5.client.tick_poll import is_quote_tick_subscription
 from nautilus_mt5.common import Requests, Subscriptions
 
 
@@ -113,6 +114,7 @@ class MetaTrader5Client(Component,
 
         # MarketDataMixin
         self._bar_type_to_last_bar = {}
+        self._live_quote_feed_enabled: bool = False
 
         # OrderMixin
         self._exec_id_details: dict[
@@ -124,6 +126,19 @@ class MetaTrader5Client(Component,
 
         # Start client
         self._request_id_seq: int = 10000
+
+    @property
+    def live_quote_feed_enabled(self) -> bool:
+        return self._live_quote_feed_enabled
+
+    @live_quote_feed_enabled.setter
+    def live_quote_feed_enabled(self, enabled: bool) -> None:
+        self._live_quote_feed_enabled = bool(enabled)
+
+    def _should_poll_quote_ticks(self, tick_type: str) -> bool:
+        if self._live_quote_feed_enabled and is_quote_tick_subscription(tick_type):
+            return False
+        return True
 
     def _start(self) -> None:
         """
@@ -440,21 +455,27 @@ class MetaTrader5Client(Component,
             The asyncio Task that has been completed.
 
         """
-        if task.exception():
+        if task.cancelled():
+            self._log.debug(f"Task `{task.get_name()}` was cancelled.")
+            return
+
+        exc = task.exception()
+        if exc is not None:
             self._log.error(
-                f"Error on `{task.get_name()}`: {task.exception()!r}",
+                f"Error on `{task.get_name()}`: {exc!r}",
             )
-        else:
-            if actions:
-                try:
-                    actions()
-                except Exception as e:
-                    self._log.error(
-                        f"Failed triggering action {actions.__name__} on `{task.get_name()}`: "
-                        f"{e!r}",
-                    )
-            if success:
-                self._log.info(success, LogColor.GREEN)
+            return
+
+        if actions:
+            try:
+                actions()
+            except Exception as e:
+                self._log.error(
+                    f"Failed triggering action {actions.__name__} on `{task.get_name()}`: "
+                    f"{e!r}",
+                )
+        if success:
+            self._log.info(success, LogColor.GREEN)
 
     def subscribe_event(self, name: str, handler: Callable) -> None:
         """
@@ -564,7 +585,10 @@ class MetaTrader5Client(Component,
                 for req_id in sub_keys:
                     sub = self._subscriptions.get(req_id)
                     if sub and isinstance(sub.name, tuple) and len(sub.name) > 1:
-                        name1 = sub.name[1].lower()
+                        tick_type = sub.name[1]
+                        if not self._should_poll_quote_ticks(tick_type):
+                            continue
+                        name1 = tick_type.lower()
                         if "tick" in name1 or "bid" in name1 or "ask" in name1:
                             # symbol is at index 1 in the partial args (index 0 is req_id)
                             symbol = sub.handle.args[1]

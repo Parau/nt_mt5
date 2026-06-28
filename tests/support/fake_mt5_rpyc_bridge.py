@@ -246,6 +246,20 @@ class FakeMT5RPyCRoot:
             }
         ] * count
 
+    def exposed_copy_rates_range(
+        self,
+        symbol: str,
+        timeframe: int,
+        date_from: Any,
+        date_to: Any,
+    ) -> List[Dict[str, Any]]:
+        self._record_call(
+            "copy_rates_range",
+            (symbol, timeframe, date_from, date_to),
+            {},
+        )
+        return self.exposed_copy_rates_from_pos(symbol, timeframe, 0, 10)
+
     def exposed_copy_ticks_range(self, symbol: str, date_from: Any, date_to: Any, flags: int) -> List[Dict[str, Any]]:
         self._record_call("copy_ticks_range", (symbol, date_from, date_to, flags), {})
         if symbol == "USTEC":

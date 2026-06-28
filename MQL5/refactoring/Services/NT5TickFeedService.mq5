@@ -5,8 +5,8 @@
 //+------------------------------------------------------------------+
 #property service
 #property copyright "nt_mt5"
-#property version   "1.02"
-#property description "NT5 live tick feed via CopyTicks and WebSocket (MVP)"
+#property version   "1.04"
+#property description "NT5 live tick + bar feed via CopyTicks/CopyRates and WebSocket"
 
 #include <WebSocket/client.mqh>
 #include <NT5FeedWire.mqh>
@@ -15,6 +15,8 @@ input string InpWsUrl        = "ws://host.docker.internal:8765/mt5-feed";
 input int    InpSleepMs      = 10;
 input int    InpBatchSize    = 100;
 input string InpSymbols      = "";
+input string InpBarSpecs     = "";
+input int    InpBarPollMs    = 300;
 input int    InpHeartbeatSec = 30;
 input bool   InpDebug        = true;
 
@@ -38,10 +40,21 @@ public:
    void              onMessage(IWebSocketMessage *msg) override;
   };
 
+struct NT5BarState
+  {
+   string           symbol;
+   ENUM_TIMEFRAMES  period;
+   string           timeframe;
+   datetime         last_closed_time;
+   bool             active;
+  };
+
 CNT5FeedWebSocket *g_ws = NULL;
 NT5SymbolState     g_symbols[];
+NT5BarState        g_bars[];
 string             g_session = "";
 ulong              g_last_heartbeat_tick = 0;
+ulong              g_last_bar_poll_tick = 0;
 
 //+------------------------------------------------------------------+
 int NT5FindSymbolIndex(const string symbol)
@@ -123,6 +136,116 @@ void NT5DeactivateSymbol(const string symbol, bool &changed)
   }
 
 //+------------------------------------------------------------------+
+void NT5ListActiveBarSpecs(string &out[])
+  {
+   ArrayResize(out, 0);
+   for(int i = 0; i < ArraySize(g_bars); i++)
+     {
+      if(!g_bars[i].active)
+         continue;
+
+      const int m = ArraySize(out);
+      ArrayResize(out, m + 1);
+      out[m] = NT5BarSpecToJson(g_bars[i].symbol, g_bars[i].timeframe);
+     }
+  }
+
+//+------------------------------------------------------------------+
+int NT5FindBarIndex(const string symbol, const ENUM_TIMEFRAMES period)
+  {
+   for(int i = 0; i < ArraySize(g_bars); i++)
+     {
+      if(g_bars[i].symbol == symbol && g_bars[i].period == period)
+         return i;
+     }
+   return -1;
+  }
+
+//+------------------------------------------------------------------+
+void NT5ActivateBar(const string symbol, const ENUM_TIMEFRAMES period, bool &changed)
+  {
+   changed = false;
+   if(!NT5EnsureSymbolSelected(symbol))
+      return;
+
+   const string tf = NT5TimeframeToString(period);
+   int idx = NT5FindBarIndex(symbol, period);
+   if(idx < 0)
+     {
+      idx = ArraySize(g_bars);
+      ArrayResize(g_bars, idx + 1);
+      g_bars[idx].symbol = symbol;
+      g_bars[idx].period = period;
+      g_bars[idx].timeframe = tf;
+      g_bars[idx].last_closed_time = 0;
+      g_bars[idx].active = true;
+      changed = true;
+      PrintFormat("[NT5Feed] subscribed bars %s:%s", symbol, tf);
+      return;
+     }
+
+   if(!g_bars[idx].active)
+     {
+      g_bars[idx].last_closed_time = 0;
+      g_bars[idx].active = true;
+      changed = true;
+      PrintFormat("[NT5Feed] re-subscribed bars %s:%s", symbol, tf);
+     }
+  }
+
+//+------------------------------------------------------------------+
+void NT5DeactivateBar(const string symbol, const ENUM_TIMEFRAMES period, bool &changed)
+  {
+   changed = false;
+   const int idx = NT5FindBarIndex(symbol, period);
+   if(idx < 0 || !g_bars[idx].active)
+      return;
+
+   g_bars[idx].active = false;
+   changed = true;
+   PrintFormat("[NT5Feed] unsubscribed bars %s:%s", symbol, g_bars[idx].timeframe);
+  }
+
+//+------------------------------------------------------------------+
+void NT5HandleSubscribeBars(const string json, bool subscribe)
+  {
+   string symbols[];
+   if(!NT5ExtractJsonStringArray(json, "symbols", symbols))
+      return;
+
+   string tf_raw = "";
+   if(!NT5ExtractJsonStringField(json, "timeframe", tf_raw))
+     {
+      if(g_ws != NULL && g_ws.isConnected())
+         g_ws.send(NT5BuildErrorJson("missing_timeframe", "subscribe_bars requires timeframe"));
+      return;
+     }
+
+   ENUM_TIMEFRAMES period;
+   if(!NT5TimeframeFromString(tf_raw, period))
+     {
+      if(g_ws != NULL && g_ws.isConnected())
+         g_ws.send(NT5BuildErrorJson("invalid_timeframe", tf_raw));
+      return;
+     }
+
+   bool changed = false;
+   for(int i = 0; i < ArraySize(symbols); i++)
+     {
+      bool one = false;
+      if(subscribe)
+         NT5ActivateBar(symbols[i], period, one);
+      else
+         NT5DeactivateBar(symbols[i], period, one);
+      if(one)
+         changed = true;
+     }
+
+   if(changed)
+      NT5SendHello();
+  }
+
+//+------------------------------------------------------------------+
 void NT5SendHello()
   {
    if(g_ws == NULL || !g_ws.isConnected())
@@ -130,7 +253,9 @@ void NT5SendHello()
 
    string active[];
    NT5ListActiveSymbols(active);
-   const string hello = NT5BuildHelloJson(g_session, active);
+   string bar_specs[];
+   NT5ListActiveBarSpecs(bar_specs);
+   const string hello = NT5BuildHelloJson(g_session, active, bar_specs);
    if(!g_ws.send(hello))
      {
       PrintFormat("[NT5Feed] failed to send hello err=%d", GetLastError());
@@ -183,6 +308,18 @@ void NT5HandleWireMessage(const string json)
          if(changed)
             NT5SendHello();
         }
+      return;
+     }
+
+   if(op == "subscribe_bars")
+     {
+      NT5HandleSubscribeBars(json, true);
+      return;
+     }
+
+   if(op == "unsubscribe_bars")
+     {
+      NT5HandleSubscribeBars(json, false);
       return;
      }
 
@@ -320,6 +457,110 @@ void NT5ExportAllTicks()
   }
 
 //+------------------------------------------------------------------+
+void NT5PollBar(const int idx)
+  {
+   if(!g_bars[idx].active)
+      return;
+
+   if(!NT5EnsureSymbolSelected(g_bars[idx].symbol))
+      return;
+
+   MqlRates rates[];
+   ResetLastError();
+   // start_pos=1, count=1 → rates[0] is the last closed bar (0 = forming bar).
+   const int copied = CopyRates(
+      g_bars[idx].symbol,
+      g_bars[idx].period,
+      1,
+      1,
+      rates
+   );
+
+   if(copied < 0)
+     {
+      PrintFormat(
+         "[NT5Feed] CopyRates failed for %s:%s err=%d",
+         g_bars[idx].symbol,
+         g_bars[idx].timeframe,
+         GetLastError()
+      );
+      return;
+     }
+
+   if(copied == 0)
+      return;
+
+   const datetime bar_time = rates[0].time;
+   if(bar_time <= 0)
+      return;
+
+   if(g_bars[idx].last_closed_time == bar_time)
+      return;
+
+   const string payload = NT5BuildBarJson(
+      g_bars[idx].symbol,
+      g_bars[idx].timeframe,
+      rates[0]
+   );
+
+   if(g_ws == NULL || !g_ws.isConnected() || !g_ws.send(payload))
+     {
+      PrintFormat(
+         "[NT5Feed] failed to send bar for %s:%s err=%d",
+         g_bars[idx].symbol,
+         g_bars[idx].timeframe,
+         GetLastError()
+      );
+      return;
+     }
+
+   g_bars[idx].last_closed_time = bar_time;
+
+   if(InpDebug)
+      PrintFormat(
+         "[NT5Feed] sent bar %s:%s time=%I64d close=%.8f",
+         g_bars[idx].symbol,
+         g_bars[idx].timeframe,
+         (long)bar_time,
+         rates[0].close
+      );
+  }
+
+//+------------------------------------------------------------------+
+void NT5PollAllBars()
+  {
+   const ulong now = GetTickCount64();
+   if(InpBarPollMs > 0 && now - g_last_bar_poll_tick < (ulong)InpBarPollMs)
+      return;
+
+   g_last_bar_poll_tick = now;
+
+   for(int i = 0; i < ArraySize(g_bars); i++)
+      NT5PollBar(i);
+  }
+
+//+------------------------------------------------------------------+
+void NT5ActivateInitialBarSpecs()
+  {
+   string specs[];
+   NT5SplitCsvBarSpecs(InpBarSpecs, specs);
+   for(int i = 0; i < ArraySize(specs); i++)
+     {
+      string symbol = "";
+      string timeframe = "";
+      if(!NT5ParseBarSpecJson(specs[i], symbol, timeframe))
+         continue;
+
+      ENUM_TIMEFRAMES period;
+      if(!NT5TimeframeFromString(timeframe, period))
+         continue;
+
+      bool changed = false;
+      NT5ActivateBar(symbol, period, changed);
+     }
+  }
+
+//+------------------------------------------------------------------+
 void NT5MaybeSendHeartbeat()
   {
    const ulong now = GetTickCount64();
@@ -366,10 +607,30 @@ void CNT5FeedWebSocket::onConnected()
   }
 
 //+------------------------------------------------------------------+
+void NT5ClearActiveBarSubscriptions()
+  {
+   for(int i = 0; i < ArraySize(g_bars); i++)
+     {
+      if(!g_bars[i].active)
+         continue;
+
+      g_bars[i].active = false;
+      if(InpDebug)
+         PrintFormat(
+            "[NT5Feed] WS disconnect: cleared bar sub %s:%s",
+            g_bars[i].symbol,
+            g_bars[i].timeframe
+         );
+     }
+  }
+
+//+------------------------------------------------------------------+
 void CNT5FeedWebSocket::onDisconnect()
   {
    if(InpDebug)
       Print(" > Disconnected ", InpWsUrl);
+
+   NT5ClearActiveBarSubscriptions();
   }
 
 //+------------------------------------------------------------------+
@@ -396,6 +657,8 @@ void OnStart()
       NT5ActivateSymbol(initial[i], changed);
      }
 
+   NT5ActivateInitialBarSpecs();
+
    PrintFormat("[NT5Feed] starting session=%s url=%s", g_session, InpWsUrl);
 
    for(; !IsStopped(); )
@@ -408,6 +671,7 @@ void OnStart()
 
       g_ws.checkMessages(false);
       NT5ExportAllTicks();
+      NT5PollAllBars();
       NT5MaybeSendHeartbeat();
       Sleep(InpSleepMs);
      }
