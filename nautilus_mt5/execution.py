@@ -343,9 +343,15 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         self, mt5_order: MT5Order
     ) -> OrderStatusReport:
         self._log.debug(f"Trying OrderStatusReport for {mt5_order.__dict__}")
-        instrument = await self.instrument_provider.find_with_symbol_id(
-            mt5_order.symbol,
-        )
+        from nautilus_mt5.data_types import MT5Symbol as _MT5Sym
+
+        sym_name = str(getattr(mt5_order, "symbol", "") or "")
+        inst_id = mt5_symbol_to_instrument_id_simplified_symbology(_MT5Sym(symbol=sym_name))
+        instrument = self._cache.instrument(inst_id)
+        if instrument is None:
+            instrument = await self.instrument_provider.find(inst_id)
+        if instrument is None:
+            raise ValueError(f"Instrument not found for MT5 symbol {sym_name!r}")
 
         total_qty = (
             Quantity.from_int(0)
@@ -401,7 +407,9 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             ts_accepted=ts_init,
             ts_last=ts_init,
             ts_init=ts_init,
-            client_order_id=ClientOrderId(mt5_order.orderRef),
+            client_order_id=ClientOrderId(
+                mt5_order.orderRef if getattr(mt5_order, "orderRef", "") else str(mt5_order.order_id),
+            ),
             # order_list_id=,
             # contingency_type=,
             expire_time=expire_time,
@@ -774,7 +782,9 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             mt5_order.price = 0.0
 
         mt5_order.type_filling = map_filling_type(order.time_in_force)
-        mt5_order.type_time = 0 # ORDER_TIME_GTC default
+        from nautilus_mt5.parsing.execution import MAP_TIME_IN_FORCE, ORDER_TIME_GTC
+
+        mt5_order.type_time = MAP_TIME_IN_FORCE.get(order.time_in_force, ORDER_TIME_GTC)
         mt5_order.magic = 0
         mt5_order.comment = "NautilusOrder"
 
@@ -924,12 +934,16 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
             mt5_order, "price", None
         ):
             mt5_order.price = command.price.as_double()
-        if command.trigger_price and command.trigger_price.as_double() != getattr(
-            mt5_order,
-            "trigger_price",
-            None,
-        ):
-            mt5_order.trigger_price = command.trigger_price.as_double()
+        if command.trigger_price:
+            new_trigger = command.trigger_price.as_double()
+            if nautilus_order.order_type == OrderType.STOP_MARKET:
+                if new_trigger != getattr(mt5_order, "price", None):
+                    mt5_order.price = new_trigger
+            elif nautilus_order.order_type == OrderType.STOP_LIMIT:
+                if new_trigger != getattr(mt5_order, "price", None):
+                    mt5_order.price = new_trigger
+            elif new_trigger != getattr(mt5_order, "trigger_price", None):
+                mt5_order.trigger_price = new_trigger
         self._log.info(f"Modifying {mt5_order!r}")
         self._client.modify_order(mt5_order)
 

@@ -60,14 +60,19 @@ from homologation.scenarios.trading_node_suite import run_trading_node_suite
 from homologation.scenarios.stop_orders import run_stop_orders
 from homologation.scenarios.data_tester_suite import run_bar_subscribe, run_unsubscribe_on_stop
 from homologation.scenarios.exec_tester_suite import (
+    run_cancel_rejection,
     run_hedging_positions,
+    run_limit_fok_day_scenarios,
     run_limit_gtc_cancel,
     run_limit_ioc_scenarios,
+    run_modify_stop_trigger,
     run_modify_volume,
 )
 from homologation.scenarios.feed_resilience import run_feed_service_restart_dedup
 from homologation.scenarios.mt5_edges import (
     run_cancel_close_on_stop,
+    run_fill_reports_after_fill,
+    run_open_on_start_reconcile,
     run_real_retcodes,
     run_reconcile_mass_status,
 )
@@ -124,15 +129,25 @@ async def main() -> int:
     reset_mt5_client_cache()
     await run_limit_gtc_cancel(cfg, report)
     reset_mt5_client_cache()
+    await run_cancel_rejection(cfg, report)
+    reset_mt5_client_cache()
     await run_limit_ioc_scenarios(cfg, report)
     reset_mt5_client_cache()
     await run_modify_volume(cfg, report)
+    reset_mt5_client_cache()
+    await run_limit_fok_day_scenarios(cfg, report)
+    reset_mt5_client_cache()
+    await run_modify_stop_trigger(cfg, report)
     reset_mt5_client_cache()
     await run_hedging_positions(cfg, report)
     reset_mt5_client_cache()
     await run_cancel_close_on_stop(cfg, report)
     reset_mt5_client_cache()
     await run_reconcile_mass_status(cfg, report)
+    reset_mt5_client_cache()
+    await run_fill_reports_after_fill(cfg, report)
+    reset_mt5_client_cache()
+    await run_open_on_start_reconcile(cfg, report)
     reset_mt5_client_cache()
     await run_real_retcodes(cfg, report)
     reset_mt5_client_cache()

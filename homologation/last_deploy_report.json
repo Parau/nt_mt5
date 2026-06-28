@@ -1,0 +1,56 @@
+{
+  "started_at": "2026-06-28T03:08:14.051344+00:00",
+  "summary": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=60103.0 ask=60113.0",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 60103.0,
+        "ask": 60113.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-E03",
+      "name": "Limit GTC + cancel",
+      "status": "PASS",
+      "detail": "BUY LIMIT @57097.85 venue=264630701 cancelled (retry retcode=10013)",
+      "metadata": {
+        "venue_order_id": "264630701",
+        "retry_retcode": 10013
+      }
+    },
+    {
+      "case_id": "TC-HOM-D03",
+      "name": "Live bar subscribe M1",
+      "status": "PASS",
+      "detail": "Received 1 M1 bar(s) (transport=ws_feed)",
+      "metadata": {
+        "bars": 1
+      }
+    },
+    {
+      "case_id": "TC-HOM-D06",
+      "name": "WS feed stop/start + cursor dedup",
+      "status": "PASS",
+      "detail": "baseline=5 after_gateway=1 post=9 unique_ts=15 dup=0",
+      "metadata": {
+        "baseline_ticks": 5,
+        "post_phase_ticks": 9,
+        "unique_ts": 15,
+        "gateway_restart": true,
+        "service_restart": false
+      }
+    }
+  ]
+}

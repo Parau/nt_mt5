@@ -9,7 +9,7 @@ import rpyc
 from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock, MessageBus
 from nautilus_trader.core.uuid import UUID4
-from nautilus_trader.execution.messages import SubmitOrder
+from nautilus_trader.execution.messages import GenerateFillReports, GenerateOrderStatusReports, GeneratePositionStatusReports, SubmitOrder
 from nautilus_trader.model.enums import OrderSide, TimeInForce, TriggerType
 from nautilus_trader.model.events import OrderAccepted, OrderSubmitted
 from nautilus_trader.model.identifiers import (
@@ -38,7 +38,13 @@ from nautilus_mt5.metatrader5.MetaTrader5 import MetaTrader5
 
 from homologation.config import HomologationConfig
 from homologation.report import HomologationReport, ScenarioStatus
-from homologation.support.bridge_probe import rpyc_cancel_order, rpyc_positions_count
+from homologation.support.bridge_probe import (
+    rpyc_cancel_all_pending,
+    rpyc_cancel_order,
+    rpyc_order_ticket,
+    rpyc_pending_orders,
+    rpyc_positions_count,
+)
 from homologation.support.clients import reset_mt5_client_cache
 
 logger = logging.getLogger(__name__)
@@ -392,6 +398,290 @@ async def run_reconcile_mass_status(cfg: HomologationConfig, report: Homologatio
             await data_client._disconnect()
         except Exception:
             pass
+
+
+async def run_fill_reports_after_fill(cfg: HomologationConfig, report: HomologationReport) -> None:
+    """TC-HOM-E05b: market fill then generate_fill_reports (history_deals_get)."""
+    import datetime as _dt
+    import os
+
+    case_id = "TC-HOM-E05b"
+    name = "Fill reports after market fill (history_deals_get)"
+
+    if not cfg.enable_execution:
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.SKIP,
+            "Set MT5_ENABLE_LIVE_EXECUTION=1 to run execution scenarios",
+        )
+        return
+
+    poll_secs = float(os.environ.get("HOMOLOG_FILL_REPORT_POLL_SECS", "30"))
+    poll_interval = float(os.environ.get("HOMOLOG_FILL_REPORT_POLL_INTERVAL_SECS", "2"))
+    lookback_mins = int(os.environ.get("HOMOLOG_FILL_REPORT_LOOKBACK_MINS", "60"))
+
+    reset_mt5_client_cache()
+    inst_id = InstrumentId(Symbol(cfg.symbol), _VENUE)
+    pos_before = rpyc_positions_count(cfg.host, cfg.port, cfg.symbol)
+    data_client, exec_client, msgbus, cache, clock = _exec_stack(
+        cfg, 7, cancel_on_stop=False, close_on_stop=False,
+    )
+
+    try:
+        await data_client._connect()
+        await exec_client._connect()
+
+        market = MarketOrder(
+            trader_id=msgbus.trader_id,
+            strategy_id=StrategyId("HOMOLOG-E05b"),
+            instrument_id=inst_id,
+            client_order_id=ClientOrderId("HOM-E05b-BUY"),
+            order_side=OrderSide.BUY,
+            quantity=Quantity.from_str("0.01"),
+            time_in_force=TimeInForce.IOC,
+            init_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+        )
+        result, err = await _submit_and_accept(exec_client, cache, msgbus, clock, market)
+        if err:
+            report.add(case_id, name, ScenarioStatus.FAIL, f"market buy: {err}")
+            return
+        if result != "FILLED":
+            report.add(case_id, name, ScenarioStatus.FAIL, f"market buy not filled: {result}")
+            return
+
+        now = _dt.datetime.now(_dt.timezone.utc)
+        start = now - _dt.timedelta(minutes=lookback_mins)
+        fill_cmd = GenerateFillReports(
+            instrument_id=inst_id,
+            venue_order_id=None,
+            start=start,
+            end=now,
+            command_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+        )
+
+        reports: list = []
+        elapsed = 0.0
+        while elapsed <= poll_secs:
+            reports = await exec_client.generate_fill_reports(fill_cmd)
+            symbol_reports = [r for r in reports if r.instrument_id == inst_id]
+            if symbol_reports:
+                reports = symbol_reports
+                break
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+            now = _dt.datetime.now(_dt.timezone.utc)
+            fill_cmd = GenerateFillReports(
+                instrument_id=inst_id,
+                venue_order_id=None,
+                start=start,
+                end=now,
+                command_id=UUID4(),
+                ts_init=clock.timestamp_ns(),
+            )
+
+        ok = len(reports) >= 1
+        detail_parts = [f"fill_reports={len(reports)} after poll={elapsed:.0f}s"]
+        if reports:
+            r0 = reports[0]
+            detail_parts.append(
+                f"sample trade_id={r0.trade_id} side={r0.order_side} "
+                f"qty={float(r0.last_qty):.2f} px={float(r0.last_px):.2f}"
+            )
+        else:
+            detail_parts.append(
+                f"no FillReport for {cfg.symbol} within {poll_secs}s "
+                "(Tickmill may delay history_deals_get)"
+            )
+
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.PASS if ok else ScenarioStatus.FAIL,
+            "; ".join(detail_parts),
+            fill_reports=len(reports),
+            poll_secs=elapsed,
+            lookback_mins=lookback_mins,
+        )
+    except Exception as exc:
+        report.add(case_id, name, ScenarioStatus.FAIL, str(exc))
+    finally:
+        try:
+            await asyncio.to_thread(_close_symbol_positions, cfg.host, cfg.port, cfg.symbol)
+            pos_after = rpyc_positions_count(cfg.host, cfg.port, cfg.symbol)
+            if pos_after > pos_before:
+                logger.warning(
+                    "E05b cleanup: positions %s→%s for %s",
+                    pos_before,
+                    pos_after,
+                    cfg.symbol,
+                )
+        except Exception:
+            pass
+        try:
+            await exec_client._disconnect()
+            await data_client._disconnect()
+        except Exception:
+            pass
+
+
+async def run_open_on_start_reconcile(cfg: HomologationConfig, report: HomologationReport) -> None:
+    """TC-HOM-E81: fresh connect sees pre-existing MT5 positions and pending orders."""
+    case_id = "TC-HOM-E81"
+    name = "Open-on-start reconcile (positions + pending orders)"
+
+    if not cfg.enable_execution:
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.SKIP,
+            "Set MT5_ENABLE_LIVE_EXECUTION=1 to run execution scenarios",
+        )
+        return
+
+    reset_mt5_client_cache()
+    inst_id = InstrumentId(Symbol(cfg.symbol), _VENUE)
+    sub_results: list[tuple[str, bool, str]] = []
+    venue_pending: str | None = None
+
+    await asyncio.to_thread(_close_symbol_positions, cfg.host, cfg.port, cfg.symbol)
+    await asyncio.to_thread(rpyc_cancel_all_pending, cfg.host, cfg.port, cfg.symbol)
+
+    # Seed state with first client session.
+    data_a, exec_a, msgbus_a, cache_a, clock_a = _exec_stack(
+        cfg, 81, cancel_on_stop=False, close_on_stop=False,
+    )
+    try:
+        await data_a._connect()
+        await exec_a._connect()
+
+        market = MarketOrder(
+            trader_id=msgbus_a.trader_id,
+            strategy_id=StrategyId("HOMOLOG-E81a"),
+            instrument_id=inst_id,
+            client_order_id=ClientOrderId("HOM-E81-BUY"),
+            order_side=OrderSide.BUY,
+            quantity=Quantity.from_str("0.01"),
+            time_in_force=TimeInForce.IOC,
+            init_id=UUID4(),
+            ts_init=clock_a.timestamp_ns(),
+        )
+        _vid, err = await _submit_and_accept(exec_a, cache_a, msgbus_a, clock_a, market)
+        if err or _vid != "FILLED":
+            sub_results.append(("E81a-seed", False, f"market buy seed: {err or _vid}"))
+        else:
+            bid, _ = _get_prices(cfg.host, cfg.port, cfg.symbol)
+            limit_px = round(bid * 0.94, 2)
+            pending = LimitOrder(
+                trader_id=msgbus_a.trader_id,
+                strategy_id=StrategyId("HOMOLOG-E81b"),
+                instrument_id=inst_id,
+                client_order_id=ClientOrderId("HOM-E81-LIM"),
+                order_side=OrderSide.BUY,
+                quantity=Quantity.from_str("0.01"),
+                price=Price.from_str(f"{limit_px:.2f}"),
+                time_in_force=TimeInForce.GTC,
+                init_id=UUID4(),
+                ts_init=clock_a.timestamp_ns(),
+            )
+            venue_pending, pend_err = await _submit_and_accept(
+                exec_a, cache_a, msgbus_a, clock_a, pending,
+            )
+            if pend_err:
+                sub_results.append(("E81b-seed", False, f"limit seed: {pend_err}"))
+            elif venue_pending:
+                _apply_accepted(pending, cache_a, exec_a.account_id, venue_pending, clock_a)
+    finally:
+        try:
+            await exec_a._disconnect()
+            await data_a._disconnect()
+        except Exception:
+            pass
+
+    bridge_positions = rpyc_positions_count(cfg.host, cfg.port, cfg.symbol)
+    bridge_pending = await asyncio.to_thread(
+        rpyc_pending_orders, cfg.host, cfg.port, cfg.symbol,
+    )
+    bridge_pending_count = len(bridge_pending or [])
+
+    reset_mt5_client_cache()
+    data_b, exec_b, _msgbus_b, _cache_b, clock_b = _exec_stack(
+        cfg, 82, cancel_on_stop=False, close_on_stop=False,
+    )
+    try:
+        await data_b._connect()
+        await exec_b._connect()
+
+        pos_cmd = GeneratePositionStatusReports(
+            instrument_id=inst_id,
+            start=None,
+            end=None,
+            command_id=UUID4(),
+            ts_init=clock_b.timestamp_ns(),
+        )
+        pos_reports = await exec_b.generate_position_status_reports(pos_cmd)
+        pos_ok = len(pos_reports) >= bridge_positions and bridge_positions >= 1
+        sub_results.append((
+            "E81a",
+            pos_ok,
+            f"position_reports={len(pos_reports)} bridge_positions={bridge_positions}",
+        ))
+
+        order_cmd = GenerateOrderStatusReports(
+            instrument_id=inst_id,
+            start=None,
+            end=None,
+            open_only=True,
+            command_id=UUID4(),
+            ts_init=clock_b.timestamp_ns(),
+        )
+        order_reports = await exec_b.generate_order_status_reports(order_cmd)
+        from nautilus_trader.model.enums import OrderStatus, OrderType
+
+        pending_reports = [
+            r for r in order_reports
+            if r.order_status in (OrderStatus.ACCEPTED, OrderStatus.SUBMITTED)
+            and r.order_type in (OrderType.LIMIT, OrderType.STOP_MARKET, OrderType.STOP_LIMIT)
+        ]
+        pending_tickets = {
+            str(rpyc_order_ticket(po))
+            for po in (bridge_pending or [])
+            if rpyc_order_ticket(po) is not None
+        }
+        report_tickets = {
+            r.venue_order_id.value for r in pending_reports if r.venue_order_id
+        }
+        overlap = pending_tickets & report_tickets
+        order_ok = bridge_pending_count == 0 or len(overlap) >= 1
+        sub_results.append((
+            "E81b",
+            order_ok,
+            f"pending_reports={len(pending_reports)} bridge_pending={bridge_pending_count} "
+            f"overlap={len(overlap)}",
+        ))
+    except Exception as exc:
+        sub_results.append(("E81", False, str(exc)))
+    finally:
+        if venue_pending:
+            await asyncio.to_thread(rpyc_cancel_order, cfg.host, cfg.port, int(venue_pending))
+        await asyncio.to_thread(_close_symbol_positions, cfg.host, cfg.port, cfg.symbol)
+        try:
+            await exec_b._disconnect()
+            await data_b._disconnect()
+        except Exception:
+            pass
+
+    ok = all(r[1] for r in sub_results)
+    detail = "; ".join(f"{sid}={'OK' if ok_ else 'FAIL'}: {msg}" for sid, ok_, msg in sub_results)
+    report.add(
+        case_id,
+        name,
+        ScenarioStatus.PASS if ok else ScenarioStatus.FAIL,
+        detail,
+        sub_results=sub_results,
+    )
 
 
 async def run_real_retcodes(cfg: HomologationConfig, report: HomologationReport) -> None:

@@ -590,7 +590,7 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         start: pd.Timestamp | None = None,
         end: pd.Timestamp | None = None,
     ) -> list[QuoteTick | TradeTick]:
-        if not start:
+        if not start and not limit:
             limit = self._cache.tick_capacity
 
         if not end:
@@ -599,11 +599,13 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         ticks: list[QuoteTick | TradeTick] = []
         while (start and end > start) or (len(ticks) < limit > 0):
             await self._client.wait_until_ready()
+            remaining = max(limit - len(ticks), 1)
             ticks_part = await self._client.get_historical_ticks(
                 symbol,
                 tick_type,
                 end_date_time=end,
                 use_rth=self._use_regular_trading_hours,
+                number_of_ticks=min(remaining, 1000),
             )
             if not ticks_part:
                 break

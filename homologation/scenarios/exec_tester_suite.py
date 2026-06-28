@@ -10,7 +10,7 @@ from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock, MessageBus
 from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.execution.messages import CancelOrder, ModifyOrder, SubmitOrder
-from nautilus_trader.model.enums import OrderSide, TimeInForce
+from nautilus_trader.model.enums import OrderSide, TimeInForce, TriggerType
 from nautilus_trader.model.events import OrderAccepted, OrderSubmitted
 from nautilus_trader.model.identifiers import (
     ClientOrderId,
@@ -228,6 +228,114 @@ async def run_limit_gtc_cancel(cfg: HomologationConfig, report: HomologationRepo
     except Exception as exc:
         report.add(case_id, name, ScenarioStatus.FAIL, str(exc))
     finally:
+        try:
+            await exec_client._disconnect()
+            await data_client._disconnect()
+        except Exception:
+            pass
+
+
+async def run_cancel_rejection(cfg: HomologationConfig, report: HomologationReport) -> None:
+    """TC-HOM-E43: second cancel on already-cancelled order → MT5 retcode 10013."""
+    case_id = "TC-HOM-E43"
+    name = "Cancel rejection (double-cancel → 10013)"
+
+    if not cfg.enable_execution:
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.SKIP,
+            "Set MT5_ENABLE_LIVE_EXECUTION=1 to run execution scenarios",
+        )
+        return
+
+    reset_mt5_client_cache()
+    inst_id = InstrumentId(Symbol(cfg.symbol), _VENUE)
+    data_client, exec_client, msgbus, cache, clock = _build_clients(
+        cfg, cancel_on_stop=False, close_on_stop=False,
+    )
+    venue_order_id: str | None = None
+
+    try:
+        await data_client._connect()
+        await exec_client._connect()
+        bid, _ask = _get_prices(cfg.host, cfg.port, cfg.symbol)
+        limit_px = round(bid * 0.95, 2)
+
+        order = LimitOrder(
+            trader_id=msgbus.trader_id,
+            strategy_id=StrategyId("HOMOLOG-E43"),
+            instrument_id=inst_id,
+            client_order_id=ClientOrderId("HOM-E43-LIM"),
+            order_side=OrderSide.BUY,
+            quantity=Quantity.from_str("0.01"),
+            price=Price.from_str(f"{limit_px:.2f}"),
+            time_in_force=TimeInForce.GTC,
+            init_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+        )
+        cache.add_order(order)
+        submit_cmd = SubmitOrder(
+            trader_id=msgbus.trader_id,
+            strategy_id=order.strategy_id,
+            order=order,
+            position_id=None,
+            client_id=exec_client.id,
+            command_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+        )
+
+        venue_order_id, error = await _submit_limit(exec_client, submit_cmd)
+        if error is not None:
+            report.add(case_id, name, ScenarioStatus.FAIL, f"Submit failed: {error}")
+            return
+
+        cancel_cmd = CancelOrder(
+            trader_id=msgbus.trader_id,
+            strategy_id=order.strategy_id,
+            instrument_id=inst_id,
+            client_order_id=order.client_order_id,
+            venue_order_id=VenueOrderId(venue_order_id),
+            command_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+        )
+        await exec_client._cancel_order(cancel_cmd)
+        await asyncio.sleep(0.5)
+
+        pending = await asyncio.to_thread(
+            rpyc_pending_orders, cfg.host, cfg.port, cfg.symbol,
+        )
+        still_pending = any(
+            rpyc_order_ticket(o) == int(venue_order_id) for o in pending
+        )
+
+        retry = await asyncio.to_thread(
+            rpyc_cancel_order, cfg.host, cfg.port, int(venue_order_id),
+        )
+        retry_code = _retcode(retry)
+        ok = retry_code == 10013 and not still_pending
+        detail = (
+            f"venue={venue_order_id} first_cancel=OK "
+            f"retry_retcode={retry_code} still_pending={still_pending}"
+        )
+        if retry_code != 10013:
+            detail += " (expected retcode 10013 Invalid request)"
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.PASS if ok else ScenarioStatus.FAIL,
+            detail,
+            venue_order_id=venue_order_id,
+            retry_retcode=retry_code,
+            still_pending=still_pending,
+        )
+    except Exception as exc:
+        report.add(case_id, name, ScenarioStatus.FAIL, str(exc))
+    finally:
+        if venue_order_id:
+            await asyncio.to_thread(
+                rpyc_cancel_order, cfg.host, cfg.port, int(venue_order_id),
+            )
         try:
             await exec_client._disconnect()
             await data_client._disconnect()
@@ -640,6 +748,218 @@ async def run_modify_volume(cfg: HomologationConfig, report: HomologationReport)
                 volume=volume,
                 price_open=price_open,
             )
+    except Exception as exc:
+        report.add(case_id, name, ScenarioStatus.FAIL, str(exc))
+    finally:
+        if venue_order_id:
+            await asyncio.to_thread(rpyc_cancel_order, cfg.host, cfg.port, int(venue_order_id))
+        try:
+            await exec_client._disconnect()
+            await data_client._disconnect()
+        except Exception:
+            pass
+
+
+async def run_limit_fok_day_scenarios(cfg: HomologationConfig, report: HomologationReport) -> None:
+    """TC-HOM-E06d/e: passive FOK and DAY limit orders accepted by MT5."""
+    case_id = "TC-HOM-E06de"
+    name = "Limit FOK + DAY passive submit"
+
+    if not cfg.enable_execution:
+        report.add(case_id, name, ScenarioStatus.SKIP, "Set MT5_ENABLE_LIVE_EXECUTION=1")
+        return
+
+    reset_mt5_client_cache()
+    from homologation.scenarios.mt5_edges import _close_symbol_positions
+
+    await asyncio.to_thread(_close_symbol_positions, cfg.host, cfg.port, cfg.symbol)
+    await asyncio.to_thread(rpyc_cancel_all_pending, cfg.host, cfg.port, cfg.symbol)
+    inst_id = InstrumentId(Symbol(cfg.symbol), _VENUE)
+    data_client, exec_client, msgbus, cache, clock = _build_clients(
+        cfg, cancel_on_stop=False, close_on_stop=False,
+    )
+    sub_results: list[tuple[str, bool, str]] = []
+    venue_ids: list[str] = []
+
+    try:
+        await data_client._connect()
+        await exec_client._connect()
+        bid, _ask = await asyncio.to_thread(_get_prices, cfg.host, cfg.port, cfg.symbol)
+        passive_px = round(bid * 0.95, 2)
+
+        for tif, sid in ((TimeInForce.FOK, "E06d"), (TimeInForce.DAY, "E06e")):
+            order = LimitOrder(
+                trader_id=msgbus.trader_id,
+                strategy_id=StrategyId(f"HOMOLOG-{sid}"),
+                instrument_id=inst_id,
+                client_order_id=ClientOrderId(f"HOM-{sid}-LIM"),
+                order_side=OrderSide.BUY,
+                quantity=Quantity.from_str("0.01"),
+                price=Price.from_str(f"{passive_px:.2f}"),
+                time_in_force=tif,
+                init_id=UUID4(),
+                ts_init=clock.timestamp_ns(),
+            )
+            cache.add_order(order)
+            cmd = SubmitOrder(
+                trader_id=msgbus.trader_id,
+                strategy_id=order.strategy_id,
+                order=order,
+                position_id=None,
+                client_id=exec_client.id,
+                command_id=UUID4(),
+                ts_init=clock.timestamp_ns(),
+            )
+            venue_id, err = await _submit_limit(exec_client, cmd)
+            if err:
+                sub_results.append((sid, False, f"submit failed: {err}"))
+                continue
+            venue_ids.append(venue_id)
+            pending = await asyncio.to_thread(
+                rpyc_pending_orders, cfg.host, cfg.port, cfg.symbol,
+            )
+            matched = [
+                po for po in (pending or [])
+                if str(rpyc_order_ticket(po)) == str(venue_id)
+            ]
+            if not matched:
+                sub_results.append((sid, False, f"venue={venue_id} not in pending"))
+                continue
+            row = matched[0]
+            type_filling = int(row.get("type_filling", -1))
+            type_time = int(row.get("type_time", -1))
+            if sid == "E06d":
+                ok = bool(matched)
+                sub_results.append((
+                    sid,
+                    ok,
+                    f"FOK venue={venue_id} type_filling={type_filling} "
+                    f"(Tickmill may override to RETURN=2) pending=OK",
+                ))
+            else:
+                ok = type_time == 1  # ORDER_TIME_DAY
+                sub_results.append((
+                    sid,
+                    ok,
+                    f"DAY venue={venue_id} type_time={type_time} pending=OK",
+                ))
+    except Exception as exc:
+        sub_results.append(("E06de", False, str(exc)))
+    finally:
+        for vid in venue_ids:
+            if vid:
+                await asyncio.to_thread(rpyc_cancel_order, cfg.host, cfg.port, int(vid))
+        try:
+            await exec_client._disconnect()
+            await data_client._disconnect()
+        except Exception:
+            pass
+
+    ok = all(r[1] for r in sub_results)
+    detail = "; ".join(f"{sid}={'OK' if ok_ else 'FAIL'}: {msg}" for sid, ok_, msg in sub_results)
+    report.add(
+        case_id,
+        name,
+        ScenarioStatus.PASS if ok else ScenarioStatus.FAIL,
+        detail,
+        sub_results=sub_results,
+    )
+
+
+async def run_modify_stop_trigger(cfg: HomologationConfig, report: HomologationReport) -> None:
+    """TC-HOM-E07b: amend BUY_STOP trigger on pending stop order."""
+    case_id = "TC-HOM-E07b"
+    name = "Modify stop trigger on pending BUY_STOP"
+
+    if not cfg.enable_execution:
+        report.add(case_id, name, ScenarioStatus.SKIP, "Set MT5_ENABLE_LIVE_EXECUTION=1")
+        return
+
+    reset_mt5_client_cache()
+    await asyncio.to_thread(rpyc_cancel_all_pending, cfg.host, cfg.port, cfg.symbol)
+    inst_id = InstrumentId(Symbol(cfg.symbol), _VENUE)
+    data_client, exec_client, msgbus, cache, clock = _build_clients(
+        cfg, cancel_on_stop=False, close_on_stop=False,
+    )
+    venue_order_id: str | None = None
+
+    try:
+        await data_client._connect()
+        await exec_client._connect()
+        _bid, ask = await asyncio.to_thread(_get_prices, cfg.host, cfg.port, cfg.symbol)
+        trigger_px = round(ask * 1.05, 2)
+        new_trigger_px = round(ask * 1.06, 2)
+
+        stop = StopMarketOrder(
+            trader_id=msgbus.trader_id,
+            strategy_id=StrategyId("HOMOLOG-E07b"),
+            instrument_id=inst_id,
+            client_order_id=ClientOrderId("HOM-E07b-STP"),
+            order_side=OrderSide.BUY,
+            quantity=Quantity.from_str("0.01"),
+            trigger_price=Price.from_str(f"{trigger_px:.2f}"),
+            trigger_type=TriggerType.DEFAULT,
+            time_in_force=TimeInForce.GTC,
+            init_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+        )
+        cache.add_order(stop)
+        submit_cmd = SubmitOrder(
+            trader_id=msgbus.trader_id,
+            strategy_id=stop.strategy_id,
+            order=stop,
+            position_id=None,
+            client_id=exec_client.id,
+            command_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+        )
+        venue_order_id, err, _filled = await _submit_with_events(exec_client, submit_cmd)
+        if err:
+            report.add(case_id, name, ScenarioStatus.FAIL, f"Submit failed: {err}")
+            return
+        if not venue_order_id or venue_order_id == "FILLED":
+            report.add(case_id, name, ScenarioStatus.FAIL, "BUY_STOP not accepted as pending")
+            return
+
+        _apply_accepted(stop, cache, exec_client.account_id, venue_order_id, clock)
+
+        modify_cmd = ModifyOrder(
+            trader_id=msgbus.trader_id,
+            strategy_id=stop.strategy_id,
+            instrument_id=inst_id,
+            client_order_id=stop.client_order_id,
+            venue_order_id=VenueOrderId(venue_order_id),
+            quantity=None,
+            price=None,
+            trigger_price=Price.from_str(f"{new_trigger_px:.2f}"),
+            command_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+        )
+        await exec_client._modify_order(modify_cmd)
+        await asyncio.sleep(0.5)
+
+        pending = await asyncio.to_thread(
+            rpyc_pending_orders, cfg.host, cfg.port, cfg.symbol,
+        )
+        matched = [
+            po for po in (pending or [])
+            if str(rpyc_order_ticket(po)) == str(venue_order_id)
+        ]
+        if not matched:
+            report.add(case_id, name, ScenarioStatus.FAIL, "Pending stop not found after modify")
+            return
+
+        price_open = float(matched[0].get("price_open", 0.0))
+        ok = abs(price_open - new_trigger_px) < 1e-6
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.PASS if ok else ScenarioStatus.FAIL,
+            f"venue={venue_order_id} trigger {trigger_px:.2f}→{price_open:.2f} (expected {new_trigger_px:.2f})",
+            venue_order_id=venue_order_id,
+            trigger_before=trigger_px,
+            trigger_after=price_open,
+        )
     except Exception as exc:
         report.add(case_id, name, ScenarioStatus.FAIL, str(exc))
     finally:

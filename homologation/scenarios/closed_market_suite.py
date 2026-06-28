@@ -16,6 +16,7 @@ from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.data.messages import (
     RequestBars,
     RequestInstrument,
+    RequestQuoteTicks,
     RequestTradeTicks,
     SubscribeInstruments,
     SubscribeOrderBook,
@@ -506,6 +507,67 @@ async def run_request_bars_e2e(cfg: HomologationConfig, report: HomologationRepo
         reset_mt5_client_cache()
 
 
+async def run_request_quote_ticks_e2e(cfg: HomologationConfig, report: HomologationReport) -> None:
+    """TC-HOM-D21: RequestQuoteTicks via DataClient._request_quote_ticks → QuoteTick."""
+    case_id = "TC-HOM-D21"
+    name = "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)"
+
+    data_client = None
+    delivered: list = []
+
+    def _capture_quotes(instrument_id, ticks, correlation_id):
+        delivered.extend(ticks)
+
+    try:
+        data_client, _, cache, clock = await _make_data_client(cfg)
+        await data_client._connect()
+
+        iid = _instrument_id(cfg.symbol)
+        if cache.instrument(iid) is None:
+            report.add(case_id, name, ScenarioStatus.FAIL, "Instrument not in cache after connect")
+            return
+
+        data_client._handle_quote_ticks = _capture_quotes
+
+        req = RequestQuoteTicks(
+            instrument_id=iid,
+            start=None,
+            end=None,
+            limit=50,
+            client_id=data_client.id,
+            venue=_VENUE,
+            callback=None,
+            request_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+            params=None,
+        )
+        await data_client._request_quote_ticks(req)
+
+        if len(delivered) == 0:
+            report.add(case_id, name, ScenarioStatus.FAIL, "No QuoteTick objects from _request_quote_ticks")
+            return
+
+        sample = delivered[-1]
+        bid = float(sample.bid_price)
+        ask = float(sample.ask_price)
+        ok = bid > 0 and ask > 0
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.PASS if ok else ScenarioStatus.FAIL,
+            f"Received {len(delivered)} QuoteTick(s) sample bid={bid} ask={ask}",
+            ticks=len(delivered),
+            bid=bid,
+            ask=ask,
+        )
+    except Exception as exc:
+        report.add(case_id, name, ScenarioStatus.FAIL, str(exc))
+    finally:
+        if data_client is not None:
+            await data_client._disconnect()
+        reset_mt5_client_cache()
+
+
 async def run_closed_market_suite(cfg: HomologationConfig, report: HomologationReport) -> None:
     """Run all closed-market homologation scenarios."""
     MT5_CLIENTS.clear()
@@ -516,6 +578,7 @@ async def run_closed_market_suite(cfg: HomologationConfig, report: HomologationR
     await run_historical_bars_rpyc(cfg, report)
     await run_request_bars_e2e(cfg, report)
     await run_historical_quote_ticks(cfg, report)
+    await run_request_quote_ticks_e2e(cfg, report)
     await run_instrument_load(cfg, report)
     await run_unsupported_gates(cfg, report)
     await run_trade_tick_request_rejected(cfg, report)

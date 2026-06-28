@@ -13,6 +13,13 @@ Run full suite (needs open market + WS for D02): `homologation/run_homologation.
 | **Wave 3 (E10)** | 2026-06-28 02:0x | `homologation/run_e10_smoke.py` (console) | **2/2 PASS** — E10, E10b (after production fixes) |
 | **Wave 3 (full)** | 2026-06-28 02:13 | `homologation/last_wave3_report.json` | **3/4 PASS** — E10, E10b OK · **D07 FAIL** (USTEC WS=0) |
 | **D06-SVC** | 2026-06-28 02:43 | `homologation/last_d06_svc_report.json` | **2/2 PASS** — baseline=53 dup=0 service_restart=manual |
+| **Deploy smoke** | 2026-06-28 03:09 | `homologation/last_deploy_report.json` | **4/4 PASS** — E03, D03, D06 gateway |
+| **D06-SVC (re-run)** | 2026-06-28 03:11 | `homologation/last_d06_svc_report.json` | **2/2 PASS** — dup=0 service_restart=manual |
+| **D07 (re-run)** | 2026-06-28 03:13 | `homologation/last_d07_report.json` | **FAIL** — BTCUSD=229 USTEC=0 WS ticks |
+| **v1.04 bar disconnect** | 2026-06-28 03:31 | MT5 journal (manual) | **PASS** — `WS disconnect: cleared bar sub BTCUSD:M1` after `taskkill` on gateway PID |
+| **E05b fill reports** | 2026-06-28 | `homologation/last_e05b_report.json` | **PASS** — fill_reports=16 after market BUY (poll=0s) |
+| **E43 cancel rejection** | 2026-06-28 | `homologation/last_e43_report.json` | **PASS** — retry_retcode=10013, still_pending=False |
+| **Wave 4** | 2026-06-28 | `homologation/last_wave4_report.json` | **4/4 PASS** — E06de, E07b, E81, D21 |
 
 Previous baseline: closed **10/10** and open **9/10 effective** on 2026-06-27 (pre-D04b; see journal notes below).
 
@@ -72,9 +79,11 @@ Verified against harness JSON (account 25339175). Exec order IDs from this run b
 | TC-HOM-D05 | Unsubscribe on stop (quotes/bars) | **DONE** | Quotes + bars via WS when `MT5_FEED_ENABLED=1` |
 | TC-HOM-E01 | Market BUY → SELL round-trip | **DONE** | BUY 0.01@60111.50 → SELL @60099.50 |
 | TC-HOM-E02 | Stop pending + cleanup cancel | **DONE** | BUY STOP #264627035; SELL STOP #264627036 |
-| TC-HOM-E03 | Limit GTC + cancel | **DONE** | BUY LIMIT @57109.72 #264627039; retry retcode=10013 (already gone) |
+| TC-HOM-E03 | Limit GTC + cancel | **DONE** | BUY LIMIT #264627039; retry retcode=10013 (already gone) |
+| TC-HOM-E43 | Cancel rejection (double-cancel) | **DONE** | venue=264631442 retry_retcode=10013 still_pending=False (2026-06-28) |
 | TC-HOM-E04 | `cancel_on_stop` / `close_on_stop` | **DONE** | E04a limit #264627040 cancelled on stop; E04b position closed |
 | TC-HOM-E05 | `generate_mass_status` vs bridge | **DONE** | positions=0; `positions_get(BTCUSD)=0` |
+| TC-HOM-E05b | Fill reports after market fill | **DONE** | 16 FillReports, poll=0s (2026-06-28) |
 | TC-HOM-E06 | IOC fill vs passive limit | **DONE** | MARKET IOC (E06a) + LIMIT IOC mapping/cancel @ask (E06c) + passive (E06b) — Tickmill instant fill via MARKET only |
 | TC-HOM-E07 | Modify pending volume | **DONE** | `TRADE_ACTION_MODIFY` + `exposed_orders_get`; Tickmill needs price nudge with volume |
 | TC-HOM-E08 | Hedging same-side legs | **DONE** | Two BUY 0.01 → `positions_get` ≥ 2 (2026-06-28) |
@@ -125,11 +134,44 @@ Harness: `homologation/scenarios/position_reconcile_suite.py`, runners `run_e10_
 
 ## OPEN — next homologation waves
 
-| Priority | ID | Scenario | When |
-|----------|-----|----------|------|
-| Média | TC-HOM-D07 | Re-run multi-symbol WS | US session + USTEC live ticks; empty `InpSymbols` OK (adapter subscribes) |
+| Priority | ID | Scenario | Matrix gap | Status |
+|----------|-----|----------|------------|--------|
+| **1** | TC-HOM-E05b | Fill reports after market fill (`history_deals_get`) | Exec fill reports Partial | **DONE** (2026-06-28) |
+| 2 | TC-HOM-E43 | Cancel rejection (double-cancel → 10013) | Exec cancel Partial | **DONE** (2026-06-28) |
+| 3 | TC-HOM-E06d/e | FOK / DAY limit passive submit | Limit TIF Partial | **DONE** (2026-06-28) |
+| 4 | TC-HOM-E07b | Modify stop trigger (BUY_STOP) | Order modify Partial | **DONE** (2026-06-28) |
+| 5 | TC-HOM-E81 | Open-on-start reconcile (positions + pending) | Lifecycle Partial | **DONE** (2026-06-28) |
+| 6 | TC-HOM-D21 | Hist quotes via `_request_quote_ticks` E2E | Historical quotes Partial | **DONE** (2026-06-28) |
+| Média | TC-HOM-D07 | USTEC WS stream = 0 | Multi-symbol Partial | OPEN — mercado US |
 
-**Done (2026-06-28):** D06-SVC, E06c SELL LIMIT IOC @bid, E07 + bridge v0.7 `exposed_orders_get`, Service v1.04 bar-sub cleanup on WS disconnect.
+**Done (2026-06-28):** deploy smoke, D06-SVC, E06/E07, bridge v0.7, Service v1.04 bar cleanup, **Wave 4** (E05b, E43, E06de, E07b, E81, D21).
+
+**Production fixes during Wave 4:** `get_historical_ticks` → `copy_ticks_from` (D21); `get_open_orders` sync via `orders_get`; `_parse_mt5_order_to_order_status_report` symbol lookup + empty `orderRef`; `MAP_TIME_IN_FORCE` on submit; stop trigger amend in `_modify_order`; `_request_quote_ticks` respects `request.limit`.
+
+---
+
+## Wave 4 — Partial matrix closure (exec/data) — DONE (2026-06-28)
+
+| # | ID | O que valida | Runner | Status |
+|---|-----|--------------|--------|--------|
+| 1 | E05b | Fill reports after market fill | `run_e05b_homologation.py` | **DONE** |
+| 2 | E43 | Double-cancel → 10013 | `run_e43_homologation.py` | **DONE** |
+| 3 | E06de | FOK + DAY passive limit | `run_wave4_homologation.py` | **DONE** |
+| 4 | E07b | BUY_STOP trigger amend | `run_wave4_homologation.py` | **DONE** |
+| 5 | E81 | Fresh connect sees MT5 position + pending | `run_wave4_homologation.py` | **DONE** |
+| 6 | D21 | `RequestQuoteTicks` → QuoteTick E2E | `run_wave4_homologation.py` / closed market | **DONE** |
+
+**Wave 4 runner:**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18812
+set MT5_SYMBOL=BTCUSD
+set MT5_ENABLE_LIVE_EXECUTION=1
+set HOMOLOG_REPORT_JSON=homologation/last_wave4_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_wave4_homologation.py
+```
+
+**E05b env vars:** `HOMOLOG_FILL_REPORT_POLL_SECS` (default 30), `HOMOLOG_FILL_REPORT_POLL_INTERVAL_SECS` (default 2), `HOMOLOG_FILL_REPORT_LOOKBACK_MINS` (default 60).
 
 ---
 
@@ -153,13 +195,17 @@ Per [`res/tickmill_restrictions.md`](tickmill_restrictions.md):
 | `feed_resilience.py` | D06 gateway restart dedup | **DONE** |
 | `multi_symbol.py` | D07 multi-symbol WS | **DONE** |
 | `run_wave2_homologation.py` | D06–D07, E06–E09 only | **DONE** |
-| `exec_tester_suite.py` | E03, E06–E08 | **DONE** |
-| `mt5_edges.py` | E04, E05, E09 | **DONE** |
+| `exec_tester_suite.py` | E03, E06–E08, **E43** | **DONE** |
+| `mt5_edges.py` | E04, E05, E05b, E09 | **DONE** |
 | `position_reconcile_suite.py` | E10, E10b | **DONE** |
 | `run_wave3_homologation.py` | D06-SVC, D07, E10, E10b | **DONE** |
 | `run_e10_smoke.py` | E10 + E10b only | **DONE** |
 | `run_d06_svc_homologation.py` | D06 with manual Service restart | **DONE** |
+| `run_deploy_homologation.py` | E03 + D03 + D06 gateway post-deploy | **DONE** |
 | `run_e06_e07_homologation.py` | E06 (incl. E06c) + E07 low-priority | **DONE** |
+| `run_e05b_homologation.py` | E05b fill reports after market fill | **DONE** |
+| `run_e43_homologation.py` | E43 cancel rejection (10013) | **DONE** |
+| `run_wave4_homologation.py` | E06de + E07b + E81 + D21 | **DONE** |
 
 ---
 
@@ -217,6 +263,26 @@ E:\miniconda\envs\trading\python.exe homologation\run_wave3_homologation.py
 ```cmd
 set MT5_ENABLE_LIVE_EXECUTION=1
 E:\miniconda\envs\trading\python.exe homologation\run_e10_smoke.py
+```
+
+**E05b fill reports (Wave 4 #1):**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18812
+set MT5_SYMBOL=BTCUSD
+set MT5_ENABLE_LIVE_EXECUTION=1
+set HOMOLOG_REPORT_JSON=homologation/last_e05b_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_e05b_homologation.py
+```
+
+**E43 cancel rejection (Wave 4 #2):**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18812
+set MT5_SYMBOL=BTCUSD
+set MT5_ENABLE_LIVE_EXECUTION=1
+set HOMOLOG_REPORT_JSON=homologation/last_e43_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_e43_homologation.py
 ```
 
 **D02 stream only (120s):**

@@ -1,0 +1,74 @@
+{
+  "started_at": "2026-06-28T03:54:01.111513+00:00",
+  "summary": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-E06de",
+      "name": "Limit FOK + DAY passive submit",
+      "status": "PASS",
+      "detail": "E06d=OK: FOK venue=264631862 type_filling=2 (Tickmill may override to RETURN=2) pending=OK; E06e=OK: DAY venue=264631863 type_time=1 pending=OK",
+      "metadata": {
+        "sub_results": [
+          [
+            "E06d",
+            true,
+            "FOK venue=264631862 type_filling=2 (Tickmill may override to RETURN=2) pending=OK"
+          ],
+          [
+            "E06e",
+            true,
+            "DAY venue=264631863 type_time=1 pending=OK"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E07b",
+      "name": "Modify stop trigger on pending BUY_STOP",
+      "status": "PASS",
+      "detail": "venue=264631864 trigger 63089.25\u219263690.10 (expected 63690.10)",
+      "metadata": {
+        "venue_order_id": "264631864",
+        "trigger_before": 63089.25,
+        "trigger_after": 63690.1
+      }
+    },
+    {
+      "case_id": "TC-HOM-E81",
+      "name": "Open-on-start reconcile (positions + pending orders)",
+      "status": "PASS",
+      "detail": "E81a=OK: position_reports=1 bridge_positions=1; E81b=OK: pending_reports=1 bridge_pending=1 overlap=1",
+      "metadata": {
+        "sub_results": [
+          [
+            "E81a",
+            true,
+            "position_reports=1 bridge_positions=1"
+          ],
+          [
+            "E81b",
+            true,
+            "pending_reports=1 bridge_pending=1 overlap=1"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
+      "status": "PASS",
+      "detail": "Received 50 QuoteTick(s) sample bid=59970.5 ask=59980.5",
+      "metadata": {
+        "ticks": 50,
+        "bid": 59970.5,
+        "ask": 59980.5
+      }
+    }
+  ]
+}

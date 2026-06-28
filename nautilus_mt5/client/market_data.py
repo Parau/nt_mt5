@@ -18,7 +18,9 @@ from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.data import TradeTick
+from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.identifiers import TradeId
 
 
 from nautilus_mt5.data_types import MT5Symbol
@@ -404,65 +406,128 @@ class MetaTrader5ClientMarketDataMixin:
         end_date_time: pd.Timestamp | str = "",
         use_rth: bool = True,
         timeout: int = 60,
+        number_of_ticks: int = 1000,
     ) -> list[QuoteTick | TradeTick] | None:
         """
         Request and retrieve historical tick data for a specified symbol and tick
-        type.
-
-        Parameters
-        ----------
-        symbol : MT5Symbol
-            The MetaTrader 5 symbol details for the instrument.
-        tick_type : str
-            The type of tick data to request (e.g., 'BID_ASK', 'TRADES').
-        start_date_time : pd.Timestamp | str, optional
-            The start time for the historical data request. Can be a pandas Timestamp
-            or a string formatted as 'YYYYMMDD HH:MM:SS [TZ]'.
-        end_date_time : pd.Timestamp | str, optional
-            The end time for the historical data request. Same format as start_date_time.
-        use_rth : bool, optional
-            Whether to use regular trading hours (RTH) only for the data.
-        timeout : int, optional
-            The maximum time in seconds to wait for the historical data response.
-
-        Returns
-        -------
-        list[QuoteTick | TradeTick] | ``None``
-
+        type via MT5-native ``copy_ticks_from``.
         """
-        if isinstance(start_date_time, pd.Timestamp):
-            start_date_time = start_date_time.strftime("%Y%m%d %H:%M:%S %Z")
-        if isinstance(end_date_time, pd.Timestamp):
-            end_date_time = end_date_time.strftime("%Y%m%d %H:%M:%S %Z")
+        import time as _time
 
-        name = (str(mt5_symbol_to_instrument_id(symbol)), tick_type)
-        if not (request := self._requests.get(name=name)):
-            req_id = self._next_req_id()
-            request = self._requests.add(
-                req_id=req_id,
-                name=name,
-                handle=functools.partial(
-                    self._mt5_client['mt5'].req_historical_ticks,
-                    req_id=req_id,
-                    symbol=symbol,
-                    start_date_time=start_date_time,
-                    end_date_time=end_date_time,
-                    number_of_ticks=1000,
-                    what_to_show=tick_type,
-                    use_rth=use_rth,
-                    ignore_size=False,
-                ),
-                cancel=functools.partial(
-                    self._mt5_client['mt5'].cancel_historical_data, req_id=req_id
-                ),
-            )
-            if not request:
-                return None
-            request.handle()
-            return await self._await_request(request, timeout)
+        mt5 = self._mt5_client["mt5"]
+        symbol_str = symbol.symbol
+
+        if isinstance(end_date_time, pd.Timestamp):
+            end_ts = int(end_date_time.timestamp())
+        elif isinstance(end_date_time, str) and end_date_time.strip():
+            end_ts = int(pd.Timestamp(end_date_time).timestamp())
         else:
-            self._log.info(f"Request already exist for {request}")
-            return None
+            end_ts = int(_time.time())
+
+        if isinstance(start_date_time, pd.Timestamp):
+            from_ts = int(start_date_time.timestamp())
+        elif isinstance(start_date_time, str) and start_date_time.strip():
+            from_ts = int(pd.Timestamp(start_date_time).timestamp())
+        else:
+            from_ts = end_ts - 86_400
+
+        flags = getattr(mt5, "COPY_TICKS_ALL", 0)
+        try:
+            raw = await asyncio.to_thread(
+                mt5.copy_ticks_from,
+                symbol_str,
+                from_ts,
+                number_of_ticks,
+                flags,
+            )
+        except Exception as exc:
+            self._log.warning(f"copy_ticks_from failed for {symbol_str}: {exc}")
+            return []
+
+        if raw is None or len(raw) == 0:
+            return []
+
+        try:
+            import rpyc
+            rows = rpyc.classic.obtain(list(raw))
+        except Exception:
+            rows = list(raw)
+
+        instrument_id = mt5_symbol_to_instrument_id(symbol)
+        instrument = self._cache.instrument(instrument_id)
+        if instrument is None:
+            self._log.warning(
+                f"Instrument {instrument_id} not in cache for historical ticks",
+            )
+            return []
+
+        ticks_out: list[QuoteTick | TradeTick] = []
+        for row in rows:
+            bid = ask = last = 0.0
+            time_sec = 0
+            time_msc = None
+            try:
+                if hasattr(row, "dtype"):
+                    bid = float(row["bid"])
+                    ask = float(row["ask"])
+                    last = float(row["last"])
+                    time_sec = int(row["time"])
+                    time_msc = row["time_msc"] if "time_msc" in row.dtype.names else None
+                elif isinstance(row, dict):
+                    bid = float(row.get("bid", 0) or 0)
+                    ask = float(row.get("ask", 0) or 0)
+                    last = float(row.get("last", 0) or 0)
+                    time_sec = int(row.get("time", 0) or 0)
+                    time_msc = row.get("time_msc")
+                elif isinstance(row, (tuple, list)) and len(row) >= 3:
+                    time_sec = int(row[0])
+                    bid = float(row[1])
+                    ask = float(row[2])
+                    last = float(row[3]) if len(row) > 3 else 0.0
+                    time_msc = row[5] if len(row) > 5 else None
+                else:
+                    bid = float(getattr(row, "bid", 0) or 0)
+                    ask = float(getattr(row, "ask", 0) or 0)
+                    last = float(getattr(row, "last", 0) or 0)
+                    time_sec = int(getattr(row, "time", 0) or 0)
+                    time_msc = getattr(row, "time_msc", None)
+            except (TypeError, KeyError, IndexError, ValueError):
+                continue
+
+            if time_msc:
+                ts_event = int(time_msc) * 1_000_000
+            elif time_sec:
+                ts_event = int(pd.Timestamp.fromtimestamp(time_sec, tz=pytz.utc).value)
+            else:
+                continue
+
+            if tick_type in ("TRADES", "AllLast"):
+                if last <= 0:
+                    continue
+                ticks_out.append(TradeTick(
+                    instrument_id=instrument_id,
+                    price=instrument.make_price(last),
+                    size=instrument.make_qty(0),
+                    aggressor_side=OrderSide.NO_ORDER_SIDE,
+                    trade_id=TradeId(str(time_sec)),
+                    ts_event=ts_event,
+                    ts_init=max(self._clock.timestamp_ns(), ts_event),
+                ))
+            else:
+                if bid <= 0 or ask <= 0:
+                    continue
+                ticks_out.append(QuoteTick(
+                    instrument_id=instrument_id,
+                    bid_price=instrument.make_price(bid),
+                    ask_price=instrument.make_price(ask),
+                    bid_size=instrument.make_qty(0),
+                    ask_size=instrument.make_qty(0),
+                    ts_event=ts_event,
+                    ts_init=max(self._clock.timestamp_ns(), ts_event),
+                ))
+
+        ticks_out.sort(key=lambda t: t.ts_init)
+        return ticks_out
 
     #
     # misc.

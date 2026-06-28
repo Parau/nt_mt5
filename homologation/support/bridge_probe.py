@@ -78,14 +78,23 @@ def _normalize_order_row(order) -> dict:
         ticket = order.get("ticket")
         volume = float(order.get("volume_current") or order.get("volume") or 0.0)
         price_open = float(order.get("price_open") or order.get("price") or 0.0)
+        order_type = int(order.get("type", -1) or -1)
+        type_time = int(order.get("type_time", -1) or -1)
+        type_filling = int(order.get("type_filling", -1) or -1)
     else:
         ticket = getattr(order, "ticket", None)
         volume = float(getattr(order, "volume_current", None) or getattr(order, "volume", 0) or 0.0)
         price_open = float(getattr(order, "price_open", None) or getattr(order, "price", 0) or 0.0)
+        order_type = int(getattr(order, "type", -1) or -1)
+        type_time = int(getattr(order, "type_time", -1) or -1)
+        type_filling = int(getattr(order, "type_filling", -1) or -1)
     return {
         "ticket": int(ticket) if ticket is not None else None,
         "volume": volume,
         "price_open": price_open,
+        "type": order_type,
+        "type_time": type_time,
+        "type_filling": type_filling,
     }
 
 
