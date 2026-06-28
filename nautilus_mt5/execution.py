@@ -267,7 +267,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
                     "deviation": 20,
                     "magic": 234000,
                     "comment": "close on stop",
-                    "type_filling": 2,  # ORDER_FILLING_RETURN
+                    "type_filling": 1,  # ORDER_FILLING_IOC (Tickmill crypto/CFD symbols)
                 }
                 try:
                     await asyncio.to_thread(order_send_fn, req)

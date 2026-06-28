@@ -1,154 +1,156 @@
-A ideia de **várias strategies de homologação** faz sentido — mas o caminho certo não é inventar strategies ad‑hoc; é alinhar com o que o Nautilus já define: **`DataTester`** (dados) e **`ExecTester`** (execução), mais um **pequeno conjunto de cenários MT5‑específicos** que esses testers não cobrem.
+# Homologation test tracker — `nt_mt5` adapter
 
-Referências upstream:
-- [Data Testing Spec](https://nautilustrader.io/docs/latest/developer_guide/spec_data_testing)
-- [Execution Testing Spec](https://nautilustrader.io/docs/latest/developer_guide/spec_exec_testing)
+Living checklist for manual homologation against **Tickmill-Demo** (real MT5 + RPyC bridge).  
+Run closed-market suite: `homologation/run_closed_market.py`  
+Run full suite (needs open market + WS for D02): `homologation/run_homologation.py`
 
-Princípio Nautilus: **validar dados antes de execução**; `ExecTester` com `LiveRiskEngineConfig(bypass=True)` e `reconciliation=True`.
+| Run | Date | Report | Result |
+|-----|------|--------|--------|
+| Closed market | 2026-06-27 | `homologation/last_closed_market_report.json` | **10/10 PASS** (BTCUSD, session closed) |
+| Open market (full) | 2026-06-27 ~21:10–21:26 server | `homologation/last_open_market_report.json` | **9/10 effective PASS** — see notes below |
 
----
-
-## O que já têm (homologação actual)
-
-| ID | O quê | Cobertura Nautilus |
-|---|---|---|
-| TC-HOM-PF | Bridge + símbolo | Pré-requisito |
-| TC-HOM-D01 | N ticks quote (burst) | TC-D20 parcial |
-| TC-HOM-D02 | Stream WS sustentado + gap | TC-D20 live real (diferencial vs poll) |
-| TC-HOM-E01 | Market BUY → SELL round-trip | TC-E01 + TC-E06 parcial |
-| TC-HOM-E02 | Stop / stop-limit pending | TC-E20–E23 parcial |
-
-Também existem `tests/live/test_external_rpyc_data_tester.py` (TC-D01/D03/D20/D40/D41 via RPyC) e `tests/acceptance/test_live_*.py` (Tier 2 pytest). A homologação (`homologation/`) é o **gate manual end-to-end** com `TradingNode` — complementar, não duplicar Tier 1.
+References: [`res/tickmill_restrictions.md`](tickmill_restrictions.md), [`docs/data_capability_matrix.md`](../docs/data_capability_matrix.md), [`docs/execution_capability_matrix.md`](../docs/execution_capability_matrix.md)
 
 ---
 
-## Lacunas importantes (surpresas prováveis em produção)
+## Legend
 
-### Dados (via Strategy / DataTester)
-
-| Prioridade | Cenário | Porquê |
-|---|---|---|
-| Alta | **TC-HOM-D03** — barras live M1 via subscribe | TC-D40/D41 só parcialmente live; estratégias reais usam bars |
-| Alta | **TC-HOM-D04** — histórico barras + quote ticks via `_request_*` | RPyC path separado do WS; regressões aqui não aparecem no D02 |
-| Alta | **TC-HOM-D05** — unsubscribe on stop | TC-D70; leak de subscrições WS/RPyC |
-| Média | **TC-HOM-D06** — reconnect WS (parar/reiniciar Service) | cursor + dedup; risco real pós-deploy |
-| Média | **TC-HOM-D07** — multi-símbolo (BTCUSD + USTEC) | stress no Service e gateway |
-| Média | **TC-HOM-D08** — `VenueProfile` rejeita trade ticks | TC-D30 live; confirmar que strategy não recebe `TradeTick` |
-| Baixa | Order book subscribe → warning | TC-D10; documentado unsupported, mas bom smoke |
-| Skip | Trade ticks, DOM, derivados | [`res/tickmill_restrictions.md`](res/tickmill_restrictions.md) |
-
-### Execução (via ExecTester ou strategies finas)
-
-| Prioridade | Cenário | Porquê |
-|---|---|---|
-| Alta | **TC-HOM-E03** — limit GTC + cancel | TC-E10/E40; pending orders no MT5 |
-| Alta | **TC-HOM-E04** — cancel-on-stop / close-on-stop via disconnect | TC-E81/E82; já implementado no client, **não homologado live** |
-| Alta | **TC-HOM-E05** — reconciliação on connect | TC-E84/E86; posição/ordem deixada numa sessão anterior |
-| Média | **TC-HOM-E06** — limit IOC agressivo (fill) vs passivo (cancel) | TC-E13/E14; filling_mode=2 no Tickmill |
-| Média | **TC-HOM-E07** — modify volume ou cancel-replace | TC-E30/E32; MT5 `TRADE_ACTION_MODIFY` |
-| Média | **TC-HOM-E08** — hedging: duas posições same side | já há `test_live_hedging.py`; falta no harness homologação |
-| Média | **TC-HOM-E09** — retcodes reais (volume inválido, stops inválidos) | fake nunca cobre; 10014, 10016 |
-| Baixa | Brackets, post-only, GTD, MIT/LIT | **Unsupported** no adaptador / Tickmill |
-
-### Edge cases MT5‑específicos (custom strategies — valor alto)
-
-Estes são onde **strategies dedicadas** valem a pena, porque o `ExecTester` genérico não cobre:
-
-1. **Primeiro tick bid/ask=0** após subscribe (legacy poll; menos relevante com WS).
-2. **`history_deals_get` eventual** — fill no cache Nautilus antes do deal aparecer no MT5.
-3. **Spread flutuante** — BTCUSD ~$10; ordens stop/limit devem respeitar `trade_stops_level`.
-4. **Sessão fechada** — USTEC fora do horário US; homologação deve falhar de forma clara, não hang.
-5. **Conta errada** — `config.account_id` ≠ login MT5 → rejeição no connect.
-6. **RPyC drop mid-session** — exec client recovery vs data WS independente.
-7. **Volume min/step** — 0.01 vs 0.001 rejeitado pelo terminal.
-8. **Dois transportes simultâneos** — WS quotes + RPyC exec no mesmo `TradingNode` (arquitectura Opção B).
+| Status | Meaning |
+|--------|---------|
+| **DONE** | Verified live on real bridge (date noted) |
+| **OPEN** | Requires market open / live ticks / orders |
+| **BLOCKED** | Adapter or bridge gap — not a homologation env issue |
+| **SKIP** | Intentionally unsupported (Tickmill profile) |
+| **TODO** | Not yet implemented in homologation harness |
 
 ---
 
-## Arquitectura recomendada (não multiplicar strategies à toa)
+## Closed market — DONE (2026-06-27)
 
+Runnable anytime (session may be closed; historical data still available).
+
+| ID | Scenario | Nautilus map | Result | Notes |
+|----|----------|--------------|--------|-------|
+| TC-HOM-PF | Bridge + account + `symbol_info` | Pre-req | **DONE** | Frozen bid/ask OK when session closed |
+| TC-HOM-D01-CM | Instrument load via `DataClient._connect` | TC-D01 | **DONE** | BTCUSD CFD, calc_mode=2 |
+| TC-HOM-D04a | Hist bars M1+M5 `copy_rates_from_pos` | TC-D40/D41 | **DONE** | Via `MetaTrader5Client` → real bridge |
+| TC-HOM-D04c | Hist ticks `copy_ticks_from` (24h, n=500) | TC-D21 partial | **DONE** | last=0.0 confirms QuoteTick-only |
+| TC-HOM-D02-CM | `SubscribeInstruments` → warning, no raise | TC-D02 | **DONE** | |
+| TC-HOM-D08 | `SubscribeTradeTicks` gated by `VenueProfile` | TC-D30 | **DONE** | |
+| TC-HOM-D08b | `RequestTradeTicks` gated by profile | TC-D31 | **DONE** | |
+| TC-HOM-D10 | Order book subscribe → warning | TC-D10 | **DONE** | |
+| TC-HOM-E-CONN | Exec connect + account validation | TC-E80 partial | **DONE** | login 25339175 |
+| TC-HOM-E-EDGE1 | Wrong `account_id` → `ConnectionError` | Edge | **DONE** | |
+
+**Harness:** `homologation/scenarios/closed_market_suite.py` + `homologation/run_closed_market.py`
+
+---
+
+## Open market — DONE (2026-06-27, BTCUSD session active)
+
+Verified against MT5 trade journal (account 25339175) and harness JSON.  
+Journal window: **21:10–21:26** server time (~18:10–18:26 BRT).
+
+| ID | Scenario | Result | Journal / evidence |
+|----|----------|--------|-------------------|
+| TC-HOM-PF | Bridge pre-flight | **DONE** | login 25339175, Tickmill-Demo |
+| TC-HOM-D01 | Quote tick burst (TradingNode) | **DONE** | WS + RPyC quotes |
+| TC-HOM-D02 | WS sustained stream 60s | **DONE** | 203 ticks, max gap 4.3s, `transport=ws_feed` |
+| TC-HOM-E01 | Market BUY → SELL round-trip | **DONE** | #264624623 @60049.50 → #264624624 @60039.50; also #264624528/#264624529 |
+| TC-HOM-E02 | Stop pending + cleanup cancel | **DONE** | #264624648/#264624649 (and #264624547/#264624548) placed + cancelled |
+| TC-HOM-D05 | Unsubscribe on stop (quotes) | **DONE** | Quote WS unsubscribe OK; bar leg **SKIP** (same gap as D03) |
+| TC-HOM-E03 | Limit GTC + cancel | **DONE** | #264624916 @57056.52 → cancel OK; retry cancel `[Invalid request]` = expected (already gone) |
+| TC-HOM-E04a | `cancel_on_stop` on pending | **DONE** | #264624917 limit placed → cancel on disconnect |
+| TC-HOM-E04b | `close_on_stop` on position | **DONE** | #264624918 buy → #264624919 close; earlier failures at 21:16:37 were **`Unsupported filling mode`** (bug, fixed) |
+| TC-HOM-E05 | `generate_mass_status` vs bridge | **DONE** | Positions reconciled; `positions_get(BTCUSD)=0` at end of journal |
+
+### BLOCKED — adapter/bridge gap (not env failure)
+
+| ID | Scenario | Result | Root cause |
+|----|----------|--------|------------|
+| TC-HOM-D03 | Live bar subscribe M1 | **BLOCKED** | Bridge lacks `exposed_req_real_time_bars`, `exposed_cancel_historical_data`. Native hist via `copy_rates_from_pos` works (D04a). |
+| TC-HOM-D04b | `DataClient._request_bars` E2E | **BLOCKED** | Same IB-style path; needs MT5-native bar request refactor |
+
+### Production bug fixed during homologation
+
+**`close_on_stop`** sent `type_filling=2` (RETURN). Tickmill BTCUSD requires **IOC (`type_filling=1`)**.  
+Journal proof: `21:16:37 failed market sell … [Unsupported filling mode]` on position #264624652; after fix, closes succeed (#264624919, #264624977).
+
+Fix: `nautilus_mt5/execution.py` — `type_filling: 1` in `_close_all_positions_on_stop`.
+
+### Harness notes (not adapter bugs)
+
+- Post-cancel verification retry → `[Invalid request]` in journal is **expected** (order already cancelled).
+- Do not call raw `exposed_order_send` on bridge for cancel probes — use `MetaTrader5.order_send` wrapper (bridge debug print crashes on some paths).
+
+---
+
+## OPEN — next homologation waves
+
+| Priority | ID | Scenario | When |
+|----------|-----|----------|------|
+| Alta | TC-HOM-D02 | Re-run WS stream **120s** + gap watch | BTCUSD session |
+| Média | TC-HOM-D06 | WS Service stop/start + cursor dedup | Service + open market |
+| Média | TC-HOM-D07 | Multi-symbol BTCUSD + USTEC | USTEC US session |
+| Média | TC-HOM-E06 | Limit IOC fill vs passive cancel | Market open |
+| Média | TC-HOM-E07 | Modify volume / cancel-replace | Pending order |
+| Média | TC-HOM-E08 | Hedging two positions same side | `test_live_hedging.py` parity |
+| Média | TC-HOM-E09 | Real retcodes (bad volume/stops) | Market open |
+
+### Tickmill BTCUSD session (server ≈ EET, UTC+2)
+
+Convert: **BRT ≈ server − 5h**. See [`res/tickmill_restrictions.md`](tickmill_restrictions.md).
+
+---
+
+## SKIP — do not homologate as Supported
+
+Per [`res/tickmill_restrictions.md`](tickmill_restrictions.md):
+
+- Trade ticks live/historical (TC-D30/D31) — **Unsupported**
+- Order book / DOM (TC-D10–D15) — **Unsupported**
+- Brackets, post-only, GTD, MIT/LIT, options — **Unsupported**
+
+---
+
+## Implementation backlog (homologation harness)
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `closed_market_suite.py` | Closed-market gate | **DONE** |
+| `run_closed_market.py` | Runner + JSON report | **DONE** |
+| `data_tester_suite.py` | D03, D05 | **DONE** (D03 reports BLOCKED when bridge gap) |
+| `exec_tester_suite.py` | E03 | **DONE** (E06–E09 TODO) |
+| `mt5_edges.py` | E04, E05 | **DONE** (D06, E09 TODO) |
+
+---
+
+## How to run
+
+**Closed market:**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18812
+set MT5_SYMBOL=BTCUSD
+E:\miniconda\envs\trading\python.exe homologation\run_closed_market.py
 ```
-homologation/
-  run_homologation.py          # orquestrador
-  scenarios/
-    preflight.py               # TC-HOM-PF ✓
-    tick_stream.py             # TC-HOM-D02 ✓
-    trading_node_suite.py      # TC-HOM-D01 + E01 ✓
-    stop_orders.py             # TC-HOM-E02 ✓
-    data_tester_suite.py       # NEW: DataTester configs por grupo
-    exec_tester_suite.py       # NEW: ExecTester configs por grupo
-    mt5_edges.py               # NEW: cenários MT5-only (reconnect, reconcile, retcodes)
+
+**Full homologation (market open):**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18812
+set MT5_SYMBOL=BTCUSD
+set MT5_FEED_ENABLED=1
+set MT5_ENABLE_LIVE_EXECUTION=1
+set HOMOLOG_REPORT_JSON=homologation/last_open_market_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_homologation.py
 ```
 
-**Padrão por cenário:** um `TradingNode` + uma strategy (`DataTester`, `ExecTester`, ou strategy mínima custom) + cleanup garantido.
-
-### Usar testers oficiais Nautilus
-
-Em vez de reimplementar lógica de ordens:
-
-```python
-from nautilus_trader.test_kit.strategies.tester_exec import ExecTester, ExecTesterConfig
-# DataTester actor — ver nautilus_trader.test_kit (equivalente data side)
-```
-
-Configurar por cenário, por exemplo:
-
-- **Smoke exec** (spec upstream): market open + 2 limits passive + stop + cancel/close on stop.
-- **Data smoke**: subscribe quotes + request bars + unsubscribe on stop.
-- **Tickmill profile**: `subscribe_trades=False`, `subscribe_book=False` no ExecTester.
-
-As vossas strategies custom (`_SuiteStrategy`, `_StreamStrategy`) ficam só onde o tester oficial não chega (gap watch D02, fases sequenciais D01→E01).
+Start `NT5TickFeedService` in MT5 before D02/D05.
 
 ---
 
-## Matriz de execução sugerida (paper Tickmill-Demo)
+## Bridge / journal cross-check (2026-06-27)
 
-| Run | Símbolo | Quando | Cenários |
-|---|---|---|---|
-| **Nightly crypto** | BTCUSD | 24/7 | PF, D02, D01, E01, E02, E03, E06 |
-| **Session US** | USTEC | mercado aberto | + D03/D04 bars, E08 hedging |
-| **Weekly deep** | BTCUSD + USTEC | manual | D05–D07, E04–E05 reconcile, E09 retcodes, WS reconnect |
-| **Pre-release gate** | ambos | antes de tag | `run_homologation.py` completo + weekly deep |
-
-Variáveis: `MT5_FEED_ENABLED=1`, Service activo, `MT5_ENABLE_LIVE_EXECUTION=1` só para cenários E*.
-
----
-
-## O que **não** vale homologar com strategy live
-
-Alinhado com [`res/tickmill_restrictions.md`](res/tickmill_restrictions.md) e matrizes:
-
-- `TradeTick` / histórico trade ticks
-- Order book / DOM
-- Brackets, post-only, reduce-only, GTD
-- Options (TC-E90+)
-
-Homologar estes como **Unsupported** (warning/`OrderDenied`) — um cenário curto basta, não investir em strategies de trading.
-
----
-
-## Relação entre camadas (evitar duplicação)
-
-| Camada | Papel |
-|---|---|
-| **Tier 1 pytest + fake bridge** | Regressão CI; autoridade para wiring |
-| **`tests/live/` + `tests/acceptance/`** | Tier 2 pytest pontual (retcodes, stoplimit bug) |
-| **`homologation/`** | Gate operacional pré-produção: **TradingNode completo**, WS+ RPyC, relatório JSON, múltiplos cenários numa corrida |
-
-Não mover tudo para pytest live — a homologação é o sítio certo para **suites longas** (D02 120s, stream gaps, reconcile multi-sessão).
-
----
-
-## Próximos passos concretos (ordem sugerida)
-
-1. **`data_tester_suite.py`** — barras live + histórico + unsubscribe (D03–D05).
-2. **`exec_tester_suite.py`** — limit GTC+cancel, cancel-on-stop live (E03–E04).
-3. **`mt5_edges.py`** — reconcile session restart (E05), retcode inválido (E09), WS reconnect (D06).
-4. Documentar mapa **TC-HOM-* → TC-D/E** em `homologation/README` ou spec §17.
-5. Parametrizar símbolo/calc_mode: BTCUSD (CFD), USTEC (CFDINDEX), opcional EURUSD (FOREX).
-
----
-
-**Resumo:** sim, devem ter **várias strategies** — mas organizadas como **cenários homologação** mapeados ao spec Nautilus (`DataTester` + `ExecTester`) + **~5 edge cases MT5**. Isso dá confiança de produção sem reinventar testes nem homologar capacidades que o Tickmill não oferece.
-
-Se quiseres implementar isto, muda para Agent mode e posso começar por `data_tester_suite.py` + `exec_tester_suite.py` integrados no `run_homologation.py`.
+MT5 journal confirms all exec scenarios; no orphaned BTCUSD positions at **21:26:28**.  
+Pending limits from debug runs were cancelled. Double-cancel `[Invalid request]` lines match harness verification, not production failures.

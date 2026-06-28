@@ -1,0 +1,92 @@
+{
+  "started_at": "2026-06-27T23:48:17.404067+00:00",
+  "summary": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (closed market \u2014 account + symbol_info)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD digits=2 ticks_bookdepth=0 bid=60129.0 ask=60139.0 symbol_time=1782611999",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "ticks_bookdepth": 0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D04a",
+      "name": "Historical bars M1+M5 via MetaTrader5Client \u2192 copy_rates_from_pos",
+      "status": "PASS",
+      "detail": "M1 bars=5 M5 bars=10 sample O=60093.5 H=60119.5 L=60093.5 C=60118.5",
+      "metadata": {
+        "m1_count": 5,
+        "m5_count": 10
+      }
+    },
+    {
+      "case_id": "TC-HOM-D04c",
+      "name": "Historical quote ticks via MetaTrader5Client \u2192 copy_ticks_from",
+      "status": "PASS",
+      "detail": "ticks=500 last_sample bid=59680.0 ask=59694.0 last=0.0",
+      "metadata": {
+        "tick_count": 500,
+        "last_zero": true
+      }
+    },
+    {
+      "case_id": "TC-HOM-D01-CM",
+      "name": "Instrument load via DataClient (closed market)",
+      "status": "PASS",
+      "detail": "BTCUSD.METATRADER_5 loaded digits=2 calc_mode=2",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D08",
+      "name": "TradeTick subscribe gated by VenueProfile",
+      "status": "PASS",
+      "detail": "SubscribeTradeTicks returned without raise (UNSUPPORTED profile)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D10",
+      "name": "Order book unsupported (warning only)",
+      "status": "PASS",
+      "detail": "SubscribeOrderBook returned without raise",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "SubscribeInstruments unsupported (warning only)",
+      "status": "PASS",
+      "detail": "SubscribeInstruments returned without raise",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D08b",
+      "name": "RequestTradeTicks rejected by VenueProfile",
+      "status": "PASS",
+      "detail": "RequestTradeTicks returned without raise (VenueProfile UNSUPPORTED gate)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-E-CONN",
+      "name": "ExecClient connect + account validation",
+      "status": "PASS",
+      "detail": "Connected account=25339175",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-E-EDGE1",
+      "name": "ExecClient rejects wrong account_id",
+      "status": "PASS",
+      "detail": "Rejected as expected: ConnectionError",
+      "metadata": {}
+    }
+  ]
+}

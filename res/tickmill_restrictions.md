@@ -1,8 +1,8 @@
-# Tickmill-Demo — broker capability restrictions
+# Tickmill-Demo — broker profile (capabilities and restrictions)
 
-Empirical broker profile for the `nt_mt5` adapter. Documents what Tickmill-Demo exposes through the **native MT5 terminal** (ground truth), independent of RPyC or the Python bridge.
+Empirical profile for the `nt_mt5` adapter. Documents what Tickmill-Demo exposes through the **native MT5 terminal** (ground truth), independent of RPyC or the Python bridge.
 
-Use this file when configuring `TICKMILL_DEMO_PROFILE`, updating capability matrices, or deciding whether a data feature is broker-limited vs adapter-limited.
+Covers **account capabilities** (hedging, leverage, demo mode) and **symbol capabilities** (ticks, DOM, sessions, execution). Use when configuring `TICKMILL_DEMO_PROFILE`, planning homologation windows, or deciding broker-limited vs adapter-limited behaviour.
 
 ---
 
@@ -12,22 +12,45 @@ Use this file when configuring `TICKMILL_DEMO_PROFILE`, updating capability matr
 |-------|-------|
 | Server | `Tickmill-Demo` |
 | Company | Tickmill Ltd |
-| Login | XXXXXX |
+| Login | 25339175 |
 | Terminal build | 5833 |
-| Probe date | 2026-06-28 01:59:59 (terminal time) |
+| Probe date | 2026-06-28 03:04:44 (server time) |
 | Method | One-shot MQL5 script in the MT5 terminal |
-| Script | [`MQL5/refactoring/scripts/teste_intrumento_infos.mq5`](../MQL5/refactoring/scripts/teste_intrumento_infos.mq5) |
+| Script | [`MQL5/refactoring/scripts/teste_intrumento_infos_tickmill.mq5`](../MQL5/refactoring/scripts/teste_intrumento_infos_tickmill.mq5) |
+| Output file | `MQL5/Files/probe_broker_Tickmill-Demo_25339175.txt` |
 
-The script dumps `SymbolInfoInteger` / `SymbolInfoDouble` / `SymbolInfoString`, attempts `MarketBookAdd` / `MarketBookGet`, and samples recent ticks via `CopyTicks`. Output is written to the Experts log and optionally to `MQL5/Files/probe_broker_*.txt`.
+The script dumps **account** `AccountInfo*` / `TerminalInfo*`, per-symbol `SymbolInfo*`, **Quote/Trade sessions** by weekday, `MarketBookAdd`, and a `CopyTicks` sample. Earlier Python/RPyC probes (`homologation/tools/probe_tick_semantics*.py`) reached the same tick-semantics conclusions.
 
 ### How to re-run
 
-1. Compile `teste_intrumento_infos.mq5` in MetaEditor.
+1. Compile `teste_intrumento_infos_tickmill.mq5` in MetaEditor.
 2. Attach the script to any chart while logged into the target account.
 3. Default inputs probe `USTEC,BTCUSD`; edit `InpSymbols` for other symbols.
 4. Compare output with this document and update if the broker profile changes.
 
-Earlier Python/RPyC probes (`homologation/tools/probe_tick_semantics*.py`) reached the same conclusions for tick semantics; this MQL5 run removes any doubt about the bridge layer.
+### Time zone note
+
+Session hours and `TimeCurrent()` in the probe are **server time** (Tickmill-Demo ≈ **EET, UTC+2** in this run).  
+Approximate conversion to **BRT (UTC−3):** `BRT ≈ server_time − 5 hours`. Do not treat MT5 Specification UI times as UTC.
+
+---
+
+## Account capabilities (login 25339175)
+
+| Property | Value | Adapter implication |
+|----------|-------|---------------------|
+| `ACCOUNT_MARGIN_MODE` | **2 — RETAIL_HEDGING** | Multiple positions per symbol; **close orders must use `position=<ticket>`** |
+| `ACCOUNT_TRADE_MODE` | **0 — DEMO** | Paper account; not live funds |
+| `ACCOUNT_TRADE_ALLOWED` | 1 | Trading enabled |
+| `ACCOUNT_TRADE_EXPERT` | 1 | EAs / Services allowed |
+| `ACCOUNT_LEVERAGE` | **30** | |
+| `ACCOUNT_LIMIT_ORDERS` | 200 | Max pending orders |
+| `ACCOUNT_MARGIN_SO_MODE` | 0 | |
+| `ACCOUNT_CURRENCY` | USD | |
+| `TERMINAL_CONNECTED` | 1 | |
+| `TERMINAL_TRADE_ALLOWED` | 1 | |
+
+**Not netting:** this is **hedging** account semantics. Confirmed live in `tests/acceptance/test_live_hedging.py` and exec smoke tests. Do not assume net position merge on close.
 
 ---
 
@@ -35,11 +58,13 @@ Earlier Python/RPyC probes (`homologation/tools/probe_tick_semantics*.py`) reach
 
 | Capability | USTEC | BTCUSD | Adapter status |
 |------------|-------|--------|----------------|
-| Quote ticks (bid/ask) | Yes | Yes | **Supported** (WS feed path + legacy RPyC snapshot) |
+| Quote ticks (bid/ask) | Yes (in session) | Yes (in session) | **Supported** (WS feed + legacy RPyC snapshot) |
 | Trade ticks (`last` / volume) | No | No | **Unsupported** (`TICKMILL_DEMO_PROFILE`) |
 | Depth of market / order book | No | No | **Unsupported** |
-| Execution (market, pending, etc.) | Yes | Yes | **Supported** (separate execution matrix) |
-| Historical bars | Yes | Yes | **Supported** (RPyC path) |
+| Execution (market, pending, etc.) | Yes (in session) | Yes (in session) | **Supported** |
+| Historical bars / ticks | Yes | Yes | **Supported** (RPyC / `copy_rates_*`, `copy_ticks_*`) |
+| Hedging account | — | — | **Supported** (position-ticket close path) |
+| Filling (market) | IOC only | IOC only | **IOC** (`SYMBOL_FILLING_MODE=2`) |
 
 ---
 
@@ -52,13 +77,26 @@ Earlier Python/RPyC probes (`homologation/tools/probe_tick_semantics*.py`) reach
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| `SYMBOL_TICKS_BOOKDEPTH` | **0** | Broker declares no market depth |
-| `SYMBOL_LAST` | **0.0** | No last-trade price at symbol level |
-| `SYMBOL_SPREAD` | 80 | Floating spread (`SYMBOL_SPREAD_FLOAT=1`); ~0.80 pts at 2 digits |
-| `SYMBOL_TRADE_MODE` | FULL (4) | Trading allowed |
-| `SYMBOL_FILLING_MODE` | 2 | IOC-capable (bitmask; verify per order type in exec tests) |
-| `SYMBOL_ORDER_MODE` | 127 | Broad order-type support |
+| `SYMBOL_TICKS_BOOKDEPTH` | **0** | No DOM |
+| `SYMBOL_LAST` | **0.0** | No last-trade price |
+| `SYMBOL_SPREAD` | 80 | Floating; ~0.80 pts at 2 digits |
+| `SYMBOL_TRADE_MODE` | FULL (4) | |
+| `SYMBOL_FILLING_MODE` | 2 | **IOC only** (bitmask decode) |
+| `SYMBOL_ORDER_MODE` | 127 | Broad order-type bitmask |
 | Volume | min 0.01, max 250, step 0.01 | |
+
+### Sessions (server time)
+
+| Day | Quote | Trade |
+|-----|-------|-------|
+| SUN | closed | closed |
+| MON–THU | 01:00–00:00 | 01:00–00:00 |
+| FRI | 01:00–23:58 | 01:00–23:58 |
+| SAT | closed | closed |
+
+`00:00` end time = midnight wrap (session runs from 01:00 through end of calendar day). **No US index stream on Sat/Sun server time.** Plan USTEC homologation **Mon–Fri** only.
+
+**BRT hint (Mon open):** server Mon 01:00 ≈ **Sun 20:00 BRT**.
 
 ### Depth of market
 
@@ -66,21 +104,15 @@ Earlier Python/RPyC probes (`homologation/tools/probe_tick_semantics*.py`) reach
 MarketBookAdd(USTEC) => FALSE  err=4901  ticks_bookdepth=0
 ```
 
-Error **4901** (`ERR_BOOKS_CANNOT_ADD`): the terminal refuses DOM subscription. This is a **broker/symbol limitation**, not an adapter or RPyC issue.
-
-### Tick semantics (`CopyTicks`, n=20)
+### Tick semantics (`CopyTicks`, n=20, probe while Fri close)
 
 | Observation | Result |
 |-------------|--------|
-| `last` field | Always **0.0** |
-| `volume` field | Always **0** |
-| Tick flags | **134** on all samples (bid + ask + bit 128) |
-| `TICK_FLAG_LAST` (8) | **0** ticks |
-| `TICK_FLAG_VOLUME` (16) | **0** ticks |
+| `last` | **0.0** |
+| Tick flags | **134** (bid+ask+128) |
+| `TICK_FLAG_LAST` / volume | **0** |
 
-**Conclusion:** ticks are **bid/ask quote updates only**. Map to Nautilus `QuoteTick`, not `TradeTick`.
-
-Flag **134** = API flags 2 (bid) + 4 (ask) + 128 (spread/wide-quote marker). MT5 UI export flags often differ by subtracting 128 (UI would show **6**).
+Stale `SYMBOL_TIME=2026.06.26 23:57:59` at probe — expected outside session.
 
 ---
 
@@ -93,13 +125,25 @@ Flag **134** = API flags 2 (bid) + 4 (ask) + 128 (spread/wide-quote marker). MT5
 
 | Property | Value | Notes |
 |----------|-------|-------|
-| `SYMBOL_TICKS_BOOKDEPTH` | **0** | No market depth |
-| `SYMBOL_LAST` | **0.0** | No last-trade price |
-| `SYMBOL_SPREAD` | 1000 | Floating; ~**$10.00** at 2 digits (e.g. bid 60129 / ask 60139) |
-| `SYMBOL_TRADE_MODE` | FULL (4) | Trading allowed |
-| `SYMBOL_FILLING_MODE` | 2 | IOC used successfully in exec smoke tests |
-| `SYMBOL_ORDER_MODE` | 127 | Broad order-type support |
-| Volume | min 0.01, max 30, step 0.01 | Lower max lot than USTEC |
+| `SYMBOL_TICKS_BOOKDEPTH` | **0** | No DOM |
+| `SYMBOL_LAST` | **0.0** | |
+| `SYMBOL_SPREAD` | 1000 | Floating; ~**$10.00** at 2 digits |
+| `SYMBOL_TRADE_MODE` | FULL (4) | |
+| `SYMBOL_FILLING_MODE` | 2 | **IOC only** |
+| `SYMBOL_ORDER_MODE` | 127 | |
+| Volume | min 0.01, max 30, step 0.01 | |
+
+### Sessions (server time)
+
+| Day | Quote | Trade |
+|-----|-------|-------|
+| SUN | 00:00–00:00 | 00:05–02:00, 03:00–00:00 |
+| MON–FRI | 00:00–00:00 | 00:05–00:00 |
+| SAT | 00:00–00:00 | 01:00–00:00 |
+
+**Quote vs trade differ:** probe showed **live ticks** (`SYMBOL_TIME` advancing, `CopyTicks` at 03:04 server) while Quote session rows show `Q[00:00-00:00]` on several days — treat **Trade** sessions as authoritative for “can we stream/fill now”. Sunday trade window includes a **02:00–03:00 server gap**.
+
+**BRT hint (Sun long window):** server Sun 03:00 ≈ **Sat 22:00 BRT** (start of post-gap session).
 
 ### Depth of market
 
@@ -107,31 +151,37 @@ Flag **134** = API flags 2 (bid) + 4 (ask) + 128 (spread/wide-quote marker). MT5
 MarketBookAdd(BTCUSD) => FALSE  err=4901  ticks_bookdepth=0
 ```
 
-Same verdict as USTEC: **DOM not available** on Tickmill-Demo for this symbol.
-
-### Tick semantics (`CopyTicks`, n=20)
+### Tick semantics (`CopyTicks`, n=20, live at probe)
 
 | Observation | Result |
 |-------------|--------|
-| `last` field | Always **0.0** |
-| `volume` field | Always **0** |
-| Tick flags | **6** on all samples (bid + ask only; no bit 128) |
-| `TICK_FLAG_LAST` (8) | **0** ticks |
-| `TICK_FLAG_VOLUME` (16) | **0** ticks |
+| `last` | **0.0** |
+| Tick flags | **6** (bid+ask only) |
+| Sample spread | bid 59943 / ask 59953 (~$10) |
 
-**Conclusion:** same as USTEC — **QuoteTick-only** feed from the broker.
+---
+
+## Restrictions (unsupported broker features)
+
+1. **Trade ticks** — `SYMBOL_LAST=0`, no `TICK_FLAG_LAST` / volume on samples → **`TradeTick` Unsupported** for all OTC calc modes in `TICKMILL_DEMO_PROFILE`.
+
+2. **Order book / DOM** — `ticks_bookdepth=0`, `MarketBookAdd` err **4901** → adapter **Unsupported**.
+
+3. **Exchange-style semantics** — dealer bid/ask quotes only; do not infer L2 book or last-trade stream.
 
 ---
 
 ## Design decisions enforced by this profile
 
-1. **`TICKMILL_DEMO_PROFILE`** declares `trade_ticks=UNSUPPORTED` for all OTC calc modes (FOREX, CFD, CFDINDEX, etc.). Do not promote `TradeTick` without new broker evidence (`SYMBOL_LAST > 0` and/or `TICK_FLAG_LAST` on live/historical ticks).
+1. **`TICKMILL_DEMO_PROFILE`:** `trade_ticks=UNSUPPORTED`; promote only with new probe evidence.
 
-2. **Order book** remains **Unsupported** in the adapter. `market_book_*` exists in the MT5 Python wrapper, but Tickmill-Demo returns `ticks_bookdepth=0` and `MarketBookAdd` fails with 4901 for USTEC and BTCUSD.
+2. **Hedging account:** exec client must close by **position ticket** when multiple legs exist.
 
-3. **Live quote path:** use the MQL5 WebSocket feed (`NT5TickFeedService` → `InboundFeedGateway`). The service reads the same bid/ask-only ticks; the adapter should continue mapping to `QuoteTick` only.
+3. **Market orders:** prefer **IOC** filling (`SYMBOL_FILLING_MODE=2` on both symbols).
 
-4. **Do not infer exchange-style semantics** (last trade, DOM, L2 book) from symbol names or paths. Tickmill OTC CFD symbols behave as **dealer quotes**, not exchange order books.
+4. **Live quote path:** MQL5 WS feed → `QuoteTick` only (same bid/ask semantics as `CopyTicks`).
+
+5. **Homologation scheduling:** respect **session tables** above; failures outside session are expected, not adapter bugs.
 
 ---
 
@@ -139,18 +189,19 @@ Same verdict as USTEC: **DOM not available** on Tickmill-Demo for this symbol.
 
 | Document | Relevance |
 |----------|-----------|
-| [`docs/venue_profile.md`](../docs/venue_profile.md) | `TICKMILL_DEMO_PROFILE` definition |
-| [`docs/data_capability_matrix.md`](../docs/data_capability_matrix.md) | Quote ticks, trade ticks, order book rows |
-| [`docs/terminal_access_capability_audit.md`](../docs/terminal_access_capability_audit.md) | Bridge vs adapter capability audit |
-| [`homologation/tools/probe_tick_semantics_fast.py`](../homologation/tools/probe_tick_semantics_fast.py) | Python/RPyC tick-semantics probe (consistent results) |
+| [`docs/venue_profile.md`](../docs/venue_profile.md) | `TICKMILL_DEMO_PROFILE` |
+| [`docs/data_capability_matrix.md`](../docs/data_capability_matrix.md) | Data capabilities |
+| [`docs/execution_capability_matrix.md`](../docs/execution_capability_matrix.md) | Exec + hedging |
+| [`res/proximos testes adaptador.md`](proximos%20testes%20adaptador.md) | Homologation tracker |
+| [`homologation/tools/probe_tick_semantics_fast.py`](../homologation/tools/probe_tick_semantics_fast.py) | Python tick probe |
 
 ---
 
-## When to update this file
+## When to update
 
-Re-run `teste_intrumento_infos.mq5` and update this document if any of the following change:
+Re-run `teste_intrumento_infos_tickmill.mq5` when any of these change:
 
-- Broker server name or account type (demo → live, different entity)
-- Symbol list or broker symbol naming
-- Observed `SYMBOL_TICKS_BOOKDEPTH`, `MarketBookAdd` success, or non-zero `last`/volume ticks
-- Terminal build with known MT5 API changes affecting tick flags or book APIs
+- Account margin mode (netting ↔ hedging), leverage, demo/live
+- Symbol sessions or spread behaviour
+- `SYMBOL_TICKS_BOOKDEPTH`, `MarketBookAdd`, or tick `last`/flags
+- Broker server / entity / terminal build

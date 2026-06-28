@@ -1,0 +1,123 @@
+{
+  "started_at": "2026-06-28T00:25:34.221972+00:00",
+  "summary": {
+    "total": 10,
+    "passed": 5,
+    "failed": 5,
+    "skipped": 0,
+    "ok": false
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=60063.0 ask=60073.0",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 60063.0,
+        "ask": 60073.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D01",
+      "name": "Quote ticks via TradingNode",
+      "status": "FAIL",
+      "detail": "Timeout after 120.0s \u2014 ticks=0",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-E01",
+      "name": "Market round-trip (BUY \u2192 SELL)",
+      "status": "FAIL",
+      "detail": "Suite timed out before round-trip completed",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "FAIL",
+      "detail": "Node timeout after 120s \u2014 ticks=0",
+      "metadata": {
+        "ticks": 0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D03",
+      "name": "Live bar subscribe M1",
+      "status": "FAIL",
+      "detail": "bridge missing: exposed_req_real_time_bars, exposed_cancel_real_time_bars, exposed_cancel_historical_data \u2014 native ``copy_rates_from_pos`` works; bar subscribe path blocked",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D05",
+      "name": "Unsubscribe on stop (quotes/bars)",
+      "status": "FAIL",
+      "detail": "Timeout \u2014 ticks=0",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-E02",
+      "name": "Stop / stop-limit pending orders",
+      "status": "PASS",
+      "detail": "TC-HOM-E02a=OK; TC-HOM-E02b=OK",
+      "metadata": {
+        "sub_results": [
+          [
+            "TC-HOM-E02a",
+            true,
+            "BUY STOP_MARKET venue=264625073"
+          ],
+          [
+            "TC-HOM-E02b",
+            true,
+            "SELL STOP_MARKET venue=264625074"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E03",
+      "name": "Limit GTC + cancel",
+      "status": "PASS",
+      "detail": "BUY LIMIT @57071.72 venue=264625075 cancelled (retry retcode=10013)",
+      "metadata": {
+        "venue_order_id": "264625075",
+        "retry_retcode": 10013
+      }
+    },
+    {
+      "case_id": "TC-HOM-E04",
+      "name": "cancel_on_stop / close_on_stop on disconnect",
+      "status": "PASS",
+      "detail": "E04a=OK; E04b=OK",
+      "metadata": {
+        "sub_results": [
+          [
+            "E04a",
+            true,
+            "cancel_on_stop venue=264625076 retry_retcode=10013"
+          ],
+          [
+            "E04b",
+            true,
+            "close_on_stop positions 0\u21920"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E05",
+      "name": "Reconcile orders/positions on reconnect",
+      "status": "PASS",
+      "detail": "mass_status positions=0 bridge.positions_get(BTCUSD)=0",
+      "metadata": {
+        "bridge_positions": 0,
+        "report_positions": 0,
+        "order_reports": 0,
+        "fill_reports": 0
+      }
+    }
+  ]
+}

@@ -1,7 +1,8 @@
 //+------------------------------------------------------------------+
-//| ProbeBrokerSymbolCapabilities.mq5                                |
-//| One-shot broker ground truth: SymbolInfo* + MarketBookAdd        |
-//| Target symbols: USTEC, BTCUSD (edit SYMBOLS[] if needed)         |
+//| teste_intrumento_infos_tickmill.mq5                             |
+//| One-shot broker ground truth probe for nt_mt5 homologation.      |
+//| Account capabilities + SymbolInfo* + sessions + MarketBookAdd  |
+//| Default symbols: USTEC, BTCUSD (edit InpSymbols if needed)       |
 //+------------------------------------------------------------------+
 #property script_show_inputs
 #property strict
@@ -41,7 +42,44 @@ string TradeCalcModeName(const long mode)
       case SYMBOL_CALC_MODE_EXCH_STOCKS_MOEX: return "EXCH_STOCKS_MOEX";
       case SYMBOL_CALC_MODE_EXCH_BONDS_MOEX: return "EXCH_BONDS_MOEX";
       case SYMBOL_CALC_MODE_SERV_COLLATERAL: return "SERV_COLLATERAL";
-      default:                               return "UNKNOWN";
+      default:                               return StringFormat("UNKNOWN(%d)", (int)mode);
+     }
+  }
+
+string MarginModeName(const long mode)
+  {
+   switch((ENUM_ACCOUNT_MARGIN_MODE)mode)
+     {
+      case ACCOUNT_MARGIN_MODE_RETAIL_NETTING: return "RETAIL_NETTING";
+      case ACCOUNT_MARGIN_MODE_EXCHANGE:       return "EXCHANGE";
+      case ACCOUNT_MARGIN_MODE_RETAIL_HEDGING: return "RETAIL_HEDGING";
+      default:                                 return StringFormat("UNKNOWN(%d)", (int)mode);
+     }
+  }
+
+string AccountTradeModeName(const long mode)
+  {
+   switch((ENUM_ACCOUNT_TRADE_MODE)mode)
+     {
+      case ACCOUNT_TRADE_MODE_DEMO:    return "DEMO";
+      case ACCOUNT_TRADE_MODE_CONTEST: return "CONTEST";
+      case ACCOUNT_TRADE_MODE_REAL:    return "REAL";
+      default:                          return StringFormat("UNKNOWN(%d)", (int)mode);
+     }
+  }
+
+string DayName(const ENUM_DAY_OF_WEEK d)
+  {
+   switch(d)
+     {
+      case SUNDAY:    return "SUN";
+      case MONDAY:    return "MON";
+      case TUESDAY:   return "TUE";
+      case WEDNESDAY: return "WED";
+      case THURSDAY:  return "THU";
+      case FRIDAY:    return "FRI";
+      case SATURDAY:  return "SAT";
+      default:        return "?";
      }
   }
 
@@ -88,6 +126,88 @@ bool EnsureSelected(const string symbol)
    return true;
   }
 
+void DumpAccountCapabilities(string &buf)
+  {
+   Append(buf, "");
+   Append(buf, "========== ACCOUNT CAPABILITIES ==========");
+   Append(buf, "--- AccountInfoInteger ---");
+
+   const long margin_mode = AccountInfoInteger(ACCOUNT_MARGIN_MODE);
+   Append(buf, StringFormat("ACCOUNT_MARGIN_MODE=%d (%s)  <-- netting=0 hedging=2",
+                            (int)margin_mode, MarginModeName(margin_mode)));
+   Append(buf, StringFormat("ACCOUNT_TRADE_MODE=%d (%s)",
+                            (int)AccountInfoInteger(ACCOUNT_TRADE_MODE),
+                            AccountTradeModeName(AccountInfoInteger(ACCOUNT_TRADE_MODE))));
+   Append(buf, StringFormat("ACCOUNT_TRADE_ALLOWED=%d", (int)AccountInfoInteger(ACCOUNT_TRADE_ALLOWED)));
+   Append(buf, StringFormat("ACCOUNT_TRADE_EXPERT=%d", (int)AccountInfoInteger(ACCOUNT_TRADE_EXPERT)));
+   Append(buf, StringFormat("ACCOUNT_LEVERAGE=%d", (int)AccountInfoInteger(ACCOUNT_LEVERAGE)));
+   Append(buf, StringFormat("ACCOUNT_LIMIT_ORDERS=%d", (int)AccountInfoInteger(ACCOUNT_LIMIT_ORDERS)));
+   Append(buf, StringFormat("ACCOUNT_MARGIN_SO_MODE=%d", (int)AccountInfoInteger(ACCOUNT_MARGIN_SO_MODE)));
+
+   Append(buf, "--- AccountInfoDouble ---");
+   Append(buf, StringFormat("ACCOUNT_BALANCE=%.2f", AccountInfoDouble(ACCOUNT_BALANCE)));
+   Append(buf, StringFormat("ACCOUNT_EQUITY=%.2f", AccountInfoDouble(ACCOUNT_EQUITY)));
+   Append(buf, StringFormat("ACCOUNT_MARGIN_FREE=%.2f", AccountInfoDouble(ACCOUNT_MARGIN_FREE)));
+
+   Append(buf, "--- AccountInfoString ---");
+   Append(buf, StringFormat("ACCOUNT_NAME=%s", AccountInfoString(ACCOUNT_NAME)));
+   Append(buf, StringFormat("ACCOUNT_CURRENCY=%s", AccountInfoString(ACCOUNT_CURRENCY)));
+   Append(buf, StringFormat("ACCOUNT_SERVER=%s", AccountInfoString(ACCOUNT_SERVER)));
+   Append(buf, StringFormat("ACCOUNT_COMPANY=%s", AccountInfoString(ACCOUNT_COMPANY)));
+
+   Append(buf, "--- TerminalInfo ---");
+   Append(buf, StringFormat("TERMINAL_CONNECTED=%d", (int)TerminalInfoInteger(TERMINAL_CONNECTED)));
+   Append(buf, StringFormat("TERMINAL_TRADE_ALLOWED=%d", (int)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)));
+   Append(buf, StringFormat("TERMINAL_BUILD=%d", (int)TerminalInfoInteger(TERMINAL_BUILD)));
+   Append(buf, "Note: symbol session hours below use SERVER TIME (not UTC/BRT).");
+  }
+
+void DumpSymbolSessions(const string symbol, string &buf)
+  {
+   Append(buf, "--- Symbol sessions (Quote=Q / Trade=T) ---");
+
+   if(!EnsureSelected(symbol))
+     {
+      Append(buf, "RESULT: symbol not selected — sessions unavailable");
+      return;
+     }
+
+   datetime from = 0, to = 0;
+   for(int d = SUNDAY; d <= SATURDAY; d++)
+     {
+      string line = DayName((ENUM_DAY_OF_WEEK)d) + ": ";
+      bool any = false;
+
+      if(SymbolInfoSessionQuote(symbol, (ENUM_DAY_OF_WEEK)d, 0, from, to))
+        {
+         line += StringFormat("Q[%s-%s]",
+                              TimeToString(from, TIME_MINUTES),
+                              TimeToString(to, TIME_MINUTES));
+         any = true;
+         for(int s = 1; SymbolInfoSessionQuote(symbol, (ENUM_DAY_OF_WEEK)d, s, from, to); s++)
+            line += StringFormat(" Q[%s-%s]",
+                                   TimeToString(from, TIME_MINUTES),
+                                   TimeToString(to, TIME_MINUTES));
+        }
+
+      if(SymbolInfoSessionTrade(symbol, (ENUM_DAY_OF_WEEK)d, 0, from, to))
+        {
+         line += StringFormat(" T[%s-%s]",
+                              TimeToString(from, TIME_MINUTES),
+                              TimeToString(to, TIME_MINUTES));
+         any = true;
+         for(int s = 1; SymbolInfoSessionTrade(symbol, (ENUM_DAY_OF_WEEK)d, s, from, to); s++)
+            line += StringFormat(" T[%s-%s]",
+                                   TimeToString(from, TIME_MINUTES),
+                                   TimeToString(to, TIME_MINUTES));
+        }
+
+      if(!any)
+         line += "(closed)";
+      Append(buf, line);
+     }
+  }
+
 void DumpSymbolInfo(const string symbol, string &buf)
   {
    Append(buf, "");
@@ -123,7 +243,15 @@ void DumpSymbolInfo(const string symbol, string &buf)
                             (int)SymbolInfoInteger(symbol, SYMBOL_TRADE_MODE),
                             TradeModeName(SymbolInfoInteger(symbol, SYMBOL_TRADE_MODE))));
    Append(buf, StringFormat("SYMBOL_TRADE_EXEMODE=%d", (int)SymbolInfoInteger(symbol, SYMBOL_TRADE_EXEMODE)));
-   Append(buf, StringFormat("SYMBOL_FILLING_MODE=%d", (int)SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE)));
+   const int fill = (int)SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE);
+   Append(buf, StringFormat("SYMBOL_FILLING_MODE=%d", fill));
+   string fill_dec = "";
+   // Bitmask: 1=FOK, 2=IOC, 4=RETURN (ORDER_FILLING_* semantics)
+   if((fill & 1) != 0) fill_dec += "FOK ";
+   if((fill & 2) != 0) fill_dec += "IOC ";
+   if((fill & 4) != 0) fill_dec += "RETURN ";
+   if(StringLen(fill_dec) == 0) fill_dec = "none ";
+   Append(buf, StringFormat("SYMBOL_FILLING_MODE decode: %s(bitmask=%d)", fill_dec, fill));
    Append(buf, StringFormat("SYMBOL_ORDER_MODE=%d", (int)SymbolInfoInteger(symbol, SYMBOL_ORDER_MODE)));
    Append(buf, StringFormat("SYMBOL_ORDER_GTC_MODE=%d", (int)SymbolInfoInteger(symbol, SYMBOL_ORDER_GTC_MODE)));
    Append(buf, StringFormat("SYMBOL_SWAP_MODE=%d", (int)SymbolInfoInteger(symbol, SYMBOL_SWAP_MODE)));
@@ -252,6 +380,7 @@ void OnStart()
    string report = "";
    Append(report, "===== ProbeBrokerSymbolCapabilities =====");
    Append(report, ServerTag());
+   DumpAccountCapabilities(report);
 
    string symbols[];
    SplitSymbols(InpSymbols, symbols);
@@ -263,6 +392,7 @@ void OnStart()
          continue;
 
       DumpSymbolInfo(sym, report);
+      DumpSymbolSessions(sym, report);
       ProbeMarketBook(sym, report);
       ProbeTickFlags(sym, InpTickSample, report);
      }

@@ -58,6 +58,9 @@ from homologation.scenarios.preflight import run_preflight
 from homologation.scenarios.tick_stream import run_tick_stream
 from homologation.scenarios.trading_node_suite import run_trading_node_suite
 from homologation.scenarios.stop_orders import run_stop_orders
+from homologation.scenarios.data_tester_suite import run_bar_subscribe, run_unsubscribe_on_stop
+from homologation.scenarios.exec_tester_suite import run_limit_gtc_cancel
+from homologation.scenarios.mt5_edges import run_cancel_close_on_stop, run_reconcile_mass_status
 from homologation.support.clients import reset_mt5_client_cache
 
 
@@ -94,7 +97,17 @@ async def main() -> int:
     reset_mt5_client_cache()
     await run_tick_stream(cfg, report)
     reset_mt5_client_cache()
+    await run_bar_subscribe(cfg, report)
+    reset_mt5_client_cache()
+    await run_unsubscribe_on_stop(cfg, report)
+    reset_mt5_client_cache()
     await run_stop_orders(cfg, report)
+    reset_mt5_client_cache()
+    await run_limit_gtc_cancel(cfg, report)
+    reset_mt5_client_cache()
+    await run_cancel_close_on_stop(cfg, report)
+    reset_mt5_client_cache()
+    await run_reconcile_mass_status(cfg, report)
 
     report.print_summary()
 
