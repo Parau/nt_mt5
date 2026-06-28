@@ -1061,15 +1061,15 @@ async def test_lifecycle_submit_gtc_stop_market_order(
 
 
 # ---------------------------------------------------------------------------
-# TC-EL-23  GTC BUY/SELL STOP_LIMIT → action=5, type 6/7, price + stpx fields
+# TC-EL-23  GTC BUY/SELL STOP_LIMIT → action=5, type 6/7, price + stoplimit fields
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("side,expected_mt5_type,trigger,limit_p", [
-    # BUY_STOP_LIMIT: stpx (NT price) must be BELOW trigger for MT5 validation.
+    # BUY_STOP_LIMIT: stoplimit (NT price) must be BELOW trigger for MT5 validation.
     # When triggered at 80000, a limit buy at 79900 is created.
     (OrderSide.BUY,  6, 80000.00, 79900.00),  # ORDER_TYPE_BUY_STOP_LIMIT
-    # SELL_STOP_LIMIT: stpx (NT price) must be ABOVE trigger for MT5 validation.
+    # SELL_STOP_LIMIT: stoplimit (NT price) must be ABOVE trigger for MT5 validation.
     # When triggered at 76000, a limit sell at 76100 is created.
     (OrderSide.SELL, 7, 76000.00, 76100.00),  # ORDER_TYPE_SELL_STOP_LIMIT
 ])
@@ -1082,7 +1082,7 @@ async def test_lifecycle_submit_gtc_stop_limit_order(
     - call order_send with action=5 (TRADE_ACTION_PENDING), the correct MT5 order
       type (6=BUY_STOP_LIMIT or 7=SELL_STOP_LIMIT);
     - set 'price' = trigger_price (the stop activation level);
-    - set 'stpx' = limit price (the limit price activated once trigger fires);
+    - set 'stoplimit' = limit price (the limit price activated once trigger fires);
     - emit OrderSubmitted followed by OrderAccepted (retcode 10008 PLACED);
     - NOT emit an immediate fill.
 

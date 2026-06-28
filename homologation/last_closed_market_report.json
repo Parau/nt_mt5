@@ -1,8 +1,8 @@
 {
-  "started_at": "2026-06-28T01:28:52.808598+00:00",
+  "started_at": "2026-06-28T13:09:21.394061+00:00",
   "summary": {
-    "total": 11,
-    "passed": 11,
+    "total": 12,
+    "passed": 12,
     "failed": 0,
     "skipped": 0,
     "ok": true
@@ -12,7 +12,7 @@
       "case_id": "TC-HOM-PF",
       "name": "Bridge pre-flight (closed market \u2014 account + symbol_info)",
       "status": "PASS",
-      "detail": "login=25339175 server=Tickmill-Demo BTCUSD digits=2 ticks_bookdepth=0 bid=60106.5 ask=60116.5 symbol_time=1782620906",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD digits=2 ticks_bookdepth=0 bid=59936.0 ask=59946.0 symbol_time=1782662934",
       "metadata": {
         "login": 25339175,
         "server": "Tickmill-Demo",
@@ -23,7 +23,7 @@
       "case_id": "TC-HOM-D04a",
       "name": "Historical bars M1+M5 via MetaTrader5Client \u2192 copy_rates_from_pos",
       "status": "PASS",
-      "detail": "M1 bars=5 M5 bars=10 sample O=60078.5 H=60092.5 L=60069.5 C=60089.5",
+      "detail": "M1 bars=5 M5 bars=10 sample O=59977.5 H=60006.5 L=59957.0 C=59963.0",
       "metadata": {
         "m1_count": 5,
         "m5_count": 10
@@ -33,7 +33,7 @@
       "case_id": "TC-HOM-D04b",
       "name": "RequestBars M1 via DataClient._request_bars (copy_rates_from_pos)",
       "status": "PASS",
-      "detail": "Received 5 M1 bar(s) close=60137.5",
+      "detail": "Received 5 M1 bar(s) close=59996.5",
       "metadata": {
         "bars": 5
       }
@@ -42,10 +42,21 @@
       "case_id": "TC-HOM-D04c",
       "name": "Historical quote ticks via MetaTrader5Client \u2192 copy_ticks_from",
       "status": "PASS",
-      "detail": "ticks=500 last_sample bid=59786.5 ask=59800.5 last=0.0",
+      "detail": "ticks=500 last_sample bid=60376.5 ask=60386.5 last=0.0",
       "metadata": {
         "tick_count": 500,
         "last_zero": true
+      }
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
+      "status": "PASS",
+      "detail": "Received 10000 QuoteTick(s) sample bid=63956.5 ask=63966.5",
+      "metadata": {
+        "ticks": 10000,
+        "bid": 63956.5,
+        "ask": 63966.5
       }
     },
     {

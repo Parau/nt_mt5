@@ -42,7 +42,7 @@
 - The canonical Tier 1 test infrastructure is `tests/support/fake_mt5_rpyc_bridge.py`. Use it for all integration tests that need an MT5 bridge. Improve the fake when it is insufficient — do not create parallel mocks.
 - Use mocks only where they keep the test focused; do not replace most of the adapter with mocks and still call it integration coverage.
 - Integration tests should pass through real adapter logic whenever practical.
-- Acceptance/smoke tests fall into two tiers. Tier 1 (deterministic, always runs, uses the fake bridge) is the default. Tier 2 (live acceptance, `tests/acceptance/` with `@pytest.mark.live`) is a legitimate but selective layer — only add a live test when the fake bridge structurally cannot cover it (real field names, real retcodes, real price constraints, real transport). See `docs/testing_contract.md` — Two-tier validation strategy — for the exact criteria.
+- Acceptance/smoke tests fall into three layers. **Tier 1** (deterministic, always runs, uses the fake bridge) is the default. **Tier 1.5** (`homologation/` — standalone `TradingNode` runners on real MT5; see `docs/testing_contract.md`) is the operational homologation gate for updating matrix **Live coverage**. **Tier 2** (live acceptance, `tests/acceptance/` with `@pytest.mark.live`) is a selective layer — only add a live test when the fake bridge structurally cannot cover it (real field names, real retcodes, real price constraints, real transport). See `docs/testing_contract.md` — Two-tier validation strategy — for Tier 1/2 criteria; Tier 1.5 is documented in the same file.
 - Never add a live test simply because a behavior is important. If the fake bridge can cover it adequately, Tier 1 is the right place.
 - Do not end tests with `assert True`.
 - Do not use `pytest.skip(...)` to hide missing coverage unless the test is genuinely environment-dependent and a replacement exists.
@@ -63,7 +63,7 @@
   - `docs/execution_capability_matrix.md`
   - `docs/decisions.md`
   - `docs/terminal_access_contract.md`
-- When a supported execution or data behavior is implemented or validated live, update the corresponding row in the capability matrix: `Deterministic coverage` if a Tier 1 test was added, `Live coverage` if a Tier 2 test was run and passed.
+- When a supported execution or data behavior is implemented or validated live, update the corresponding row in the capability matrix: `Deterministic coverage` if a Tier 1 test was added, `Live coverage` if a Tier 2 test or **Tier 1.5 homologation** scenario passed (`res/proximos testes adaptador.md`).
 
 ## 6) PR rules for coding agents
 - Stay inside the requested scope.

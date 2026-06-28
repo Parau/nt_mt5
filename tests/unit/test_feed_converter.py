@@ -8,7 +8,12 @@ from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
 from nautilus_trader.model.instruments import CurrencyPair
 from nautilus_trader.model.objects import Currency, Price, Quantity
 
-from nautilus_mt5.feed.converter import wire_bar_to_nautilus_bar, wire_tick_to_quote_tick
+from nautilus_mt5.feed.converter import (
+    route_wire_tick_to_nautilus,
+    wire_bar_to_nautilus_bar,
+    wire_tick_to_quote_tick,
+    wire_tick_to_trade_tick,
+)
 from nautilus_mt5.feed.messages import WireBar, WireTick
 
 
@@ -53,6 +58,22 @@ def test_wire_tick_invalid_prices_returns_none() -> None:
     instrument = _btcusd_instrument()
     tick = WireTick(time_msc=1_000, bid=0.0, ask=60478.0)
     assert wire_tick_to_quote_tick(instrument, tick, ts_init=1) is None
+
+
+def test_wire_tick_to_trade_tick() -> None:
+    instrument = _btcusd_instrument()
+    tick = WireTick(time_msc=2_000, bid=0.0, ask=0.0, last=60470.0, volume=3, flags=8)
+    trade = wire_tick_to_trade_tick(instrument, tick, ts_init=3_000_000_000)
+    assert trade is not None
+    assert float(trade.price) == 60470.0
+
+
+def test_route_wire_tick_trade_only() -> None:
+    instrument = _btcusd_instrument()
+    tick = WireTick(time_msc=1_000, bid=0.0, ask=0.0, last=60400.0, volume=1, flags=1336)
+    quote, trade = route_wire_tick_to_nautilus(instrument, tick, ts_init=1)
+    assert quote is None
+    assert trade is not None
 
 
 def test_wire_bar_to_nautilus_bar() -> None:

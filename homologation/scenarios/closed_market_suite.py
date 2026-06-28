@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 
+import pandas as pd
 import rpyc
 from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock, MessageBus
@@ -26,7 +27,7 @@ from nautilus_trader.model.data import BarSpecification, BarType, OrderBookDelta
 from nautilus_trader.model.enums import AggregationSource, BarAggregation, BookType, PriceType
 from nautilus_trader.model.identifiers import InstrumentId, Symbol, TraderId, Venue
 
-from nautilus_mt5 import TICKMILL_DEMO_PROFILE
+from nautilus_mt5.venue_profile import CapabilityStatus
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
@@ -55,7 +56,7 @@ def _data_config(cfg: HomologationConfig) -> MetaTrader5DataClientConfig:
         instrument_provider=MetaTrader5InstrumentProviderConfig(
             load_symbols=frozenset([MT5Symbol(symbol=cfg.symbol, broker=cfg.broker)]),
         ),
-        venue_profile=TICKMILL_DEMO_PROFILE,
+        venue_profile=cfg.venue_profile,
     )
 
 
@@ -272,7 +273,8 @@ async def run_historical_quote_ticks(cfg: HomologationConfig, report: Homologati
     try:
         data_client, mt5 = await _connected_mt5(cfg)
         flags = mt5.COPY_TICKS_ALL if hasattr(mt5, "COPY_TICKS_ALL") else 0
-        from_ts = int((datetime.now(timezone.utc) - timedelta(hours=24)).timestamp())
+        lookback_hours = 168 if cfg.venue_profile.name == "xp-b3" else 24
+        from_ts = int((datetime.now(timezone.utc) - timedelta(hours=lookback_hours)).timestamp())
         ticks = mt5.copy_ticks_from(cfg.symbol, from_ts, 500, flags)
 
         if ticks is None or len(ticks) == 0:
@@ -339,11 +341,17 @@ async def run_unsupported_gates(cfg: HomologationConfig, report: HomologationRep
         )
         await data_client._subscribe_trade_ticks(trade_cmd)
 
+        is_xp = cfg.venue_profile.name == "xp-b3"
+        d08_msg = (
+            "SubscribeTradeTicks returned without raise (profile allows trade ticks)"
+            if is_xp
+            else "SubscribeTradeTicks returned without raise (UNSUPPORTED profile)"
+        )
         report.add(
             "TC-HOM-D08",
             "TradeTick subscribe gated by VenueProfile",
             ScenarioStatus.PASS,
-            "SubscribeTradeTicks returned without raise (UNSUPPORTED profile)",
+            d08_msg,
         )
         report.add(
             "TC-HOM-D10",
@@ -404,13 +412,22 @@ async def run_exec_wrong_account(cfg: HomologationConfig, report: HomologationRe
 
 
 async def run_trade_tick_request_rejected(cfg: HomologationConfig, report: HomologationReport) -> None:
-    """TC-HOM-D08b: _request_trade_ticks rejected by VenueProfile before bridge."""
+    """TC-HOM-D08b: _request_trade_ticks — gated for Tickmill, fetched for XP."""
     case_id = "TC-HOM-D08b"
-    name = "RequestTradeTicks rejected by VenueProfile"
+    is_xp = cfg.venue_profile.name == "xp-b3"
+    name = (
+        "RequestTradeTicks E2E (XP profile)"
+        if is_xp
+        else "RequestTradeTicks rejected by VenueProfile"
+    )
 
     reset_mt5_client_cache()
     data_client, _, cache, clock = await _make_data_client(cfg)
     iid = _instrument_id(cfg.symbol)
+    delivered: list = []
+
+    def _capture_trades(instrument_id, ticks, correlation_id):
+        delivered.extend(ticks)
 
     try:
         await data_client._connect()
@@ -419,11 +436,15 @@ async def run_trade_tick_request_rejected(cfg: HomologationConfig, report: Homol
             report.add(case_id, name, ScenarioStatus.FAIL, "instrument not loaded")
             return
 
+        if is_xp:
+            data_client._handle_trade_ticks = _capture_trades
+
+        lookback = timedelta(days=7) if is_xp else None
         trade_req = RequestTradeTicks(
             instrument_id=iid,
-            start=None,
+            start=pd.Timestamp.utcnow() - lookback if lookback else None,
             end=None,
-            limit=5,
+            limit=50 if is_xp else 5,
             client_id=data_client.id,
             venue=_VENUE,
             callback=None,
@@ -433,12 +454,26 @@ async def run_trade_tick_request_rejected(cfg: HomologationConfig, report: Homol
         )
         await data_client._request_trade_ticks(trade_req)
 
-        report.add(
-            case_id,
-            name,
-            ScenarioStatus.PASS,
-            "RequestTradeTicks returned without raise (VenueProfile UNSUPPORTED gate)",
-        )
+        if is_xp:
+            if len(delivered) == 0:
+                report.add(case_id, name, ScenarioStatus.FAIL, "No TradeTick objects from _request_trade_ticks")
+                return
+            sample = delivered[-1]
+            last_px = float(sample.price)
+            report.add(
+                case_id,
+                name,
+                ScenarioStatus.PASS if last_px > 0 else ScenarioStatus.FAIL,
+                f"Received {len(delivered)} TradeTick(s) sample last={last_px}",
+                ticks=len(delivered),
+            )
+        else:
+            report.add(
+                case_id,
+                name,
+                ScenarioStatus.PASS,
+                "RequestTradeTicks returned without raise (VenueProfile UNSUPPORTED gate)",
+            )
     except Exception as exc:
         report.add(case_id, name, ScenarioStatus.FAIL, str(exc))
     finally:
@@ -529,9 +564,10 @@ async def run_request_quote_ticks_e2e(cfg: HomologationConfig, report: Homologat
 
         data_client._handle_quote_ticks = _capture_quotes
 
+        lookback = timedelta(days=7) if cfg.venue_profile.name == "xp-b3" else None
         req = RequestQuoteTicks(
             instrument_id=iid,
-            start=None,
+            start=pd.Timestamp.utcnow() - lookback if lookback else None,
             end=None,
             limit=50,
             client_id=data_client.id,

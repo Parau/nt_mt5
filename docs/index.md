@@ -59,10 +59,17 @@ Defines testing expectations.
 Use it to understand:
 
 - unit, integration, acceptance, performance and memory tests;
+- **Tier 1.5 homologation** (`homologation/` — operational `TradingNode` runners on real MT5);
 - fake bridge strategy;
 - why deterministic tests must not require live MT5;
 - why tests should assert observable behavior, not log text;
 - when mocks are appropriate.
+
+### [`venue_profile.md`](venue_profile.md)
+
+Broker-specific capability gates (`TICKMILL_DEMO_PROFILE`, `XP_B3_PROFILE`).
+
+Use it when a behavior is **profile-dependent** (e.g. TradeTick unsupported on Tickmill, partial on XP/B3) or when homologating a non-Tickmill broker.
 
 ---
 
@@ -164,6 +171,20 @@ Live tests should use markers such as:
 
 Execution tests must require explicit opt-in before sending demo orders.
 
+### Homologation (Tier 1.5)
+
+Operational validation via standalone runners in `homologation/` — not part of the default `pytest` suite.
+
+| Resource | Purpose |
+|---|---|
+| `homologation/run_homologation.py` | Full Tickmill suite |
+| `homologation/run_open_market.py` | Open-market smoke (quotes, bars, exec) |
+| `homologation/run_closed_market.py` | Closed-market subset |
+| `homologation/run_xp_closed_market.py` | XP/B3 closed market (`XP_B3_PROFILE`) |
+| `res/proximos testes adaptador.md` | Homologation tracker (TC-HOM-*) |
+
+See `docs/testing_contract.md` — Tier 1.5 — for runner details and env vars (`MT5_HOST`, `MT5_PORT`).
+
 ---
 
 ## 6. Agent task specification
@@ -258,6 +279,7 @@ Read:
 - `remote_mt5_test_gateway.md`
 - `testing_contract.md`
 - `terminal_access_contract.md`
+- `venue_profile.md` (if broker-specific)
 
 Check:
 
@@ -265,6 +287,21 @@ Check:
 - env var skip behavior;
 - demo execution opt-in;
 - no live dependency in deterministic tests.
+
+### Homologation task
+
+Read:
+
+- `testing_contract.md` (Tier 1.5)
+- `data_capability_matrix.md` and/or `execution_capability_matrix.md`
+- `venue_profile.md` (Tickmill vs XP/B3)
+- `res/proximos testes adaptador.md`
+
+Check:
+
+- correct runner and broker login on the MT5 terminal;
+- update tracker and matrix **Live coverage** columns when scenarios pass;
+- record production fixes in `docs/decisions.md` when discovered.
 
 ### Documentation/governance task
 
@@ -289,9 +326,10 @@ Check:
 Use these status values consistently:
 
 - **Supported**: production implementation exists, Nautilus-level flow is exercised, deterministic tests exist, and docs/capability matrix are aligned.
-- **Partial**: gateway/wrapper/wiring exists, but Nautilus-level flow, tester coverage, reports, or docs are incomplete.
+- **Partial**: gateway/wrapper/wiring exists, but Nautilus-level flow, tester coverage, reports, homologation, or docs are incomplete.
 - **Unsupported**: not implemented and must fail safely.
 - **Planned**: intentionally future work.
+- **Profile-dependent**: behavior differs by `VenueProfile` (see `venue_profile.md`); state the profile when claiming support.
 
 Do not mark a feature **Supported** just because the RPyC gateway exposes a method.
 

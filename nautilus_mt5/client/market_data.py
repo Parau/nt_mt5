@@ -18,6 +18,7 @@ from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.data import TradeTick
+from nautilus_trader.model.enums import AggressorSide
 from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TradeId
@@ -429,19 +430,40 @@ class MetaTrader5ClientMarketDataMixin:
         elif isinstance(start_date_time, str) and start_date_time.strip():
             from_ts = int(pd.Timestamp(start_date_time).timestamp())
         else:
-            from_ts = end_ts - 86_400
+            from_ts = None
 
         flags = getattr(mt5, "COPY_TICKS_ALL", 0)
         try:
-            raw = await asyncio.to_thread(
-                mt5.copy_ticks_from,
-                symbol_str,
-                from_ts,
-                number_of_ticks,
-                flags,
-            )
+            # Prefer copy_ticks_from with a count cap — copy_ticks_range pulls the entire window
+            # (e.g. 800k+ ticks over 7 days on WDON26) and is only for uncapped requests.
+            if from_ts is not None and number_of_ticks > 0:
+                raw = await asyncio.to_thread(
+                    mt5.copy_ticks_from,
+                    symbol_str,
+                    from_ts,
+                    number_of_ticks,
+                    flags,
+                )
+            elif from_ts is not None and from_ts < end_ts and hasattr(mt5, "copy_ticks_range"):
+                raw = await asyncio.to_thread(
+                    mt5.copy_ticks_range,
+                    symbol_str,
+                    from_ts,
+                    end_ts,
+                    flags,
+                )
+            else:
+                if from_ts is None:
+                    from_ts = end_ts - 86_400
+                raw = await asyncio.to_thread(
+                    mt5.copy_ticks_from,
+                    symbol_str,
+                    from_ts,
+                    number_of_ticks or 1000,
+                    flags,
+                )
         except Exception as exc:
-            self._log.warning(f"copy_ticks_from failed for {symbol_str}: {exc}")
+            self._log.warning(f"copy_ticks failed for {symbol_str}: {exc}")
             return []
 
         if raw is None or len(raw) == 0:
@@ -464,6 +486,7 @@ class MetaTrader5ClientMarketDataMixin:
         ticks_out: list[QuoteTick | TradeTick] = []
         for row in rows:
             bid = ask = last = 0.0
+            volume = 0.0
             time_sec = 0
             time_msc = None
             try:
@@ -471,12 +494,14 @@ class MetaTrader5ClientMarketDataMixin:
                     bid = float(row["bid"])
                     ask = float(row["ask"])
                     last = float(row["last"])
+                    volume = float(row["volume"]) if "volume" in row.dtype.names else 0.0
                     time_sec = int(row["time"])
                     time_msc = row["time_msc"] if "time_msc" in row.dtype.names else None
                 elif isinstance(row, dict):
                     bid = float(row.get("bid", 0) or 0)
                     ask = float(row.get("ask", 0) or 0)
                     last = float(row.get("last", 0) or 0)
+                    volume = float(row.get("volume", 0) or 0)
                     time_sec = int(row.get("time", 0) or 0)
                     time_msc = row.get("time_msc")
                 elif isinstance(row, (tuple, list)) and len(row) >= 3:
@@ -484,11 +509,13 @@ class MetaTrader5ClientMarketDataMixin:
                     bid = float(row[1])
                     ask = float(row[2])
                     last = float(row[3]) if len(row) > 3 else 0.0
+                    volume = float(row[4]) if len(row) > 4 else 0.0
                     time_msc = row[5] if len(row) > 5 else None
                 else:
                     bid = float(getattr(row, "bid", 0) or 0)
                     ask = float(getattr(row, "ask", 0) or 0)
                     last = float(getattr(row, "last", 0) or 0)
+                    volume = float(getattr(row, "volume", 0) or 0)
                     time_sec = int(getattr(row, "time", 0) or 0)
                     time_msc = getattr(row, "time_msc", None)
             except (TypeError, KeyError, IndexError, ValueError):
@@ -504,11 +531,12 @@ class MetaTrader5ClientMarketDataMixin:
             if tick_type in ("TRADES", "AllLast"):
                 if last <= 0:
                     continue
+                trade_size = volume if volume > 0 else 1.0
                 ticks_out.append(TradeTick(
                     instrument_id=instrument_id,
                     price=instrument.make_price(last),
-                    size=instrument.make_qty(0),
-                    aggressor_side=OrderSide.NO_ORDER_SIDE,
+                    size=instrument.make_qty(trade_size),
+                    aggressor_side=AggressorSide.NO_AGGRESSOR,
                     trade_id=TradeId(str(time_sec)),
                     ts_event=ts_event,
                     ts_init=max(self._clock.timestamp_ns(), ts_event),
@@ -527,6 +555,8 @@ class MetaTrader5ClientMarketDataMixin:
                 ))
 
         ticks_out.sort(key=lambda t: t.ts_init)
+        if number_of_ticks > 0 and len(ticks_out) > number_of_ticks:
+            ticks_out = ticks_out[-number_of_ticks:]
         return ticks_out
 
     #
@@ -798,6 +828,45 @@ class MetaTrader5ClientMarketDataMixin:
         )
 
         await self._handle_data(quote_tick)
+
+    async def process_tick_by_tick_all_last(
+        self,
+        *,
+        req_id: int,
+        time: int,
+        last_price: float,
+        volume: Decimal,
+    ) -> None:
+        """Return AllLast / trade tick data from symbol_info_tick polling."""
+        if not (subscription := self._subscriptions.get(req_id=req_id)):
+            return
+
+        if last_price <= 0.0:
+            self._log.debug(
+                f"Discarding invalid TradeTick (last={last_price}) for req_id={req_id}.",
+            )
+            return
+
+        instrument_id = InstrumentId.from_str(subscription.name[0])
+        instrument = self._cache.instrument(instrument_id)
+        if instrument is None:
+            self._log.warning(
+                f"Instrument {instrument_id} not found in cache for req_id={req_id}. Skipping TradeTick.",
+            )
+            return
+
+        ts_event = await self._convert_mt5_timestamp_to_pandas_timestamp(time)
+        trade_qty = volume if volume > 0 else Decimal(1)
+        trade_tick = TradeTick(
+            instrument_id=instrument_id,
+            price=instrument.make_price(last_price),
+            size=instrument.make_qty(trade_qty),
+            aggressor_side=AggressorSide.NO_AGGRESSOR,
+            trade_id=TradeId(str(time)),
+            ts_event=ts_event,
+            ts_init=max(self._clock.timestamp_ns(), ts_event),
+        )
+        await self._handle_data(trade_tick)
 
     async def process_realtime_bar(
         self,

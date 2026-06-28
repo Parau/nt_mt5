@@ -7,6 +7,7 @@ Run full suite (needs open market + WS for D02): `homologation/run_homologation.
 | Run | Date (UTC) | Report | Result |
 |-----|------------|--------|--------|
 | Closed market | 2026-06-28 01:28 | `homologation/last_closed_market_report.json` | **11/11 PASS** (BTCUSD, account 25339175) |
+| Closed market (post-XP) | 2026-06-28 13:14 | `homologation/last_closed_market_report.json` | **12/12 PASS** (BTCUSD, D21 tick_capacity pagination) |
 | Open market (full) | 2026-06-28 01:29–01:32 | `homologation/last_open_market_report.json` | **10/10 PASS** (BTCUSD, WS feed + live exec) |
 | **D02 stream 120s** | 2026-06-28 | `homologation/run_feed_smoke.py` (console) | **PASS** — 488 ticks, max gap 5.1s, `transport=ws_feed` |
 | **Wave 2** | 2026-06-28 01:51 | `homologation/last_wave2_report.json` | **7/7 PASS** — D06, D07, E06–E09 |
@@ -228,8 +229,10 @@ set MT5_SYMBOL=BTCUSD
 set MT5_FEED_ENABLED=1
 set MT5_ENABLE_LIVE_EXECUTION=1
 set HOMOLOG_REPORT_JSON=homologation/last_open_market_report.json
-E:\miniconda\envs\trading\python.exe homologation\run_homologation.py
+E:\miniconda\envs\trading\python.exe homologation\run_open_market.py
 ```
+
+**Open market (focused — D02, E01, D03/D05, D21, E80+):** same env as above; `run_open_market.py` is a shorter subset of `run_homologation.py` (no wave2/3/4 extras). D21 fix validated: `limit=50` returns in seconds (not `tick_capacity` ~10k).
 
 Start `NT5TickFeedService` in MT5 before D02/D03/D05.
 
@@ -300,3 +303,55 @@ E:\miniconda\envs\trading\python.exe homologation\run_feed_smoke.py
 ### Tickmill BTCUSD session (server ≈ EET, UTC+2)
 
 Convert: **BRT ≈ server − 5h**. See [`res/tickmill_restrictions.md`](tickmill_restrictions.md).
+
+---
+
+## XP/B3 (XPMT5-DEMO) — homologation tracker
+
+Ground truth: [`res/xp_b3_restrictions.md`](xp_b3_restrictions.md)  
+Harness: `homologation/run_xp_closed_market.py` (`MT5_VENUE_PROFILE=xp_b3`, login **56822578**)
+
+**Before running:** MT5 must be logged into **XP** (not Tickmill). Switch login manually and restart bridge if needed.
+
+| Run | Date (UTC) | Report | Result |
+|-----|------------|--------|--------|
+| Closed market | 2026-06-28 12:54+ | `homologation/last_xp_closed_market_report.json` | **15/17 PASS** (D08b/D21-T TradeTick size=0) |
+| Closed market (re-run) | 2026-06-28 | `homologation/last_xp_closed_market_report.json` | **17/17 PASS** (login 56822578, WDON26) |
+
+### Closed market — runnable off-hours
+
+| ID | Scenario | Status | Notes |
+|----|----------|--------|-------|
+| TC-HOM-PF | Bridge + account + symbol_info | **DONE** | login 56822578, BRL |
+| TC-HOM-D01-CM | Instrument load | **DONE** | WDON26 default |
+| TC-HOM-D01-CM-XP | Multi-symbol load | **DONE** | WDON26,PETR4,DI1F27,WIN$,WINQ26 |
+| TC-HOM-D04a/b/c | Historical bars + ticks | **DONE** | 7-day lookback for ticks off-hours |
+| TC-HOM-D21 | RequestQuoteTicks | **DONE** | WDON26,PETR4,DI1F27 |
+| TC-HOM-D21-T | RequestTradeTicks | **DONE** | WIN$,WINQ26 (size default=1 when vol=0) |
+| TC-HOM-D08/D08b | Trade tick subscribe/request | **DONE** | Profile allows (inverse of Tickmill) |
+| TC-HOM-E-CONN / E-EDGE1 | Exec connect | **DONE** | |
+| TC-HOM-E-SUBMIT | Off-hours limit/stop shape | **DONE** | WDON26,PETR4,DI1F27 submitted |
+
+### Open market — OPEN (pregão B3)
+
+| ID | Scenario | Status | Notes |
+|----|----------|--------|-------|
+| TC-HOM-D02 | WS sustained stream | **OPEN** | Needs live ticks |
+| TC-HOM-D03/D05 | Live bars WS | **OPEN** | |
+| TC-HOM-D06/D06-SVC | Feed resilience | **OPEN** | |
+| TC-HOM-D07 | Multi-symbol WS | **OPEN** | |
+| TC-HOM-E01 | Market round-trip + fill | **OPEN** | WDON26 first |
+| TC-HOM-E02–E10 | Stops, hedging, mass status | **OPEN** | |
+| WINQ26 quotes | QuoteTick sanity in session | **OPEN** | Off-hours bid/ask unreliable |
+
+**XP closed-market CMD:**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18812
+set MT5_VENUE_PROFILE=xp_b3
+set MT5_ACCOUNT_NUMBER=56822578
+set MT5_SYMBOL=WDON26
+set HOMOLOG_MULTI_SYMBOLS=WDON26,PETR4,DI1F27,WIN$,WINQ26
+set HOMOLOG_REPORT_JSON=homologation/last_xp_closed_market_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_xp_closed_market.py
+```

@@ -182,12 +182,12 @@ async def _run_stop_order_acceptance() -> dict:
     # Place trigger prices safely away from market
     buy_stop_trigger  = round(ask * 1.02, 2)   # 2% above ask
     sell_stop_trigger = round(bid * 0.98, 2)    # 2% below bid
-    # BUY_STOP_LIMIT: MT5 requires stpx (NT price) < trigger (NT trigger_price)
+    # BUY_STOP_LIMIT: MT5 requires stoplimit (NT price) < trigger (NT trigger_price)
     # When triggered at buy_stop_limit_trigger, a limit buy at limit price is placed.
     # The limit must be BELOW the trigger so it does not fill immediately on activation.
     buy_stop_limit_trigger = round(ask * 1.02, 2)
     buy_stop_limit_limit   = round(ask * 1.015, 2)   # limit below trigger
-    # SELL_STOP_LIMIT: MT5 requires stpx (NT price) > trigger (NT trigger_price)
+    # SELL_STOP_LIMIT: MT5 requires stoplimit (NT price) > trigger (NT trigger_price)
     sell_stop_limit_trigger = round(bid * 0.98, 2)
     sell_stop_limit_limit   = round(bid * 0.985, 2)  # limit above trigger
 
@@ -216,7 +216,7 @@ async def _run_stop_order_acceptance() -> dict:
                 ts_init=clock.timestamp_ns(),
             ),
             "expected_mt5_type": 4,  # ORDER_TYPE_BUY_STOP
-            "expect_stpx": False,
+            "expect_stoplimit": False,
         },
         {
             "id": "TC-LIVE-STOP-02",
@@ -235,7 +235,7 @@ async def _run_stop_order_acceptance() -> dict:
                 ts_init=clock.timestamp_ns(),
             ),
             "expected_mt5_type": 5,  # ORDER_TYPE_SELL_STOP
-            "expect_stpx": False,
+            "expect_stoplimit": False,
         },
         {
             "id": "TC-LIVE-STOP-03",
@@ -247,7 +247,7 @@ async def _run_stop_order_acceptance() -> dict:
                 client_order_id=ClientOrderId("LIVE-STOP-03"),
                 order_side=OrderSide.BUY,
                 quantity=Quantity.from_str("0.01"),
-                # NT price → MT5 stpx (limit activated after trigger)
+                # NT price → MT5 stoplimit (limit activated after trigger)
                 # Must be BELOW trigger for BUY_STOP_LIMIT so it does not fill immediately.
                 price=Price.from_str(f"{buy_stop_limit_limit:.2f}"),
                 trigger_price=Price.from_str(f"{buy_stop_limit_trigger:.2f}"),
@@ -257,7 +257,7 @@ async def _run_stop_order_acceptance() -> dict:
                 ts_init=clock.timestamp_ns(),
             ),
             "expected_mt5_type": 6,  # ORDER_TYPE_BUY_STOP_LIMIT
-            "expect_stpx": True,
+            "expect_stoplimit": True,
         },
         {
             "id": "TC-LIVE-STOP-04",
@@ -269,7 +269,7 @@ async def _run_stop_order_acceptance() -> dict:
                 client_order_id=ClientOrderId("LIVE-STOP-04"),
                 order_side=OrderSide.SELL,
                 quantity=Quantity.from_str("0.01"),
-                # NT price → MT5 stpx (limit activated after trigger)
+                # NT price → MT5 stoplimit (limit activated after trigger)
                 # Must be ABOVE trigger for SELL_STOP_LIMIT so it does not fill immediately.
                 price=Price.from_str(f"{sell_stop_limit_limit:.2f}"),
                 trigger_price=Price.from_str(f"{sell_stop_limit_trigger:.2f}"),
@@ -279,7 +279,7 @@ async def _run_stop_order_acceptance() -> dict:
                 ts_init=clock.timestamp_ns(),
             ),
             "expected_mt5_type": 7,  # ORDER_TYPE_SELL_STOP_LIMIT
-            "expect_stpx": True,
+            "expect_stoplimit": True,
         },
     ]
 
@@ -288,7 +288,7 @@ async def _run_stop_order_acceptance() -> dict:
         label = tc["label"]
         order = tc["order"]
         expected_mt5_type = tc["expected_mt5_type"]
-        expect_stpx = tc["expect_stpx"]
+        expect_stoplimit = tc["expect_stoplimit"]
 
         logger.info(f"\n{'='*60}")
         logger.info(f"Running {tc_id}: {label}")

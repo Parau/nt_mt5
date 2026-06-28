@@ -60,11 +60,13 @@ from nautilus_mt5.config import (
 from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.factories import MT5LiveDataClientFactory
-from nautilus_mt5.venue_profile import TICKMILL_DEMO_PROFILE
+from nautilus_mt5.venue_profile import TICKMILL_DEMO_PROFILE, XP_B3_PROFILE
 
 _VENUE = Venue("METATRADER_5")
 _USTEC_ID = InstrumentId(Symbol("USTEC"), _VENUE)
 _EURUSD_ID = InstrumentId(Symbol("EURUSD"), _VENUE)
+_WDON26_ID = InstrumentId(Symbol("WDON26"), _VENUE)
+_WIN_DOLLAR_ID = InstrumentId(Symbol("WIN$"), _VENUE)
 
 _BAR_TYPE = BarType(
     instrument_id=_USTEC_ID,
@@ -73,13 +75,13 @@ _BAR_TYPE = BarType(
 )
 
 
-def _data_config(*symbols: str) -> MetaTrader5DataClientConfig:
+def _data_config(*symbols: str, venue_profile=TICKMILL_DEMO_PROFILE) -> MetaTrader5DataClientConfig:
     load = frozenset(MT5Symbol(symbol=s) for s in symbols) if symbols else None
     return MetaTrader5DataClientConfig(
         client_id=1,
         terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
         external_rpyc=ExternalRPyCTerminalConfig(host="127.0.0.1", port=18812),
-        venue_profile=TICKMILL_DEMO_PROFILE,
+        venue_profile=venue_profile,
         instrument_provider=MetaTrader5InstrumentProviderConfig(
             load_symbols=load,
         ),
@@ -594,6 +596,109 @@ async def test_tc_d31_request_trade_ticks_cfd_profile_rejects(
     )
 
 
+@pytest.mark.asyncio
+@pytest.mark.data_tester
+async def test_tc_d30_xp_subscribe_trade_ticks_reaches_client(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+):
+    """
+    TC-D30 (XP_B3_PROFILE): _subscribe_trade_ticks() for WDON26 (EXCH_FUTURES)
+    passes the profile gate and calls subscribe_ticks with tick_type='AllLast'.
+    """
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_data_config("WDON26", venue_profile=XP_B3_PROFILE),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+    await data_client._connect()
+
+    subscribe_calls: list = []
+
+    async def _spy_subscribe_ticks(instrument_id, symbol, tick_type, ignore_size=False):
+        subscribe_calls.append(
+            {"instrument_id": instrument_id, "tick_type": tick_type, "symbol": symbol},
+        )
+
+    data_client._client.subscribe_ticks = _spy_subscribe_ticks
+
+    cmd = SubscribeTradeTicks(
+        instrument_id=_WDON26_ID,
+        client_id=data_client.id,
+        venue=None,
+        command_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+    )
+    await data_client._subscribe_trade_ticks(cmd)
+
+    assert len(subscribe_calls) == 1, (
+        "TC-D30 (XP): subscribe_ticks must be called for WDON26 trade_ticks=OBSERVED"
+    )
+    assert subscribe_calls[0]["tick_type"] == "AllLast"
+    assert subscribe_calls[0]["instrument_id"] == _WDON26_ID
+
+
+@pytest.mark.asyncio
+@pytest.mark.data_tester
+async def test_tc_d31_xp_request_trade_ticks_delivers_trade_tick_objects(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+):
+    """
+    TC-D31 (XP_B3_PROFILE): _request_trade_ticks() for WIN$ (continuous future)
+    passes the profile gate, calls get_historical_ticks(TRADES), and forwards
+    TradeTick objects to _handle_trade_ticks.
+    """
+    from nautilus_trader.model.data import TradeTick
+
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_data_config("WIN$", venue_profile=XP_B3_PROFILE),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+    await data_client._connect()
+
+    handle_calls: list = []
+
+    def _spy_handle(instrument_id, ticks, correlation_id):
+        handle_calls.append({"instrument_id": instrument_id, "ticks": ticks})
+
+    data_client._handle_trade_ticks = _spy_handle
+
+    req = RequestTradeTicks(
+        instrument_id=_WIN_DOLLAR_ID,
+        start=None,
+        end=None,
+        limit=1,
+        client_id=data_client.id,
+        venue=_VENUE,
+        callback=None,
+        request_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+        params=None,
+    )
+    await data_client._request_trade_ticks(req)
+
+    assert len(handle_calls) == 1, (
+        "TC-D31 (XP): _handle_trade_ticks not called for WIN$ historical trade request"
+    )
+    delivered = handle_calls[0]["ticks"]
+    assert len(delivered) >= 1, "TC-D31 (XP): expected at least 1 TradeTick"
+    assert isinstance(delivered[0], TradeTick), "TC-D31 (XP): delivered item must be TradeTick"
+    assert delivered[0].instrument_id == _WIN_DOLLAR_ID
+    assert float(delivered[0].price) > 0
+
+
 # ---------------------------------------------------------------------------
 # TC-D40: Request historical bars
 # ---------------------------------------------------------------------------
@@ -1063,17 +1168,15 @@ async def test_tc_d21_request_quote_ticks_delivers_quote_tick_objects(
 
 @pytest.mark.asyncio
 @pytest.mark.data_tester
-async def test_tc_d21_start_none_uses_tick_capacity_not_request_limit(
+async def test_tc_d21_start_none_honors_explicit_limit(
     clean_factory_cache, nautilus_components, nautilus_mt5_harness
 ):
     """
-    TC-D21: When request.start=None, _handle_ticks_request replaces 'limit'
-    with self._cache.tick_capacity (typically 10 000) instead of the request's
-    'limit' field.
+    TC-D21: When request.start=None and request.limit is set, _handle_ticks_request
+    uses the request limit (does not replace with tick_capacity).
 
-    Observable: with request.limit=1 and start=None, the stub is called TWICE
-    (first call → 1 tick, second call → [] → break).  If limit=1 had been
-    honoured, the loop would have exited after the first call (len==1 >= 1).
+    Observable: with request.limit=1 and start=None, the stub is called once
+    (first call → 1 tick → len==1 >= limit → loop exits).
     """
     from nautilus_trader.model.data import QuoteTick
     from nautilus_trader.model.objects import Price, Quantity
@@ -1103,6 +1206,79 @@ async def test_tc_d21_start_none_uses_tick_capacity_not_request_limit(
 
     async def _stub(symbol, tick_type, **kwargs):
         call_count["n"] += 1
+        return [fake_tick]
+
+    data_client._client.get_historical_ticks = _stub
+
+    handle_calls: list = []
+
+    def _spy_handle(instrument_id, ticks, correlation_id):
+        handle_calls.append(ticks)
+
+    data_client._handle_quote_ticks = _spy_handle
+
+    req = RequestQuoteTicks(
+        instrument_id=_USTEC_ID,
+        start=None,
+        end=None,
+        limit=1,
+        client_id=data_client.id,
+        venue=_VENUE,
+        callback=None,
+        request_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+        params=None,
+    )
+    await data_client._request_quote_ticks(req)
+
+    assert call_count["n"] == 1, (
+        "TC-D21: get_historical_ticks should be called once when start=None and limit=1"
+    )
+    assert len(handle_calls) == 1
+    assert len(handle_calls[0]) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.data_tester
+async def test_tc_d21_zero_limit_uses_tick_capacity(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+):
+    """
+    TC-D21: When request.limit is falsy (0), _handle_ticks_request falls back
+    to self._cache.tick_capacity.
+    """
+    from nautilus_trader.model.data import QuoteTick
+
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop, name="MT5", config=_data_config("USTEC"),
+        msgbus=msgbus, cache=cache, clock=clock,
+    )
+    await data_client._connect()
+
+    instrument = cache.instrument(_USTEC_ID)
+    ts = 1_700_000_000_000_000_000
+    fake_tick = QuoteTick(
+        instrument_id=_USTEC_ID,
+        bid_price=instrument.make_price(18500.00),
+        ask_price=instrument.make_price(18500.50),
+        bid_size=instrument.make_qty(1.0),
+        ask_size=instrument.make_qty(1.0),
+        ts_event=ts,
+        ts_init=ts,
+    )
+
+    call_count = {"n": 0}
+    tick_capacity = cache.tick_capacity
+
+    async def _stub(symbol, tick_type, **kwargs):
+        call_count["n"] += 1
+        n_ticks = kwargs.get("number_of_ticks", 0)
+        assert n_ticks <= min(tick_capacity, 1000), (
+            f"TC-D21: number_of_ticks={n_ticks} exceeds tick_capacity cap"
+        )
         return [fake_tick] if call_count["n"] == 1 else []
 
     data_client._client.get_historical_ticks = _stub
@@ -1118,7 +1294,7 @@ async def test_tc_d21_start_none_uses_tick_capacity_not_request_limit(
         instrument_id=_USTEC_ID,
         start=None,
         end=None,
-        limit=1,  # should be ignored — tick_capacity takes over
+        limit=0,
         client_id=data_client.id,
         venue=_VENUE,
         callback=None,
@@ -1129,14 +1305,9 @@ async def test_tc_d21_start_none_uses_tick_capacity_not_request_limit(
     await data_client._request_quote_ticks(req)
 
     assert call_count["n"] == 2, (
-        "TC-D21: get_historical_ticks should be called twice when start=None — "
-        "once to fetch ticks, once more (returns []) confirming tick_capacity "
-        "is used as limit instead of request.limit=1"
+        "TC-D21: limit=0 should use tick_capacity — stub called twice before empty break"
     )
     assert len(handle_calls) == 1
-    assert len(handle_calls[0]) == 1, (
-        "TC-D21: 1 tick should have been delivered (all returned by stub)"
-    )
 
 
 @pytest.mark.asyncio

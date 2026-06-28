@@ -1,49 +1,47 @@
 {
-  "started_at": "2026-06-28T01:29:13.405268+00:00",
+  "started_at": "2026-06-28T14:13:29.425583+00:00",
   "summary": {
     "total": 10,
-    "passed": 10,
-    "failed": 0,
+    "passed": 8,
+    "failed": 2,
     "skipped": 0,
-    "ok": true
+    "ok": false
   },
   "results": [
     {
       "case_id": "TC-HOM-PF",
       "name": "Bridge pre-flight (account + symbol tick)",
       "status": "PASS",
-      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=60100.0 ask=60110.0",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=60069.5 ask=60079.5",
       "metadata": {
         "login": 25339175,
         "server": "Tickmill-Demo",
-        "bid": 60100.0,
-        "ask": 60110.0
+        "bid": 60069.5,
+        "ask": 60079.5
       }
     },
     {
       "case_id": "TC-HOM-D01",
       "name": "Quote ticks via TradingNode",
-      "status": "PASS",
-      "detail": "Received 3 ticks (last bid=60101.0 ask=60111.0)",
-      "metadata": {
-        "ticks": 3
-      }
+      "status": "FAIL",
+      "detail": "Timeout after 120.0s \u2014 ticks=0",
+      "metadata": {}
     },
     {
       "case_id": "TC-HOM-E01",
       "name": "Market round-trip (BUY \u2192 SELL)",
-      "status": "PASS",
-      "detail": "BUY 0.01@60111.50 \u2192 SELL @60099.50",
+      "status": "FAIL",
+      "detail": "Suite timed out before round-trip completed",
       "metadata": {}
     },
     {
       "case_id": "TC-HOM-D02",
       "name": "Sustained quote tick stream",
       "status": "PASS",
-      "detail": "242 ticks in 60s (max inter-tick gap 5.6s, transport=ws_feed)",
+      "detail": "99 ticks in 60s (max inter-tick gap 5.7s, transport=ws_feed)",
       "metadata": {
-        "ticks": 242,
-        "max_gap_secs": 5.598458599997684,
+        "ticks": 99,
+        "max_gap_secs": 5.657196599999679,
         "duration_secs": 60.0,
         "transport": "ws_feed",
         "feed_uri": "ws://0.0.0.0:8765/mt5-feed"
@@ -69,53 +67,14 @@
       }
     },
     {
-      "case_id": "TC-HOM-E02",
-      "name": "Stop / stop-limit pending orders",
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
       "status": "PASS",
-      "detail": "TC-HOM-E02a=OK; TC-HOM-E02b=OK",
+      "detail": "Received 50 QuoteTick(s) sample bid=60243.5 ask=60253.5",
       "metadata": {
-        "sub_results": [
-          [
-            "TC-HOM-E02a",
-            true,
-            "BUY STOP_MARKET venue=264627035"
-          ],
-          [
-            "TC-HOM-E02b",
-            true,
-            "SELL STOP_MARKET venue=264627036"
-          ]
-        ]
-      }
-    },
-    {
-      "case_id": "TC-HOM-E03",
-      "name": "Limit GTC + cancel",
-      "status": "PASS",
-      "detail": "BUY LIMIT @57109.72 venue=264627039 cancelled (retry retcode=10013)",
-      "metadata": {
-        "venue_order_id": "264627039",
-        "retry_retcode": 10013
-      }
-    },
-    {
-      "case_id": "TC-HOM-E04",
-      "name": "cancel_on_stop / close_on_stop on disconnect",
-      "status": "PASS",
-      "detail": "E04a=OK; E04b=OK",
-      "metadata": {
-        "sub_results": [
-          [
-            "E04a",
-            true,
-            "cancel_on_stop venue=264627040 retry_retcode=10013"
-          ],
-          [
-            "E04b",
-            true,
-            "close_on_stop positions 0\u21920"
-          ]
-        ]
+        "ticks": 50,
+        "bid": 60243.5,
+        "ask": 60253.5
       }
     },
     {
@@ -128,6 +87,37 @@
         "report_positions": 0,
         "order_reports": 0,
         "fill_reports": 0
+      }
+    },
+    {
+      "case_id": "TC-HOM-E05b",
+      "name": "Fill reports after market fill (history_deals_get)",
+      "status": "PASS",
+      "detail": "fill_reports=164 after poll=32s; venue_order_id=264666928; fresh order not in history yet; path validated via prior deal; sample trade_id=226835850 side=1 qty=0.01 px=60471.00",
+      "metadata": {
+        "fill_reports": 164,
+        "poll_secs": 32.0,
+        "lookback_mins": 1440
+      }
+    },
+    {
+      "case_id": "TC-HOM-E81",
+      "name": "Open-on-start reconcile (positions + pending orders)",
+      "status": "PASS",
+      "detail": "E81a=OK: position_reports=1 bridge_positions=1; E81b=OK: pending_reports=1 bridge_pending=1 overlap=1",
+      "metadata": {
+        "sub_results": [
+          [
+            "E81a",
+            true,
+            "position_reports=1 bridge_positions=1"
+          ],
+          [
+            "E81b",
+            true,
+            "pending_reports=1 bridge_pending=1 overlap=1"
+          ]
+        ]
       }
     }
   ]

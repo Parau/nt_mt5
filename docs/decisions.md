@@ -137,6 +137,28 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - Required for homologation **TC-HOM-E07** (modify volume verification) and for `generate_order_status_reports` when open pending orders exist.
 - Staging reference: `MQL5/refactoring/bridge/mt5_bridge_v007.py` (bridge v0.7).
 
+### 20. Multi-broker support via VenueProfile (Tickmill + XP/B3)
+- One adapter (`METATRADER_5`); broker differences are expressed only through **`VenueProfile` + config** (`MT5_VENUE_PROFILE`, symbols, `account_id`). No `if broker == "XP"` branches in core adapter code.
+- Live terminals on build 5833 report **`trade_calc_mode` 32/33** for B3 stocks/futures (not legacy 6/7). `XP_B3_PROFILE` declares both v2 and legacy aliases; `normalize_trade_calc_mode()` resolves lookups.
+- Quote vs `TradeTick` routing for B3 uses **`tick_routing`** (tick shape, `TRADE_MODE`, `$` continuous suffix) — not broker name.
+- Continuous B3 series (`WIN$`, `WDO$`) are **data-only** (`TRADE_MODE=DISABLED`); execution targets nominal contracts (`WINQ26`, `WDON26`).
+- Homologation runners: `run_closed_market.py` (Tickmill) and `run_xp_closed_market.py` (XP). **MT5 login must be switched manually** between brokers — the RPyC bridge binds to whichever terminal session is open.
+
+### 21. Historical quote ticks — MT5-native path (D21, 2026-06-28)
+- On-demand historical `QuoteTick` requests (`_request_quote_ticks`) must use MT5-native **`copy_ticks_from`** via `MetaTrader5Client.get_historical_ticks`.
+- Legacy Interactive Brokers **`req_historical_ticks`** / `cancel_historical_data` paths are removed from this adapter; do not reintroduce them.
+- RPyC payloads may be numpy structured tuples — parse by field name / index, not only `getattr`.
+- When `RequestQuoteTicks.limit > 0` and `start is None`, honor **`limit`** (do not always substitute `tick_capacity`). Use `tick_capacity` only when `limit=0`.
+- Homologation: **TC-HOM-D21** (`closed_market_suite.py`, `run_wave4_homologation.py`, `run_open_market.py`).
+
+### 22. Execution reconciliation and modify fixes (Wave 4, 2026-06-28)
+- **`get_open_orders`** must call MT5 `orders_get` synchronously (same pattern as `positions_get`) and normalize dict rows to `MT5Order` for `generate_order_status_reports`.
+- **`_parse_mt5_order_to_order_status_report`** resolves instruments by **symbol name**, not `find_with_symbol_id(symbol_string)`. Use `orderRef` or fall back to `str(order_id)` for `ClientOrderId` when `orderRef` is empty.
+- **`_modify_order`** uses `TRADE_ACTION_MODIFY` (`action=7`) via `MetaTrader5Client.modify_order`, not a new `place_order` submit.
+- **Stop trigger amend:** for `STOP_MARKET`, `ModifyOrder.trigger_price` maps to MT5 pending **`price`** (trigger), not `stoplimit`.
+- **`MAP_TIME_IN_FORCE`** must be applied on submit (`type_time`); do not hardcode GTC for all pending orders (required for **DAY** limit homologation **E06e**).
+- Homologation evidence: **E05b** fill reports, **E43** cancel rejection (10013), **E06de** FOK/DAY, **E07b** stop amend, **E81** open-on-start reconcile — see `res/proximos testes adaptador.md`.
+
 ## How to use this file
 
 When changing the adapter, ask:

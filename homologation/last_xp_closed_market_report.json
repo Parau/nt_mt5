@@ -1,0 +1,157 @@
+{
+  "started_at": "2026-06-28T13:04:40.518454+00:00",
+  "summary": {
+    "total": 17,
+    "passed": 17,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (closed market \u2014 account + symbol_info)",
+      "status": "PASS",
+      "detail": "login=56822578 server=XPMT5-DEMO WDON26 digits=3 ticks_bookdepth=32 bid=0.0 ask=0.0 symbol_time=1782498480 (snapshot frozen \u2014 market closed; OK for closed-market run)",
+      "metadata": {
+        "login": 56822578,
+        "server": "XPMT5-DEMO",
+        "ticks_bookdepth": 32
+      }
+    },
+    {
+      "case_id": "TC-HOM-D04a",
+      "name": "Historical bars M1+M5 via MetaTrader5Client \u2192 copy_rates_from_pos",
+      "status": "PASS",
+      "detail": "M1 bars=5 M5 bars=10 sample O=5176.0 H=5177.5 L=5175.5 C=5176.0",
+      "metadata": {
+        "m1_count": 5,
+        "m5_count": 10
+      }
+    },
+    {
+      "case_id": "TC-HOM-D04b",
+      "name": "RequestBars M1 via DataClient._request_bars (copy_rates_from_pos)",
+      "status": "PASS",
+      "detail": "Received 5 M1 bar(s) close=5176.0",
+      "metadata": {
+        "bars": 5
+      }
+    },
+    {
+      "case_id": "TC-HOM-D04c",
+      "name": "Historical quote ticks via MetaTrader5Client \u2192 copy_ticks_from",
+      "status": "PASS",
+      "detail": "ticks=500 last_sample bid=5163.5 ask=5164.0 last=5162.0",
+      "metadata": {
+        "tick_count": 500,
+        "last_zero": false
+      }
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
+      "status": "PASS",
+      "detail": "Received 49 QuoteTick(s) sample bid=5166.0 ask=5167.0",
+      "metadata": {
+        "ticks": 49,
+        "bid": 5166.0,
+        "ask": 5167.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D01-CM",
+      "name": "Instrument load via DataClient (closed market)",
+      "status": "PASS",
+      "detail": "WDON26.METATRADER_5 loaded digits=3 calc_mode=33",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D08",
+      "name": "TradeTick subscribe gated by VenueProfile",
+      "status": "PASS",
+      "detail": "SubscribeTradeTicks returned without raise (profile allows trade ticks)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D10",
+      "name": "Order book unsupported (warning only)",
+      "status": "PASS",
+      "detail": "SubscribeOrderBook returned without raise",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "SubscribeInstruments unsupported (warning only)",
+      "status": "PASS",
+      "detail": "SubscribeInstruments returned without raise",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D08b",
+      "name": "RequestTradeTicks E2E (XP profile)",
+      "status": "PASS",
+      "detail": "Received 34 TradeTick(s) sample last=5166.5",
+      "metadata": {
+        "ticks": 34
+      }
+    },
+    {
+      "case_id": "TC-HOM-E-CONN",
+      "name": "ExecClient connect + account validation",
+      "status": "PASS",
+      "detail": "Connected account=56822578",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-E-EDGE1",
+      "name": "ExecClient rejects wrong account_id",
+      "status": "PASS",
+      "detail": "Rejected as expected: ConnectionError",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D01-CM-XP",
+      "name": "Multi-symbol instrument load (XP closed market)",
+      "status": "PASS",
+      "detail": "WDON26(calc=33,mode=4), PETR4(calc=32,mode=4), DI1F27(calc=33,mode=4), WIN$(calc=33,mode=0), WINQ26(calc=33,mode=4)",
+      "metadata": {
+        "symbols": [
+          "WDON26",
+          "PETR4",
+          "DI1F27",
+          "WIN$",
+          "WINQ26"
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-D04c-XP",
+      "name": "Historical ticks multi-symbol (XP)",
+      "status": "PASS",
+      "detail": "WDON26=200(bid=5163.5,ask=5164.0,last=5163.5); PETR4=200(bid=38.83,ask=38.87,last=38.82); DI1F27=200(bid=14.255,ask=14.26,last=14.255); WIN$=200(bid=0.0,ask=0.0,last=171445.0); WINQ26=200(bid=171430.0,ask=171435.0,last=171425.0)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D21-XP",
+      "name": "RequestQuoteTicks E2E (XP quote symbols)",
+      "status": "PASS",
+      "detail": "QuoteTicks OK for WDON26,PETR4,DI1F27",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D21-T",
+      "name": "RequestTradeTicks E2E (XP trade symbols)",
+      "status": "PASS",
+      "detail": "TradeTicks OK for WIN$,WINQ26",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-E-SUBMIT",
+      "name": "Off-hours limit/stop submit (order shape validation)",
+      "status": "PASS",
+      "detail": "WDON26/LIMIT: submitted; WDON26/STOP: submitted; PETR4/LIMIT: submitted; PETR4/STOP: submitted; DI1F27/LIMIT: submitted; DI1F27/STOP: submitted",
+      "metadata": {}
+    }
+  ]
+}

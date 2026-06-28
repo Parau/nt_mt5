@@ -5,7 +5,7 @@ from nautilus_trader.config import LiveDataEngineConfig, LoggingConfig, RoutingC
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
 
-from nautilus_mt5 import TICKMILL_DEMO_PROFILE
+from nautilus_mt5.venue_profile import resolve_venue_profile
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
@@ -57,7 +57,7 @@ def build_trading_node(
                 terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
                 external_rpyc=external_rpyc,
                 instrument_provider=instrument_provider,
-                venue_profile=TICKMILL_DEMO_PROFILE,
+                venue_profile=resolve_venue_profile(cfg.venue_profile_name),
                 feed=feed_config,
             ),
         },

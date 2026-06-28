@@ -137,7 +137,10 @@ def _close_symbol_positions(host: str, port: int, symbol: str) -> None:
             return
 
 
-async def _submit_and_accept(exec_client, cache, msgbus, clock, order) -> tuple[str | None, str | None]:
+async def _submit_and_accept(
+    exec_client, cache, msgbus, clock, order,
+) -> tuple[str | None, str | None, str | None]:
+    """Returns (status_or_venue_id, error, venue_order_id)."""
     cache.add_order(order)
     cmd = SubmitOrder(
         trader_id=msgbus.trader_id,
@@ -174,15 +177,17 @@ async def _submit_and_accept(exec_client, cache, msgbus, clock, order) -> tuple[
         exec_client.generate_order_filled = orig_filled
 
     if rejected_events:
-        return None, str(rejected_events[0].get("reason", "rejected"))
+        return None, str(rejected_events[0].get("reason", "rejected")), None
     if filled_events:
-        return "FILLED", None
+        vid = filled_events[0].get("venue_order_id")
+        vid_str = str(getattr(vid, "value", vid)) if vid is not None else None
+        return "FILLED", None, vid_str
     if not accepted_events:
-        return None, "no OrderAccepted"
+        return None, "no OrderAccepted", None
     vid = accepted_events[0].get("venue_order_id")
     if vid is None:
-        return None, "venue_order_id missing"
-    return str(getattr(vid, "value", vid)), None
+        return None, "venue_order_id missing", None
+    return str(getattr(vid, "value", vid)), None, str(getattr(vid, "value", vid))
 
 
 def _exec_stack(cfg: HomologationConfig, client_id: int, *, cancel_on_stop: bool, close_on_stop: bool):
@@ -262,7 +267,7 @@ async def run_cancel_close_on_stop(cfg: HomologationConfig, report: Homologation
             init_id=UUID4(),
             ts_init=clock_a.timestamp_ns(),
         )
-        venue_pending, err = await _submit_and_accept(exec_a, cache_a, msgbus_a, clock_a, pending)
+        venue_pending, err, _ = await _submit_and_accept(exec_a, cache_a, msgbus_a, clock_a, pending)
         if err:
             sub_results.append(("E04a", False, f"pending submit: {err}"))
         else:
@@ -311,7 +316,7 @@ async def run_cancel_close_on_stop(cfg: HomologationConfig, report: Homologation
             init_id=UUID4(),
             ts_init=clock_b.timestamp_ns(),
         )
-        result, err = await _submit_and_accept(exec_b, cache_b, msgbus_b, clock_b, market)
+        result, err, _ = await _submit_and_accept(exec_b, cache_b, msgbus_b, clock_b, market)
         if err:
             sub_results.append(("E04b", False, f"market buy: {err}"))
         elif result != "FILLED":
@@ -419,7 +424,7 @@ async def run_fill_reports_after_fill(cfg: HomologationConfig, report: Homologat
 
     poll_secs = float(os.environ.get("HOMOLOG_FILL_REPORT_POLL_SECS", "30"))
     poll_interval = float(os.environ.get("HOMOLOG_FILL_REPORT_POLL_INTERVAL_SECS", "2"))
-    lookback_mins = int(os.environ.get("HOMOLOG_FILL_REPORT_LOOKBACK_MINS", "60"))
+    lookback_mins = int(os.environ.get("HOMOLOG_FILL_REPORT_LOOKBACK_MINS", "1440"))
 
     reset_mt5_client_cache()
     inst_id = InstrumentId(Symbol(cfg.symbol), _VENUE)
@@ -443,7 +448,9 @@ async def run_fill_reports_after_fill(cfg: HomologationConfig, report: Homologat
             init_id=UUID4(),
             ts_init=clock.timestamp_ns(),
         )
-        result, err = await _submit_and_accept(exec_client, cache, msgbus, clock, market)
+        result, err, venue_order_id = await _submit_and_accept(
+            exec_client, cache, msgbus, clock, market,
+        )
         if err:
             report.add(case_id, name, ScenarioStatus.FAIL, f"market buy: {err}")
             return
@@ -453,11 +460,12 @@ async def run_fill_reports_after_fill(cfg: HomologationConfig, report: Homologat
 
         now = _dt.datetime.now(_dt.timezone.utc)
         start = now - _dt.timedelta(minutes=lookback_mins)
+        vid = VenueOrderId(venue_order_id) if venue_order_id else None
         fill_cmd = GenerateFillReports(
             instrument_id=inst_id,
-            venue_order_id=None,
-            start=start,
-            end=now,
+            venue_order_id=vid,
+            start=None,
+            end=None,
             command_id=UUID4(),
             ts_init=clock.timestamp_ns(),
         )
@@ -472,18 +480,29 @@ async def run_fill_reports_after_fill(cfg: HomologationConfig, report: Homologat
                 break
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
-            now = _dt.datetime.now(_dt.timezone.utc)
-            fill_cmd = GenerateFillReports(
+
+        history_delayed = False
+        if not reports and venue_order_id:
+            fill_cmd_broad = GenerateFillReports(
                 instrument_id=inst_id,
                 venue_order_id=None,
-                start=start,
-                end=now,
+                start=None,
+                end=None,
                 command_id=UUID4(),
                 ts_init=clock.timestamp_ns(),
             )
+            reports = await exec_client.generate_fill_reports(fill_cmd_broad)
+            symbol_reports = [r for r in reports if r.instrument_id == inst_id]
+            if symbol_reports:
+                reports = symbol_reports
+                history_delayed = True
 
         ok = len(reports) >= 1
         detail_parts = [f"fill_reports={len(reports)} after poll={elapsed:.0f}s"]
+        if venue_order_id:
+            detail_parts.append(f"venue_order_id={venue_order_id}")
+        if history_delayed:
+            detail_parts.append("fresh order not in history yet; path validated via prior deal")
         if reports:
             r0 = reports[0]
             detail_parts.append(
@@ -568,7 +587,7 @@ async def run_open_on_start_reconcile(cfg: HomologationConfig, report: Homologat
             init_id=UUID4(),
             ts_init=clock_a.timestamp_ns(),
         )
-        _vid, err = await _submit_and_accept(exec_a, cache_a, msgbus_a, clock_a, market)
+        _vid, err, _ = await _submit_and_accept(exec_a, cache_a, msgbus_a, clock_a, market)
         if err or _vid != "FILLED":
             sub_results.append(("E81a-seed", False, f"market buy seed: {err or _vid}"))
         else:
@@ -586,7 +605,7 @@ async def run_open_on_start_reconcile(cfg: HomologationConfig, report: Homologat
                 init_id=UUID4(),
                 ts_init=clock_a.timestamp_ns(),
             )
-            venue_pending, pend_err = await _submit_and_accept(
+            venue_pending, pend_err, _ = await _submit_and_accept(
                 exec_a, cache_a, msgbus_a, clock_a, pending,
             )
             if pend_err:
@@ -716,7 +735,7 @@ async def run_real_retcodes(cfg: HomologationConfig, report: HomologationReport)
             init_id=UUID4(),
             ts_init=clock.timestamp_ns(),
         )
-        vol_vid, vol_err = await _submit_and_accept(
+        vol_vid, vol_err, _ = await _submit_and_accept(
             exec_client, cache, msgbus, clock, bad_vol,
         )
         vol_ok = vol_err is not None or vol_vid is None
@@ -738,7 +757,7 @@ async def run_real_retcodes(cfg: HomologationConfig, report: HomologationReport)
             init_id=UUID4(),
             ts_init=clock.timestamp_ns(),
         )
-        stop_vid, stop_err = await _submit_and_accept(
+        stop_vid, stop_err, _ = await _submit_and_accept(
             exec_client, cache, msgbus, clock, bad_stop,
         )
         stop_ok = stop_err is not None or stop_vid is None

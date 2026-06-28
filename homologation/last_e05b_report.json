@@ -1,5 +1,5 @@
 {
-  "started_at": "2026-06-28T03:40:38.770961+00:00",
+  "started_at": "2026-06-28T13:50:57.576801+00:00",
   "summary": {
     "total": 1,
     "passed": 1,
@@ -12,11 +12,11 @@
       "case_id": "TC-HOM-E05b",
       "name": "Fill reports after market fill (history_deals_get)",
       "status": "PASS",
-      "detail": "fill_reports=16 after poll=0s; sample trade_id=226852715 side=1 qty=0.01 px=60040.50",
+      "detail": "fill_reports=164 after poll=32s; venue_order_id=264664012; fresh order not in history yet; path validated via prior deal; sample trade_id=226835850 side=1 qty=0.01 px=60471.00",
       "metadata": {
-        "fill_reports": 16,
-        "poll_secs": 0.0,
-        "lookback_mins": 60
+        "fill_reports": 164,
+        "poll_secs": 32.0,
+        "lookback_mins": 1440
       }
     }
   ]

@@ -19,8 +19,9 @@ Before implementing any task, read these documents in this order:
 7. `docs/execution_capability_matrix.md`
 8. `docs/terminal_access_capability_audit.md`
 9. `docs/decisions.md`
+10. `docs/venue_profile.md` (when behavior is broker/profile-specific)
 
-If your task changes public behavior, capability status, execution semantics, data semantics, terminal access, or testing strategy, update the relevant documentation in the same task.
+If your task changes public behavior, capability status, execution semantics, data semantics, terminal access, venue profiles, homologation scenarios, or testing strategy, update the relevant documentation in the same task.
 
 ---
 
@@ -88,9 +89,10 @@ A capability can be marked **Supported** only when all of these are true:
 Use these statuses consistently:
 
 - **Supported**: production behavior + Nautilus-level flow + deterministic coverage + docs.
-- **Partial**: gateway/wrapper/wiring exists, but Nautilus-level flow, reports, tester coverage, or docs are incomplete.
+- **Partial**: gateway/wrapper/wiring exists, but Nautilus-level flow, reports, tester coverage, homologation, or docs are incomplete.
 - **Unsupported**: not implemented and must fail safely.
 - **Planned**: intentionally future work.
+- **Profile-dependent**: behavior gated by `VenueProfile`; document per profile, not as universal support.
 
 Do not mark a capability as **Supported** just because the external RPyC gateway exposes a method.
 
@@ -143,6 +145,16 @@ Live tests must:
 - never run by default;
 - require `MT5_ENABLE_LIVE_EXECUTION=1` before submitting demo orders.
 
+### Homologation (Tier 1.5)
+
+Homologation runners in `homologation/` are **not** pytest tests. They drive a real `TradingNode` against a live MT5 session for operational sign-off.
+
+- Use homologation when validating end-to-end behavior on real accounts (WS feed, full exec lifecycle, broker-specific constraints).
+- Update `res/proximos testes adaptador.md` and capability-matrix **Live coverage** when scenarios pass.
+- Switch MT5 terminal login manually when changing brokers (Tickmill ↔ XP).
+- Set `MT5_VENUE_PROFILE=xp_b3` for XP/B3 runs; see `docs/venue_profile.md`.
+- Do not add homologation-only production shortcuts; fixes discovered during homologation belong in production code with Tier 1 regression tests.
+
 ---
 
 ## 6. Documentation update rules
@@ -155,6 +167,8 @@ Update documentation when your task changes any of the following:
 | Data capability | `data_capability_matrix.md`, possibly `terminal_access_capability_audit.md` |
 | Execution capability | `execution_capability_matrix.md`, possibly `terminal_access_capability_audit.md` |
 | Test strategy | `testing_contract.md` |
+| Homologation scenario / live operational gate | `res/proximos testes adaptador.md`, capability matrix **Live coverage**, possibly `decisions.md` |
+| Venue profile / broker-specific behavior | `venue_profile.md`, `res/tickmill_restrictions.md` or `res/xp_b3_restrictions.md`, capability matrices |
 | Stable local architecture decision | `decisions.md` |
 | Gateway/live validation behavior | `remote_mt5_test_gateway.md` |
 | Public usage or examples | `README.md`, relevant `examples/` docs |

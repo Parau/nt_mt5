@@ -116,6 +116,10 @@ class VenueProfile:
         """
         cap = self.capabilities.get(calc_mode)
         if cap is None:
+            normalized = normalize_trade_calc_mode(calc_mode)
+            if normalized != calc_mode:
+                cap = self.capabilities.get(normalized)
+        if cap is None:
             known = sorted(self.capabilities.keys())
             raise ValueError(
                 f"MT5 trade_calc_mode={calc_mode} is not declared in VenueProfile "
@@ -200,6 +204,23 @@ SYMBOL_CALC_MODE_EXCH_STOCKS_MOEX = 10
 SYMBOL_CALC_MODE_EXCH_BONDS_MOEX = 11
 """Moscow Exchange bonds."""
 
+# MT5 terminal build >= 5200 (incl. build 5833) remapped exchange calc modes.
+# Source: MetaTrader5.py / live XPMT5-DEMO probe 2026-06-26.
+SYMBOL_CALC_MODE_EXCH_STOCKS_V2 = 32
+"""Exchange stocks (B3 equities: PETR4). Same semantic as mode 6."""
+
+SYMBOL_CALC_MODE_EXCH_FUTURES_V2 = 33
+"""Exchange futures (B3: WIN$, WDON26, DI1F27). Same semantic as mode 7."""
+
+
+def normalize_trade_calc_mode(calc_mode: int) -> int:
+    """Map legacy documentation constants to live terminal values when equivalent."""
+    if calc_mode == SYMBOL_CALC_MODE_EXCH_STOCKS:
+        return SYMBOL_CALC_MODE_EXCH_STOCKS_V2
+    if calc_mode == SYMBOL_CALC_MODE_EXCH_FUTURES:
+        return SYMBOL_CALC_MODE_EXCH_FUTURES_V2
+    return calc_mode
+
 
 # ---------------------------------------------------------------------------
 # Pre-built profiles
@@ -255,11 +276,64 @@ Confirmed capabilities (2026-05-02):
 """
 
 
+_B3_EQUITY_CAP = CalcModeCapability(
+    nautilus_instrument_type=Equity,
+    quote_ticks=CapabilityStatus.OBSERVED,
+    trade_ticks=CapabilityStatus.OBSERVED,
+    bars=CapabilityStatus.ASSUMED,
+    notes="B3 equities (e.g. PETR4). Lot size typically 100 shares.",
+)
+
+_B3_FUTURES_CAP = CalcModeCapability(
+    nautilus_instrument_type=FuturesContract,
+    quote_ticks=CapabilityStatus.OBSERVED,
+    trade_ticks=CapabilityStatus.OBSERVED,
+    bars=CapabilityStatus.ASSUMED,
+    notes=(
+        "B3 exchange futures. Continuous series (WIN$, WDO$) are trade-tick-only; "
+        "nominals (WINQ26, WDON26) may carry bid/ask. Routing uses tick shape + trade_mode."
+    ),
+)
+
+XP_B3_PROFILE = VenueProfile(
+    name="xp-b3",
+    capabilities={
+        SYMBOL_CALC_MODE_EXCH_STOCKS_V2: _B3_EQUITY_CAP,
+        SYMBOL_CALC_MODE_EXCH_FUTURES_V2: _B3_FUTURES_CAP,
+        # Legacy doc constants (alias via normalize_trade_calc_mode)
+        SYMBOL_CALC_MODE_EXCH_STOCKS: _B3_EQUITY_CAP,
+        SYMBOL_CALC_MODE_EXCH_FUTURES: _B3_FUTURES_CAP,
+    },
+)
+"""
+Pre-built VenueProfile for XP Investimentos / B3 (XPMT5-DEMO probe 2026-06-26).
+
+- EXCH_STOCKS (32) → Equity
+- EXCH_FUTURES (33) → FuturesContract
+- Trade ticks OBSERVED on WIN$/WDO$/nominals; quote ticks symbol-dependent (see tick_routing).
+"""
+
+
+def resolve_venue_profile(name: str) -> VenueProfile:
+    """Resolve a profile name from config / homologation env."""
+    key = (name or "tickmill").strip().lower().replace("-", "_")
+    if key in ("tickmill", "tickmill_demo", "tickmill_demo_profile"):
+        return TICKMILL_DEMO_PROFILE
+    if key in ("xp", "xp_b3", "xp_b3_profile", "b3", "xpmt5"):
+        return XP_B3_PROFILE
+    raise ValueError(
+        f"Unknown venue profile {name!r}. Expected 'tickmill' or 'xp_b3'."
+    )
+
+
 __all__ = [
     "CapabilityStatus",
     "CalcModeCapability",
     "VenueProfile",
     "TICKMILL_DEMO_PROFILE",
+    "XP_B3_PROFILE",
+    "resolve_venue_profile",
+    "normalize_trade_calc_mode",
     # calc_mode constants
     "SYMBOL_CALC_MODE_FOREX",
     "SYMBOL_CALC_MODE_FUTURES",
@@ -273,4 +347,6 @@ __all__ = [
     "SYMBOL_CALC_MODE_EXCH_BONDS",
     "SYMBOL_CALC_MODE_EXCH_STOCKS_MOEX",
     "SYMBOL_CALC_MODE_EXCH_BONDS_MOEX",
+    "SYMBOL_CALC_MODE_EXCH_STOCKS_V2",
+    "SYMBOL_CALC_MODE_EXCH_FUTURES_V2",
 ]

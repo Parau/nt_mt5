@@ -105,6 +105,48 @@ def validate_order_pre_venue(order_type: OrderType, time_in_force: TimeInForce) 
         )
 
 
+# MT5 SYMBOL_TRADE_MODE_DISABLED — continuous B3 series (WIN$, WDO$) are data-only.
+SYMBOL_TRADE_MODE_DISABLED = 0
+
+# MT5 SYMBOL_FILLING_* bitmask on symbol_info.filling_mode
+SYMBOL_FILLING_FOK = 1
+SYMBOL_FILLING_IOC = 2
+SYMBOL_FILLING_RETURN = 4
+
+
+def validate_symbol_tradable(instrument_info: dict) -> None:
+    """
+    Reject orders on symbols with ``TRADE_MODE=DISABLED`` before ``order_send``.
+
+    Raises
+    ------
+    ValueError
+        When the symbol is data-only (e.g. B3 continuous ``WIN$`` / ``WDO$``).
+    """
+    trade_mode = int(instrument_info.get("trade_mode", 4))
+    if trade_mode != SYMBOL_TRADE_MODE_DISABLED:
+        return
+
+    sym_payload = instrument_info.get("symbol", {})
+    sym_name = sym_payload.get("symbol", "?") if isinstance(sym_payload, dict) else "?"
+    raise ValueError(
+        f"Symbol {sym_name} has TRADE_MODE=DISABLED — orders are not accepted on this "
+        "continuous/data series. Use the tradable nominal contract instead."
+    )
+
+
+def validate_filling_mode(filling_mode: int, time_in_force: TimeInForce) -> None:
+    """
+    Ensure explicit FOK/IOC requests are allowed for the symbol (XP/B3: FOK+IOC only).
+
+    GTC/DAY map to RETURN filling and are validated by the broker retcode instead.
+    """
+    if time_in_force == TimeInForce.FOK and not (filling_mode & SYMBOL_FILLING_FOK):
+        raise ValueError("FOK filling is not supported for this symbol.")
+    if time_in_force == TimeInForce.IOC and not (filling_mode & SYMBOL_FILLING_IOC):
+        raise ValueError("IOC filling is not supported for this symbol.")
+
+
 def map_order_type_and_action(order_type: OrderType, side: OrderSide) -> tuple[int, int]:
     if order_type == OrderType.MARKET:
         action = TRADE_ACTION_DEAL

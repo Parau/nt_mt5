@@ -8,7 +8,7 @@ Tests:
     TC-EL-08  generate_order_status_reports → infers reports from open positions
     TC-EL-09  generate_order_status_report (singular) → returns None when not in open orders
     TC-EL-10  _cancel_order → calls order_send with action=8 (TRADE_ACTION_REMOVE)
-    TC-EL-11  _modify_order → calls place_order with updated volume
+    TC-EL-11  _modify_order → order_send with action=7 (TRADE_ACTION_MODIFY)
     TC-EL-12  _cancel_all_orders → cancels each open order in the Nautilus cache
 """
 import asyncio
@@ -272,16 +272,16 @@ async def test_cancel_order_sends_action_8(
 
 
 # ---------------------------------------------------------------------------
-# TC-EL-11  _modify_order → place_order called with updated volume
+# TC-EL-11  _modify_order → order_send with action=7 (TRADE_ACTION_MODIFY)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_modify_order_calls_place_order(
+async def test_modify_order_sends_action_7(
     clean_factory_cache, nautilus_components, nautilus_mt5_harness
 ):
     """
-    _modify_order calls place_order (→ order_send) with updated volume after
-    a limit order is found in the Nautilus cache.
+    _modify_order calls modify_order (→ order_send action=7) with updated volume
+    after a limit order is found in the Nautilus cache.
     """
     msgbus, cache, clock = nautilus_components
     loop = asyncio.get_running_loop()
@@ -323,7 +323,8 @@ async def test_modify_order_calls_place_order(
     order_send_calls = [c for c in nautilus_mt5_harness.root.calls if c.method == "order_send"]
     assert len(order_send_calls) >= 1, "Expected order_send called during modify"
     sent_req = order_send_calls[0].args[0]
-    # Modify uses place_order which sends a full order request
+    assert sent_req.get("action") == 7  # TRADE_ACTION_MODIFY
+    assert int(sent_req.get("order", 0)) == 1001
     assert sent_req.get("symbol") == "USTEC"
     assert float(sent_req.get("volume", 0)) == pytest.approx(2.0)
 

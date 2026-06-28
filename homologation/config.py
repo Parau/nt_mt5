@@ -6,6 +6,25 @@ from dataclasses import dataclass
 
 import rpyc
 
+from nautilus_mt5.venue_profile import VenueProfile, resolve_venue_profile
+
+
+def _profile_defaults(profile_name: str) -> dict[str, str]:
+    key = (profile_name or "tickmill").strip().lower().replace("-", "_")
+    if key in ("xp", "xp_b3", "xp_b3_profile", "b3", "xpmt5"):
+        return {
+            "broker": "XPMT5-DEMO",
+            "symbol": "WDON26",
+            "account": "56822578",
+            "multi_symbols": "WDON26,PETR4,DI1F27,WIN$",
+        }
+    return {
+        "broker": "Tickmill-Demo",
+        "symbol": "BTCUSD",
+        "account": "",
+        "multi_symbols": "BTCUSD,USTEC",
+    }
+
 
 @dataclass(frozen=True)
 class HomologationConfig:
@@ -14,6 +33,7 @@ class HomologationConfig:
     account_number: str
     broker: str
     symbol: str
+    venue_profile_name: str
     enable_execution: bool
     min_quote_ticks: int
     scenario_timeout_secs: float
@@ -28,17 +48,25 @@ class HomologationConfig:
     feed_hello_timeout_secs: float
 
     @property
+    def venue_profile(self) -> VenueProfile:
+        return resolve_venue_profile(self.venue_profile_name)
+
+    @property
     def multi_symbols(self) -> tuple[str, ...]:
-        raw = os.environ.get("HOMOLOG_MULTI_SYMBOLS", "BTCUSD,USTEC")
+        defaults = _profile_defaults(self.venue_profile_name)
+        raw = os.environ.get("HOMOLOG_MULTI_SYMBOLS", defaults["multi_symbols"])
         parts = tuple(s.strip() for s in raw.split(",") if s.strip())
         return parts if parts else (self.symbol,)
 
     @classmethod
     def from_env(cls) -> HomologationConfig:
+        profile_name = os.environ.get("MT5_VENUE_PROFILE", "tickmill").strip()
+        defaults = _profile_defaults(profile_name)
+
         host = os.environ.get("MT5_HOST", "127.0.0.1")
         port = int(os.environ.get("MT5_PORT", "18812"))
-        symbol = os.environ.get("MT5_SYMBOL", "BTCUSD")  # default: crypto open 24/7 on Tickmill
-        broker = os.environ.get("MT5_BROKER", "Tickmill-Demo")
+        symbol = os.environ.get("MT5_SYMBOL", defaults["symbol"])
+        broker = os.environ.get("MT5_BROKER", defaults["broker"])
         enable_execution = os.environ.get("MT5_ENABLE_LIVE_EXECUTION", "").strip() == "1"
         min_ticks = int(os.environ.get("HOMOLOG_MIN_TICKS", "3"))
         timeout = float(os.environ.get("HOMOLOG_TIMEOUT_SECS", "120"))
@@ -52,7 +80,7 @@ class HomologationConfig:
         feed_path = os.environ.get("MT5_FEED_PATH", "/mt5-feed")
         feed_hello_timeout = float(os.environ.get("MT5_FEED_HELLO_TIMEOUT_SECS", "30"))
 
-        account = os.environ.get("MT5_ACCOUNT_NUMBER", "").strip()
+        account = os.environ.get("MT5_ACCOUNT_NUMBER", defaults["account"]).strip()
         if not account:
             account = str(_probe_account_login(host, port))
 
@@ -62,6 +90,7 @@ class HomologationConfig:
             account_number=account,
             broker=broker,
             symbol=symbol,
+            venue_profile_name=profile_name,
             enable_execution=enable_execution,
             min_quote_ticks=min_ticks,
             scenario_timeout_secs=timeout,

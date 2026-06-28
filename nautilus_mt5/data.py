@@ -1,5 +1,4 @@
 import asyncio
-from operator import attrgetter
 
 import pandas as pd
 
@@ -19,7 +18,11 @@ from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.config import MetaTrader5DataClientConfig
 from nautilus_mt5.feed.config import FeedGatewayConfig
-from nautilus_mt5.feed.converter import wire_bar_to_nautilus_bar, wire_tick_to_quote_tick
+from nautilus_mt5.feed.converter import (
+    route_wire_tick_to_nautilus,
+    wire_bar_to_nautilus_bar,
+    wire_tick_to_quote_tick,
+)
 from nautilus_mt5.feed.gateway import InboundFeedGateway
 from nautilus_mt5.feed.handler import InboundFeedHandler
 from nautilus_mt5.feed.messages import (
@@ -254,9 +257,11 @@ class MetaTrader5DataClient(LiveMarketDataClient):
 
         ts_init = self._clock.timestamp_ns()
         for tick in batch.ticks:
-            quote_tick = wire_tick_to_quote_tick(instrument, tick, ts_init)
+            quote_tick, trade_tick = route_wire_tick_to_nautilus(instrument, tick, ts_init)
             if quote_tick is not None:
                 self._handle_data(quote_tick)
+            if trade_tick is not None:
+                self._handle_data(trade_tick)
 
     def _handle_feed_bar(self, message: BarMessage) -> None:
         wire = message.bar
@@ -590,14 +595,35 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         start: pd.Timestamp | None = None,
         end: pd.Timestamp | None = None,
     ) -> list[QuoteTick | TradeTick]:
-        if not start and not limit:
+        if not limit:
             limit = self._cache.tick_capacity
 
         if not end:
             end = pd.Timestamp.utcnow()
 
         ticks: list[QuoteTick | TradeTick] = []
-        while (start and end > start) or (len(ticks) < limit > 0):
+        seen_events: set[int] = set()
+
+        # Bounded window: one capped bridge call (copy_ticks_from, not copy_ticks_range).
+        if start is not None:
+            await self._client.wait_until_ready()
+            ticks_part = await self._client.get_historical_ticks(
+                symbol,
+                tick_type,
+                start_date_time=start,
+                end_date_time=end,
+                use_rth=self._use_regular_trading_hours,
+                number_of_ticks=limit,
+            )
+            if ticks_part:
+                ticks.extend(ticks_part[:limit])
+            ticks.sort(key=lambda x: x.ts_init)
+            return ticks
+
+        max_iterations = 100
+        iterations = 0
+        while len(ticks) < limit > 0 and iterations < max_iterations:
+            iterations += 1
             await self._client.wait_until_ready()
             remaining = max(limit - len(ticks), 1)
             ticks_part = await self._client.get_historical_ticks(
@@ -609,10 +635,21 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             )
             if not ticks_part:
                 break
-            end = pd.Timestamp(
-                min(ticks_part, key=attrgetter("ts_init")).ts_init, tz="UTC"
-            )
-            ticks.extend(ticks_part)
+
+            new_ticks = [t for t in ticks_part if t.ts_event not in seen_events]
+            for tick in new_ticks:
+                seen_events.add(tick.ts_event)
+            ticks.extend(new_ticks)
+
+            earliest_ns = min(t.ts_event for t in ticks_part)
+            new_end = pd.Timestamp(earliest_ns - 1, unit="ns", tz="UTC")
+            if new_end >= end:
+                break
+            end = new_end
+
+            if not new_ticks:
+                # Bridge returned only duplicates — keep paginating backward.
+                continue
 
         ticks.sort(key=lambda x: x.ts_init)
         return ticks

@@ -542,7 +542,30 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         from_ts = int(start.timestamp()) if start is not None else 0
         to_ts = int(end.timestamp()) if end is not None else int(_time.time())
 
-        raw_deals = await self._client.get_history_deals(from_ts=from_ts, to_ts=to_ts)
+        group: str | None = None
+        if instrument_id is not None:
+            group = f"*{instrument_id.symbol.value}*"
+
+        raw_deals = await self._client.get_history_deals(
+            from_ts=from_ts,
+            to_ts=to_ts,
+            group=group,
+        )
+
+        # Narrow time windows often miss deals on demo brokers; widen when filtering
+        # by venue_order_id and the targeted order is not visible yet.
+        if venue_order_id is not None and from_ts != 0:
+            has_order = any(
+                str((d.get("order") if isinstance(d, dict) else getattr(d, "order", 0)) or 0)
+                == venue_order_id.value
+                for d in raw_deals
+            )
+            if not has_order:
+                raw_deals = await self._client.get_history_deals(
+                    from_ts=0,
+                    to_ts=to_ts,
+                    group=group,
+                )
         if not raw_deals:
             return []
 
@@ -794,10 +817,23 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
         PyCondition.type(command, SubmitOrder, "command")
         try:
-            from nautilus_mt5.parsing.execution import validate_order_pre_venue
+            from nautilus_mt5.parsing.execution import (
+                validate_filling_mode,
+                validate_order_pre_venue,
+                validate_symbol_tradable,
+            )
             validate_order_pre_venue(command.order.order_type, command.order.time_in_force)
 
             instrument = self._cache.instrument(command.order.instrument_id)
+            if instrument is None:
+                raise ValueError(f"Instrument {command.order.instrument_id} not found in cache.")
+            if isinstance(instrument.info, dict):
+                validate_symbol_tradable(instrument.info)
+                validate_filling_mode(
+                    int(instrument.info.get("filling_mode", 0)),
+                    command.order.time_in_force,
+                )
+
             mt5_order: MT5Order = self._transform_order_to_mt5_order(command.order, instrument)
             mt5_order.order_id = self._client.next_order_id()
 

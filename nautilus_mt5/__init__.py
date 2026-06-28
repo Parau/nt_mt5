@@ -21,6 +21,8 @@ from nautilus_mt5.venue_profile import (
     CalcModeCapability,
     VenueProfile,
     TICKMILL_DEMO_PROFILE,
+    XP_B3_PROFILE,
+    resolve_venue_profile,
 )
 
 __all__ = [
@@ -40,5 +42,7 @@ __all__ = [
     "MT5LiveDataClientFactory",
     "MT5LiveExecClientFactory",
     "TICKMILL_DEMO_PROFILE",
+    "XP_B3_PROFILE",
     "VenueProfile",
+    "resolve_venue_profile",
 ]
