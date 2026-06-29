@@ -22,7 +22,7 @@ from nautilus_trader.model.identifiers import (
 from nautilus_trader.model.objects import Price, Quantity
 from nautilus_trader.model.orders import StopMarketOrder
 
-from nautilus_mt5 import TICKMILL_DEMO_PROFILE
+from nautilus_mt5.venue_profile import resolve_venue_profile
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
@@ -125,12 +125,13 @@ async def run_stop_orders(cfg: HomologationConfig, report: HomologationReport) -
         load_symbols=frozenset({MT5Symbol(symbol=cfg.symbol, broker=cfg.broker)}),
     )
 
+    profile = resolve_venue_profile(cfg.venue_profile_name)
     data_config = MetaTrader5DataClientConfig(
         client_id=2,
         terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
         external_rpyc=rpyc_cfg,
         instrument_provider=provider,
-        venue_profile=TICKMILL_DEMO_PROFILE,
+        venue_profile=profile,
     )
     exec_config = MetaTrader5ExecClientConfig(
         client_id=2,

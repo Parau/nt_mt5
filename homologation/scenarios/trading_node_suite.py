@@ -59,6 +59,7 @@ class _SuiteStrategy(Strategy):
         self._sell_order_id: ClientOrderId | None = None
         self._buy_fill_px = 0.0
         self._buy_fill_qty = 0.0
+        self._buy_qty: Quantity | None = None
         self._sell_fill_px = 0.0
 
     def on_start(self) -> None:
@@ -118,6 +119,7 @@ class _SuiteStrategy(Strategy):
 
     def _submit_buy(self) -> None:
         qty = self._min_quantity()
+        self._buy_qty = qty
         order = self.order_factory.market(
             instrument_id=self.config.instrument_id,
             order_side=OrderSide.BUY,
@@ -130,7 +132,14 @@ class _SuiteStrategy(Strategy):
 
     def _submit_sell(self) -> None:
         self._phase = _Phase.MARKET_SELL
-        qty = Quantity.from_str(str(self._buy_fill_qty))
+        if self._buy_qty is not None:
+            qty = self._buy_qty
+        else:
+            instrument = self.cache.instrument(self.config.instrument_id)
+            if instrument is not None:
+                qty = instrument.make_qty(self._buy_fill_qty)
+            else:
+                qty = Quantity.from_int(int(self._buy_fill_qty))
         order = self.order_factory.market(
             instrument_id=self.config.instrument_id,
             order_side=OrderSide.SELL,

@@ -9,7 +9,8 @@ Changes vs v0.7
   ticket when the named overload fails (broker-dependent).
 
 Deploy: copy to production path (e.g. ``E:\\dev\\TradingUltimate\\mt5_bridge.py``)
-and restart the bridge process on port 18812.
+and restart the bridge process. Bind port: ``RPYC_PORT`` env (default ``18812``);
+Docker XP uses ``18813``. Adapter clients use ``MT5_PORT`` on the host side.
 """
 from __future__ import annotations
 
@@ -234,17 +235,21 @@ class MT5Service(rpyc.Service):
 
 
 if __name__ == "__main__":
+    import os
+
     from rpyc.utils.server import ThreadedServer
+
+    rpyc_port = int(os.environ.get("RPYC_PORT", "18812"))
 
     if not mt5.initialize():
         print("initialize() failed, error code =", mt5.last_error())
         quit()
 
-    print("MT5 initialized successfully. Starting RPyC server on port 18812...")
+    print(f"MT5 initialized successfully. Starting RPyC server on port {rpyc_port}...")
     print("Bridge V 0.8")
     server = ThreadedServer(
         MT5Service,
-        port=18812,
+        port=rpyc_port,
         protocol_config={"allow_public_attrs": True, "allow_all_attrs": True},
     )
     try:

@@ -1,0 +1,70 @@
+{
+  "started_at": "2026-06-29T13:26:53.272944+00:00",
+  "summary": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-E08",
+      "name": "Hedging two same-side positions (BUY + BUY)",
+      "status": "PASS",
+      "detail": "positions_get(USTEC)=2 (two BUY legs on hedging account)",
+      "metadata": {
+        "positions": 2
+      }
+    },
+    {
+      "case_id": "TC-HOM-E08b",
+      "name": "Hedging two same-side positions (SELL + SELL)",
+      "status": "PASS",
+      "detail": "positions_get(USTEC)=2 (2 SHORT legs)",
+      "metadata": {
+        "positions": 2,
+        "short_legs": 2
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10",
+      "name": "Multi-leg position reconcile (mass_status vs bridge)",
+      "status": "PASS",
+      "detail": "bridge=3 L=0.02 S=0.01 reports=3 L=0.02 S=0.01",
+      "metadata": {
+        "bridge_count": 3,
+        "report_count": 3
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10c",
+      "name": "Minimal mixed hedging book (1\u00d7 SELL + 1\u00d7 BUY)",
+      "status": "PASS",
+      "detail": "bridge=2 L=0.01 S=0.01",
+      "metadata": {
+        "bridge_count": 2
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10b",
+      "name": "close_on_stop clears multi-leg book",
+      "status": "PASS",
+      "detail": "positions 2\u21920 via close_on_stop",
+      "metadata": {
+        "before": 2,
+        "after": 0
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10d",
+      "name": "close_on_stop clears mixed L+S book",
+      "status": "PASS",
+      "detail": "positions 2\u21920 via close_on_stop (was L=0.01 S=0.01)",
+      "metadata": {
+        "before": 2,
+        "after": 0
+      }
+    }
+  ]
+}

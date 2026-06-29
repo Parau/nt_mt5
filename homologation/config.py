@@ -76,7 +76,13 @@ class HomologationConfig:
         skip_stream = os.environ.get("HOMOLOG_SKIP_STREAM", "").strip() == "1"
         feed_enabled = os.environ.get("MT5_FEED_ENABLED", "").strip() == "1"
         feed_host = os.environ.get("MT5_FEED_HOST", "0.0.0.0")
-        feed_port = int(os.environ.get("MT5_FEED_PORT", "8765"))
+        feed_port_raw = os.environ.get("MT5_FEED_PORT", "").strip()
+        if feed_port_raw:
+            feed_port = int(feed_port_raw)
+        elif port == 18813:
+            feed_port = 8766  # MT5-Docker xp profile
+        else:
+            feed_port = 8765  # MT5-Docker tickmill / default
         feed_path = os.environ.get("MT5_FEED_PATH", "/mt5-feed")
         feed_hello_timeout = float(os.environ.get("MT5_FEED_HELLO_TIMEOUT_SECS", "30"))
 
@@ -124,11 +130,19 @@ def _probe_account_login(host: str, port: int) -> int:
 def probe_symbol_tick(host: str, port: int, symbol: str) -> tuple[float, float] | None:
     conn = rpyc.connect(host, port)
     try:
+        try:
+            conn.root.symbol_select(symbol, True)
+        except Exception:
+            pass
         tick = conn.root.symbol_info_tick(symbol)
         if tick is None:
             return None
         if isinstance(tick, dict):
-            return float(tick["bid"]), float(tick["ask"])
-        return float(tick.bid), float(tick.ask)
+            bid, ask = float(tick["bid"]), float(tick["ask"])
+        else:
+            bid, ask = float(tick.bid), float(tick.ask)
+        if bid <= 0.0 and ask <= 0.0:
+            return None
+        return bid, ask
     finally:
         conn.close()

@@ -137,9 +137,12 @@ def validate_symbol_tradable(instrument_info: dict) -> None:
 
 def validate_filling_mode(filling_mode: int, time_in_force: TimeInForce) -> None:
     """
-    Ensure explicit FOK/IOC requests are allowed for the symbol (XP/B3: FOK+IOC only).
+    Ensure explicit FOK/IOC requests are allowed for the symbol.
 
-    GTC/DAY map to RETURN filling and are validated by the broker retcode instead.
+    Broker bitmasks vary: Tickmill CFDs are often IOC-only (``filling_mode=2``);
+    XP/B3 symbols typically expose FOK+IOC (``filling_mode=3``). GTC/DAY market
+    deals resolve filling from the bitmask via ``resolve_type_filling``; pending
+    limits still map GTC/DAY to RETURN filling.
     """
     if time_in_force == TimeInForce.FOK and not (filling_mode & SYMBOL_FILLING_FOK):
         raise ValueError("FOK filling is not supported for this symbol.")
@@ -183,6 +186,54 @@ def map_filling_type(time_in_force: TimeInForce) -> int:
     elif time_in_force == TimeInForce.IOC:
         return ORDER_FILLING_IOC
     return ORDER_FILLING_RETURN
+
+
+# IOC before FOK before RETURN — matches CFD/forex brokers (e.g. Tickmill IOC-only).
+_FILLING_PREFERENCE: tuple[tuple[int, int], ...] = (
+    (SYMBOL_FILLING_IOC, ORDER_FILLING_IOC),
+    (SYMBOL_FILLING_FOK, ORDER_FILLING_FOK),
+    (SYMBOL_FILLING_RETURN, ORDER_FILLING_RETURN),
+)
+
+
+def _pick_filling_mode_from_bitmask(filling_mode: int) -> int:
+    """Return the best supported ``ORDER_FILLING_*`` constant for ``filling_mode``."""
+    for bit, order_filling in _FILLING_PREFERENCE:
+        if filling_mode & bit:
+            return order_filling
+    return ORDER_FILLING_RETURN
+
+
+def resolve_type_filling(
+    order_type: OrderType,
+    time_in_force: TimeInForce,
+    filling_mode: int,
+) -> int:
+    """
+    Map Nautilus order type and TIF to MT5 ``type_filling``.
+
+    Market deals (``TRADE_ACTION_DEAL``) with GTC/DAY pick the best mode from the
+    symbol ``filling_mode`` bitmask; explicit FOK/IOC TIF still use
+    ``map_filling_type``. Pending limits/stops keep ``map_filling_type`` (RETURN
+    for GTC/DAY).
+
+    Parameters
+    ----------
+    order_type : OrderType
+    time_in_force : TimeInForce
+    filling_mode : int
+        ``symbol_info.filling_mode`` bitmask (bit0=FOK, bit1=IOC, bit2=RETURN).
+
+    Returns
+    -------
+    int
+        ``ORDER_FILLING_FOK``, ``ORDER_FILLING_IOC``, or ``ORDER_FILLING_RETURN``.
+    """
+    if order_type == OrderType.MARKET:
+        if time_in_force in (TimeInForce.FOK, TimeInForce.IOC):
+            return map_filling_type(time_in_force)
+        return _pick_filling_mode_from_bitmask(filling_mode)
+    return map_filling_type(time_in_force)
 
 def timestring_to_timestamp(timestring: str) -> pd.Timestamp:
     dt, tz = timestring.rsplit(" ", 1)

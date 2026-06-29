@@ -1,0 +1,23 @@
+{
+  "started_at": "2026-06-29T13:13:47.101886+00:00",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "ok": false
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-E05b",
+      "name": "Fill reports after market fill (history_deals_get)",
+      "status": "FAIL",
+      "detail": "fill_reports=0 after poll=62s; venue_order_id=265515426; no FillReport for USTEC within 60.0s (Tickmill may delay history_deals_get)",
+      "metadata": {
+        "fill_reports": 0,
+        "poll_secs": 62.0,
+        "lookback_mins": 1440
+      }
+    }
+  ]
+}

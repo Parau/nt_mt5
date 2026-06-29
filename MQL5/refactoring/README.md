@@ -17,7 +17,13 @@ Spec: `res/especificacao_novo_adaptador_nautilus_mt5.md`
 
 ---
 
-## Revisão MQL5 (v1.04)
+## Revisão MQL5 (v1.05)
+
+| Alteração | Detalhe |
+|-----------|---------|
+| Reconnect WS | `NT5DestroyWebSocket()` — `delete g_ws` após falha ou desconexão; evita leak de handles MQL5 (erro **5271**) quando `WebSocketClient::close()` não corre com socket já desconectado |
+
+### v1.04
 
 | Alteração | Detalhe |
 |-----------|---------|
@@ -42,7 +48,7 @@ Spec: `res/especificacao_novo_adaptador_nautilus_mt5.md`
 
 | Problema | Correcção |
 |----------|-----------|
-| `new`/`delete` a cada reconnect | Uma instância `g_ws`; reconnect = `close()` + `open()` |
+| `new`/`delete` a cada reconnect | ~~Uma instância `g_ws`; reconnect = `close()` + `open()`~~ **v1.05:** destroy+recreate em falha/desconexão (v1.01 evitava leak mas `close()` da lib é incompleto) |
 | Ticks no mesmo `time_msc` perdidos | `last_sent` + filtro antes de enviar |
 | `InpBatchSize=1000` → JSON enorme | Default **100** |
 
@@ -83,7 +89,7 @@ Se `WS open failed ... err=4014`:
 2. **Copiar Service** (incluído no `.bat` acima, ou manualmente):
    - `MQL5/refactoring/Services/NT5TickFeedService.mq5` → `<MT5_DATA>/MQL5/Services/`
 
-3. **Compilar** `NT5TickFeedService.mq5` no MetaEditor (F7). Corrigir erros se houver e avisar.
+3. **Compilar** `NT5TickFeedService.mq5` no MetaEditor (F7). Guardar o `.ex5` em `Services/` (junto ao fonte) — o `MT5-Docker` sync copia `.mq5` + `.ex5` para a imagem.
 
 4. **Whitelist de rede** (obrigatório — inclui sockets MQL5, não só WebRequest):
    - MetaTrader → Tools → Options → Expert Advisors
@@ -114,7 +120,7 @@ Se `WS open failed ... err=4014`:
    - Com `InpBarSpecs=BTCUSD:M1`: **`BAR symbol=BTCUSD timeframe=M1 time=... close=...`** (primeira barra fechada ao ligar; nova linha a cada fecho de M1)
    - Journal MT5: `[NT5Feed] sent N ticks...` / `[NT5Feed] sent bar...`
 
-9. **Bridge RPyC:** não alterar nesta fase. Manter a correr como hoje (`18812`).
+9. **Bridge RPyC:** staging em `bridge/mt5_bridge.py` (v0.8). Porta de bind: `RPYC_PORT` (default `18812`); adaptador no host usa `MT5_PORT`. Docker XP: `18813` em ambos.
 
 ---
 

@@ -17,10 +17,17 @@ Run full suite (needs open market + WS for D02): `homologation/run_homologation.
 | **Deploy smoke** | 2026-06-28 03:09 | `homologation/last_deploy_report.json` | **4/4 PASS** — E03, D03, D06 gateway |
 | **D06-SVC (re-run)** | 2026-06-28 03:11 | `homologation/last_d06_svc_report.json` | **2/2 PASS** — dup=0 service_restart=manual |
 | **D07 (re-run)** | 2026-06-28 03:13 | `homologation/last_d07_report.json` | **FAIL** — BTCUSD=229 USTEC=0 WS ticks |
+| **D07 (re-run)** | 2026-06-29 12:39 | `homologation/last_d07_report.json` | **PASS** — BTCUSD=1 USTEC=3 WS ticks (USTEC session open) |
 | **v1.04 bar disconnect** | 2026-06-28 03:31 | MT5 journal (manual) | **PASS** — `WS disconnect: cleared bar sub BTCUSD:M1` after `taskkill` on gateway PID |
 | **E05b fill reports** | 2026-06-28 | `homologation/last_e05b_report.json` | **PASS** — fill_reports=16 after market BUY (poll=0s) |
 | **E43 cancel rejection** | 2026-06-28 | `homologation/last_e43_report.json` | **PASS** — retry_retcode=10013, still_pending=False |
 | **Wave 4** | 2026-06-28 | `homologation/last_wave4_report.json` | **4/4 PASS** — E06de, E07b, E81, D21 |
+| **USTEC closed market** | 2026-06-29 | `homologation/last_ustec_closed_market_report.json` | **12/12 PASS** (`MT5_SYMBOL=USTEC`) |
+| **USTEC open market** | 2026-06-29 | `homologation/last_ustec_open_market_report.json` | **9/10** — E01 OK · **E05b FAIL** (fill_reports=0, history delay) |
+| **USTEC wave 2** | 2026-06-29 | `homologation/last_ustec_wave2_report.json` | **7/7 PASS** — D06, D07, E06–E09 |
+| **USTEC wave 3** | 2026-06-29 | `homologation/last_ustec_wave3_report.json` | **4/4 PASS** — D07 USTEC=100, E10, E10b |
+| **USTEC wave 4** | 2026-06-29 | `homologation/last_ustec_wave4_report.json` | **3/4** — **E06d FAIL** (FOK not supported on USTEC) · E07b, E81, D21 OK |
+| **USTEC E05b re-run** | 2026-06-29 | `homologation/last_ustec_e05b_report.json` | **FAIL** — fill_reports=0 after 60s poll |
 
 Previous baseline: closed **10/10** and open **9/10 effective** on 2026-06-27 (pre-D04b; see journal notes below).
 
@@ -75,7 +82,7 @@ Verified against harness JSON (account 25339175). Exec order IDs from this run b
 | TC-HOM-D02 | WS sustained stream | **DONE** | **60s:** 242 ticks, max gap 5.6s · **120s:** 488 ticks, max gap 5.1s (`run_feed_smoke.py`, 2026-06-28) |
 | TC-HOM-D06 | WS gateway restart + dedup | **DONE** | Gateway restart, dup=0 post-restart (`feed_resilience.py`, 2026-06-28) |
 | TC-HOM-D06-SVC | Full **Service** stop/start + dedup | **DONE** | Manual Service restart; quote resubscribe on `hello` replay fix (2026-06-28) |
-| TC-HOM-D07 | Multi-symbol WS quotes | **PARTIAL** | RPyC quote OK for both; **WS stream:** BTCUSD=141 ticks, **USTEC=0** (2026-06-28 wave3) — adapter `subscribe` OK with empty `InpSymbols` |
+| TC-HOM-D07 | Multi-symbol WS quotes | **DONE** | BTCUSD=1 USTEC=3 via WS feed (2026-06-29, USTEC session open) |
 | TC-HOM-D03 | Live bar subscribe M1 | **DONE** | 1 M1 bar via WS `subscribe_bars` → `op:bar` |
 | TC-HOM-D05 | Unsubscribe on stop (quotes/bars) | **DONE** | Quotes + bars via WS when `MT5_FEED_ENABLED=1` |
 | TC-HOM-E01 | Market BUY → SELL round-trip | **DONE** | BUY 0.01@60111.50 → SELL @60099.50 |
@@ -87,10 +94,13 @@ Verified against harness JSON (account 25339175). Exec order IDs from this run b
 | TC-HOM-E05b | Fill reports after market fill | **DONE** | 16 FillReports, poll=0s (2026-06-28) |
 | TC-HOM-E06 | IOC fill vs passive limit | **DONE** | MARKET IOC (E06a) + LIMIT IOC mapping/cancel @ask (E06c) + passive (E06b) — Tickmill instant fill via MARKET only |
 | TC-HOM-E07 | Modify pending volume | **DONE** | `TRADE_ACTION_MODIFY` + `exposed_orders_get`; Tickmill needs price nudge with volume |
-| TC-HOM-E08 | Hedging same-side legs | **DONE** | Two BUY 0.01 → `positions_get` ≥ 2 (2026-06-28) |
+| TC-HOM-E08 | Hedging same-side legs (2× BUY) | **DONE** | Two BUY 0.01 → `positions_get` ≥ 2 (2026-06-28) |
+| TC-HOM-E08b | Hedging same-side legs (2× SELL) | **DONE** | Two SELL 0.01 → 2 SHORT legs; Docker RPyC (BTCUSD + **USTEC** 2026-06-29) |
 | TC-HOM-E09 | Real retcodes | **DONE** | Invalid volume + invalid BUY STOP rejected (2026-06-28) |
 | TC-HOM-E10 | Multi-leg `generate_mass_status` vs bridge | **DONE** | 2× BUY + 1× SELL → bridge=3 L=0.02 S=0.01 = reports (2026-06-28) |
-| TC-HOM-E10b | `close_on_stop` with N>1 legs | **DONE** | 2 legs → 0 via disconnect (2026-06-28) |
+| TC-HOM-E10c | Minimal mixed book (1× SELL + 1× BUY) | **DONE** | flat→SELL→BUY → bridge=2 L=0.01 S=0.01; Docker BTCUSD + **USTEC** (2026-06-29) |
+| TC-HOM-E10b | `close_on_stop` with N>1 same-side legs | **DONE** | 2× BUY → 0 via disconnect (2026-06-28) |
+| TC-HOM-E10d | `close_on_stop` mixed L+S book | **DONE** | 1L+1S → 0 via disconnect; Docker BTCUSD + **USTEC** (2026-06-29) |
 
 ### Prior run (2026-06-27, journal cross-check)
 
@@ -143,7 +153,7 @@ Harness: `homologation/scenarios/position_reconcile_suite.py`, runners `run_e10_
 | 4 | TC-HOM-E07b | Modify stop trigger (BUY_STOP) | Order modify Partial | **DONE** (2026-06-28) |
 | 5 | TC-HOM-E81 | Open-on-start reconcile (positions + pending) | Lifecycle Partial | **DONE** (2026-06-28) |
 | 6 | TC-HOM-D21 | Hist quotes via `_request_quote_ticks` E2E | Historical quotes Partial | **DONE** (2026-06-28) |
-| Média | TC-HOM-D07 | USTEC WS stream = 0 | Multi-symbol Partial | OPEN — mercado US |
+| Média | TC-HOM-D07 | USTEC WS stream = 0 | Multi-symbol Partial | **DONE** (2026-06-29) |
 
 **Done (2026-06-28):** deploy smoke, D06-SVC, E06/E07, bridge v0.7, Service v1.04 bar cleanup, **Wave 4** (E05b, E43, E06de, E07b, E81, D21).
 
@@ -196,9 +206,10 @@ Per [`res/tickmill_restrictions.md`](tickmill_restrictions.md):
 | `feed_resilience.py` | D06 gateway restart dedup | **DONE** |
 | `multi_symbol.py` | D07 multi-symbol WS | **DONE** |
 | `run_wave2_homologation.py` | D06–D07, E06–E09 only | **DONE** |
-| `exec_tester_suite.py` | E03, E06–E08, **E43** | **DONE** |
+| `exec_tester_suite.py` | E03, E06–E08, **E08b**, **E43** | **DONE** |
 | `mt5_edges.py` | E04, E05, E05b, E09 | **DONE** |
-| `position_reconcile_suite.py` | E10, E10b | **DONE** |
+| `position_reconcile_suite.py` | E10, E10b, **E10c**, **E10d** | **DONE** |
+| `run_hedging_wave_homologation.py` | E08, E08b, E10, E10c, E10b, E10d (Docker RPyC) | **DONE** (6/6 BTCUSD + 6/6 USTEC, 2026-06-29) |
 | `run_wave3_homologation.py` | D06-SVC, D07, E10, E10b | **DONE** |
 | `run_e10_smoke.py` | E10 + E10b only | **DONE** |
 | `run_d06_svc_homologation.py` | D06 with manual Service restart | **DONE** |
@@ -266,6 +277,16 @@ E:\miniconda\envs\trading\python.exe homologation\run_wave3_homologation.py
 ```cmd
 set MT5_ENABLE_LIVE_EXECUTION=1
 E:\miniconda\envs\trading\python.exe homologation\run_e10_smoke.py
+```
+
+**Hedging wave (E08/E08b/E10/E10c/E10b/E10d) — Docker Tickmill RPyC:**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18812
+set MT5_SYMBOL=BTCUSD
+set MT5_ENABLE_LIVE_EXECUTION=1
+set HOMOLOG_REPORT_JSON=homologation/last_hedging_wave_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_hedging_wave_homologation.py
 ```
 
 **E05b fill reports (Wave 4 #1):**

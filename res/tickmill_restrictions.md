@@ -14,19 +14,24 @@ Covers **account capabilities** (hedging, leverage, demo mode) and **symbol capa
 | Company | Tickmill Ltd |
 | Login | 25339175 |
 | Terminal build | 5833 |
-| Probe date | 2026-06-28 03:04:44 (server time) |
-| Method | One-shot MQL5 script in the MT5 terminal |
-| Script | [`MQL5/refactoring/scripts/teste_intrumento_infos_tickmill.mq5`](../MQL5/refactoring/scripts/teste_intrumento_infos_tickmill.mq5) |
-| Output file | `MQL5/Files/probe_broker_Tickmill-Demo_25339175.txt` |
+| Probe date (declared) | 2026-06-28 03:04:44 (server time) |
+| Probe date (live OrderCheck) | **2026-06-29 16:58–16:59** (server time, Mon session open) |
+| Method | MQL5 scripts in the MT5 terminal (ad-hoc, not deployed) |
+| Scripts | [`probe_tickmill_market_off_hours.mq5`](../MQL5/refactoring/scripts/probe/probe_tickmill_market_off_hours.mq5), [`probe_tickmill_market_live.mq5`](../MQL5/refactoring/scripts/probe/probe_tickmill_market_live.mq5) |
+| Output files | `MQL5/Files/probe_tickmill_off_Tickmill-Demo_25339175.txt`, `MQL5/Files/probe_tickmill_live_Tickmill-Demo_25339175.txt` |
 
-The script dumps **account** `AccountInfo*` / `TerminalInfo*`, per-symbol `SymbolInfo*`, **Quote/Trade sessions** by weekday, `MarketBookAdd`, and a `CopyTicks` sample. Earlier Python/RPyC probes (`homologation/tools/probe_tick_semantics*.py`) reached the same tick-semantics conclusions.
+Legacy probe (2026-06-28): [`teste_intrumento_infos_tickmill.mq5`](../MQL5/refactoring/scripts/teste_intrumento_infos_tickmill.mq5) → `probe_broker_Tickmill-Demo_25339175.txt` (same **declared** symbol fields; no `OrderCheck`).
+
+Earlier Python/RPyC probes (`homologation/tools/probe_tick_semantics*.py`) reached the same tick-semantics conclusions.
 
 ### How to re-run
 
-1. Compile `teste_intrumento_infos_tickmill.mq5` in MetaEditor.
-2. Attach the script to any chart while logged into the target account.
-3. Default inputs probe `USTEC,BTCUSD`; edit `InpSymbols` for other symbols.
-4. Compare output with this document and update if the broker profile changes.
+1. Copy `MQL5/refactoring/scripts/probe/` to `Terminal\<hash>\MQL5\Scripts\probe\`.
+2. Compile `probe_tickmill_market_off_hours.mq5` and/or `probe_tickmill_market_live.mq5` in MetaEditor.
+3. Attach to any chart while logged into the target account.
+4. Default inputs probe `USTEC,BTCUSD`; edit `InpSymbols` for other symbols.
+5. Run **`market_live`** during trade session for `OrderCheck` filling ground truth.
+6. Compare output with this document and update if the broker profile changes.
 
 ### Time zone note
 
@@ -64,7 +69,18 @@ Approximate conversion to **BRT (UTC−3):** `BRT ≈ server_time − 5 hours`. 
 | Execution (market, pending, etc.) | Yes (in session) | Yes (in session) | **Supported** |
 | Historical bars / ticks | Yes | Yes | **Supported** (RPyC / `copy_rates_*`, `copy_ticks_*`) |
 | Hedging account | — | — | **Supported** (position-ticket close path) |
-| Filling (market) | IOC only | IOC only | **IOC** (`SYMBOL_FILLING_MODE=2`) |
+| Filling (market) | IOC only | IOC only | **IOC** (`SYMBOL_FILLING_MODE=2`; FOK/RETURN rejected) |
+
+### Filling — declared vs observed (2026-06-29 live probe)
+
+| Symbol | Declared (`SymbolInfo`) | Observed (`OrderCheck` market deal) |
+|--------|-------------------------|-------------------------------------|
+| USTEC | bitmask **2** → IOC only | FOK **FAIL** `10030 INVALID_FILL`; IOC **OK**; RETURN **FAIL** `10030` |
+| BTCUSD | bitmask **2** → IOC only | FOK **FAIL** `10030 INVALID_FILL`; IOC **OK**; RETURN **FAIL** `10030` |
+
+**Conclusion:** USTEC and BTCUSD are **identical** on Tickmill-Demo for filling. The adapter `validate_filling_mode()` correctly rejects explicit **FOK** when bitmask lacks bit 0. **DAY** limit orders use `ORDER_FILLING_RETURN` via `map_filling_type(GTC/DAY)` and remain valid.
+
+**Homologation note:** TC-HOM-E06d (passive FOK limit) must **not** expect MT5 accept on Tickmill IOC-only symbols — expect adapter pre-venue reject or broker `INVALID_FILL` on market FOK. E06e (DAY limit) remains valid.
 
 ---
 
@@ -104,15 +120,15 @@ Approximate conversion to **BRT (UTC−3):** `BRT ≈ server_time − 5 hours`. 
 MarketBookAdd(USTEC) => FALSE  err=4901  ticks_bookdepth=0
 ```
 
-### Tick semantics (`CopyTicks`, n=20, probe while Fri close)
+### Tick semantics (`CopyTicks`, n=20, Mon 16:58 server — session open)
 
 | Observation | Result |
 |-------------|--------|
 | `last` | **0.0** |
-| Tick flags | **134** (bid+ask+128) |
-| `TICK_FLAG_LAST` / volume | **0** |
+| Tick flags | **6** (bid+ask only) |
+| `TICK_FLAG_LAST` / volume | **0** (20/20 ticks bid+ask) |
 
-Stale `SYMBOL_TIME=2026.06.26 23:57:59` at probe — expected outside session.
+Live prices advancing; `SYMBOL_TIME` current at probe.
 
 ---
 
@@ -177,11 +193,13 @@ MarketBookAdd(BTCUSD) => FALSE  err=4901  ticks_bookdepth=0
 
 2. **Hedging account:** exec client must close by **position ticket** when multiple legs exist.
 
-3. **Market orders:** prefer **IOC** filling (`SYMBOL_FILLING_MODE=2` on both symbols).
+3. **Market orders:** **IOC only** (`SYMBOL_FILLING_MODE=2`; `type_filling=1`). FOK and RETURN rejected by broker (`OrderCheck` retcode 10030) and by adapter `validate_filling_mode()` for explicit FOK.
 
-4. **Live quote path:** MQL5 WS feed → `QuoteTick` only (same bid/ask semantics as `CopyTicks`).
+4. **Limit DAY/GTC:** use RETURN filling (`map_filling_type` default); distinct from market FOK TIF.
 
-5. **Homologation scheduling:** respect **session tables** above; failures outside session are expected, not adapter bugs.
+5. **Live quote path:** MQL5 WS feed → `QuoteTick` only (same bid/ask semantics as `CopyTicks`).
+
+6. **Homologation scheduling:** respect **session tables** above; failures outside session are expected, not adapter bugs.
 
 ---
 
@@ -193,15 +211,17 @@ MarketBookAdd(BTCUSD) => FALSE  err=4901  ticks_bookdepth=0
 | [`docs/data_capability_matrix.md`](../docs/data_capability_matrix.md) | Data capabilities |
 | [`docs/execution_capability_matrix.md`](../docs/execution_capability_matrix.md) | Exec + hedging |
 | [`res/proximos testes adaptador.md`](proximos%20testes%20adaptador.md) | Homologation tracker |
+| [`MQL5/refactoring/scripts/probe/`](../MQL5/refactoring/scripts/probe/) | Ad-hoc broker probes (off_hours + live OrderCheck) |
 | [`homologation/tools/probe_tick_semantics_fast.py`](../homologation/tools/probe_tick_semantics_fast.py) | Python tick probe |
 
 ---
 
 ## When to update
 
-Re-run `teste_intrumento_infos_tickmill.mq5` when any of these change:
+Re-run `probe_tickmill_market_off_hours.mq5` and (in session) `probe_tickmill_market_live.mq5` when any of these change:
 
 - Account margin mode (netting ↔ hedging), leverage, demo/live
 - Symbol sessions or spread behaviour
 - `SYMBOL_TICKS_BOOKDEPTH`, `MarketBookAdd`, or tick `last`/flags
+- **`SYMBOL_FILLING_MODE` or `OrderCheck` acceptance** (FOK/IOC/RETURN)
 - Broker server / entity / terminal build

@@ -1,0 +1,32 @@
+{
+  "started_at": "2026-06-29T15:28:30.244990+00:00",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-E06de",
+      "name": "Limit FOK + DAY passive submit",
+      "status": "PASS",
+      "detail": "E06d=OK: IOC-only symbol (bitmask=2): adapter reject expected: FOK filling is not supported for this symbol.; E06e=OK: DAY venue=265707603 type_time=1 pending=OK",
+      "metadata": {
+        "sub_results": [
+          [
+            "E06d",
+            true,
+            "IOC-only symbol (bitmask=2): adapter reject expected: FOK filling is not supported for this symbol."
+          ],
+          [
+            "E06e",
+            true,
+            "DAY venue=265707603 type_time=1 pending=OK"
+          ]
+        ]
+      }
+    }
+  ]
+}

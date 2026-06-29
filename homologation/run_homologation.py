@@ -62,6 +62,7 @@ from homologation.scenarios.data_tester_suite import run_bar_subscribe, run_unsu
 from homologation.scenarios.exec_tester_suite import (
     run_cancel_rejection,
     run_hedging_positions,
+    run_hedging_sell_positions,
     run_limit_fok_day_scenarios,
     run_limit_gtc_cancel,
     run_limit_ioc_scenarios,
@@ -78,7 +79,9 @@ from homologation.scenarios.mt5_edges import (
 )
 from homologation.scenarios.multi_symbol import run_multi_symbol_stream
 from homologation.scenarios.position_reconcile_suite import (
+    run_close_on_stop_mixed,
     run_close_on_stop_multi,
+    run_minimal_mixed_book,
     run_position_reconcile,
 )
 from homologation.support.clients import reset_mt5_client_cache
@@ -141,6 +144,8 @@ async def main() -> int:
     reset_mt5_client_cache()
     await run_hedging_positions(cfg, report)
     reset_mt5_client_cache()
+    await run_hedging_sell_positions(cfg, report)
+    reset_mt5_client_cache()
     await run_cancel_close_on_stop(cfg, report)
     reset_mt5_client_cache()
     await run_reconcile_mass_status(cfg, report)
@@ -153,7 +158,11 @@ async def main() -> int:
     reset_mt5_client_cache()
     await run_position_reconcile(cfg, report)
     reset_mt5_client_cache()
+    await run_minimal_mixed_book(cfg, report)
+    reset_mt5_client_cache()
     await run_close_on_stop_multi(cfg, report)
+    reset_mt5_client_cache()
+    await run_close_on_stop_mixed(cfg, report)
 
     report.print_summary()
 

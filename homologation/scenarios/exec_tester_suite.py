@@ -25,6 +25,7 @@ from nautilus_trader.model.objects import Price, Quantity
 from nautilus_trader.model.orders import LimitOrder, MarketOrder, StopMarketOrder
 
 from nautilus_mt5 import TICKMILL_DEMO_PROFILE
+from nautilus_mt5.parsing.execution import SYMBOL_FILLING_FOK
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
@@ -50,6 +51,19 @@ from homologation.support.clients import reset_mt5_client_cache
 logger = logging.getLogger(__name__)
 
 _VENUE = Venue("METATRADER_5")
+
+
+def _get_symbol_filling_mode(host: str, port: int, symbol: str) -> int:
+    conn = rpyc.connect(host, port)
+    try:
+        info = conn.root.symbol_info(symbol)
+        if info is None:
+            return 0
+        if isinstance(info, dict):
+            return int(info.get("filling_mode", 0) or 0)
+        return int(getattr(info, "filling_mode", 0) or 0)
+    finally:
+        conn.close()
 
 
 def _get_prices(host: str, port: int, symbol: str) -> tuple[float, float]:
@@ -761,7 +775,7 @@ async def run_modify_volume(cfg: HomologationConfig, report: HomologationReport)
 
 
 async def run_limit_fok_day_scenarios(cfg: HomologationConfig, report: HomologationReport) -> None:
-    """TC-HOM-E06d/e: passive FOK and DAY limit orders accepted by MT5."""
+    """TC-HOM-E06d/e: FOK limit (if symbol supports) + DAY limit passive submit."""
     case_id = "TC-HOM-E06de"
     name = "Limit FOK + DAY passive submit"
 
@@ -784,6 +798,10 @@ async def run_limit_fok_day_scenarios(cfg: HomologationConfig, report: Homologat
     try:
         await data_client._connect()
         await exec_client._connect()
+        filling_mode = await asyncio.to_thread(
+            _get_symbol_filling_mode, cfg.host, cfg.port, cfg.symbol,
+        )
+        fok_supported = bool(filling_mode & SYMBOL_FILLING_FOK)
         bid, _ask = await asyncio.to_thread(_get_prices, cfg.host, cfg.port, cfg.symbol)
         passive_px = round(bid * 0.95, 2)
 
@@ -812,7 +830,15 @@ async def run_limit_fok_day_scenarios(cfg: HomologationConfig, report: Homologat
             )
             venue_id, err = await _submit_limit(exec_client, cmd)
             if err:
-                sub_results.append((sid, False, f"submit failed: {err}"))
+                if sid == "E06d" and not fok_supported:
+                    ok = "FOK filling is not supported" in err
+                    sub_results.append((
+                        sid,
+                        ok,
+                        f"IOC-only symbol (bitmask={filling_mode}): adapter reject expected: {err}",
+                    ))
+                else:
+                    sub_results.append((sid, False, f"submit failed: {err}"))
                 continue
             venue_ids.append(venue_id)
             pending = await asyncio.to_thread(
@@ -833,8 +859,8 @@ async def run_limit_fok_day_scenarios(cfg: HomologationConfig, report: Homologat
                 sub_results.append((
                     sid,
                     ok,
-                    f"FOK venue={venue_id} type_filling={type_filling} "
-                    f"(Tickmill may override to RETURN=2) pending=OK",
+                    f"FOK venue={venue_id} type_filling={type_filling} pending=OK "
+                    f"(bitmask={filling_mode})",
                 ))
             else:
                 ok = type_time == 1  # ORDER_TIME_DAY
@@ -1053,6 +1079,200 @@ async def run_hedging_positions(cfg: HomologationConfig, report: HomologationRep
                 ScenarioStatus.FAIL,
                 f"Expected >=2 same-side positions, bridge reports {pos_count}",
                 positions=pos_count,
+            )
+    except Exception as exc:
+        report.add(case_id, name, ScenarioStatus.FAIL, str(exc))
+    finally:
+        try:
+            from homologation.scenarios.mt5_edges import _close_symbol_positions
+
+            await asyncio.to_thread(_close_symbol_positions, cfg.host, cfg.port, cfg.symbol)
+        except Exception:
+            pass
+        try:
+            await exec_client._disconnect()
+            await data_client._disconnect()
+        except Exception:
+            pass
+
+
+async def run_hedging_sell_positions(cfg: HomologationConfig, report: HomologationReport) -> None:
+    """TC-HOM-E08b: hedging account holds two independent SELL legs."""
+    case_id = "TC-HOM-E08b"
+    name = "Hedging two same-side positions (SELL + SELL)"
+
+    if not cfg.enable_execution:
+        report.add(case_id, name, ScenarioStatus.SKIP, "Set MT5_ENABLE_LIVE_EXECUTION=1")
+        return
+
+    reset_mt5_client_cache()
+    inst_id = InstrumentId(Symbol(cfg.symbol), _VENUE)
+    data_client, exec_client, msgbus, cache, clock = _build_clients(
+        cfg, cancel_on_stop=False, close_on_stop=False,
+    )
+
+    try:
+        from homologation.scenarios.mt5_edges import _close_symbol_positions
+        from homologation.support.bridge_probe import rpyc_positions_snapshot
+
+        if await asyncio.to_thread(rpyc_positions_count, cfg.host, cfg.port, cfg.symbol) > 0:
+            await asyncio.to_thread(_close_symbol_positions, cfg.host, cfg.port, cfg.symbol)
+            await asyncio.sleep(1.0)
+
+        await data_client._connect()
+        await exec_client._connect()
+
+        for coid in ("HOM-E08b-SELL1", "HOM-E08b-SELL2"):
+            order = MarketOrder(
+                trader_id=msgbus.trader_id,
+                strategy_id=StrategyId("HOMOLOG-E08b"),
+                instrument_id=inst_id,
+                client_order_id=ClientOrderId(coid),
+                order_side=OrderSide.SELL,
+                quantity=Quantity.from_str("0.01"),
+                time_in_force=TimeInForce.IOC,
+                init_id=UUID4(),
+                ts_init=clock.timestamp_ns(),
+            )
+            cache.add_order(order)
+            cmd = SubmitOrder(
+                trader_id=msgbus.trader_id,
+                strategy_id=order.strategy_id,
+                order=order,
+                position_id=None,
+                client_id=exec_client.id,
+                command_id=UUID4(),
+                ts_init=clock.timestamp_ns(),
+            )
+            _vid, err, filled = await _submit_with_events(exec_client, cmd)
+            if err or not filled:
+                report.add(
+                    case_id,
+                    name,
+                    ScenarioStatus.FAIL,
+                    f"SELL leg {coid} failed: {err or 'not filled'}",
+                )
+                return
+
+        snap = await asyncio.to_thread(
+            rpyc_positions_snapshot, cfg.host, cfg.port, cfg.symbol,
+        )
+        short_legs = [p for p in snap if p["type"] == 1]
+        if len(short_legs) >= 2:
+            report.add(
+                case_id,
+                name,
+                ScenarioStatus.PASS,
+                f"positions_get({cfg.symbol})={len(snap)} ({len(short_legs)} SHORT legs)",
+                positions=len(snap),
+                short_legs=len(short_legs),
+            )
+        else:
+            report.add(
+                case_id,
+                name,
+                ScenarioStatus.FAIL,
+                f"Expected >=2 SHORT legs, bridge reports {len(snap)} total "
+                f"({len(short_legs)} SHORT)",
+                positions=len(snap),
+                short_legs=len(short_legs),
+            )
+    except Exception as exc:
+        report.add(case_id, name, ScenarioStatus.FAIL, str(exc))
+    finally:
+        try:
+            from homologation.scenarios.mt5_edges import _close_symbol_positions
+
+            await asyncio.to_thread(_close_symbol_positions, cfg.host, cfg.port, cfg.symbol)
+        except Exception:
+            pass
+        try:
+            await exec_client._disconnect()
+            await data_client._disconnect()
+        except Exception:
+            pass
+
+
+async def run_hedging_sell_positions(cfg: HomologationConfig, report: HomologationReport) -> None:
+    """TC-HOM-E08b: hedging account holds two independent SELL legs."""
+    case_id = "TC-HOM-E08b"
+    name = "Hedging two same-side positions (SELL + SELL)"
+
+    if not cfg.enable_execution:
+        report.add(case_id, name, ScenarioStatus.SKIP, "Set MT5_ENABLE_LIVE_EXECUTION=1")
+        return
+
+    reset_mt5_client_cache()
+    inst_id = InstrumentId(Symbol(cfg.symbol), _VENUE)
+    data_client, exec_client, msgbus, cache, clock = _build_clients(
+        cfg, cancel_on_stop=False, close_on_stop=False,
+    )
+
+    try:
+        from homologation.scenarios.mt5_edges import _close_symbol_positions
+        from homologation.support.bridge_probe import rpyc_positions_snapshot
+
+        if await asyncio.to_thread(rpyc_positions_count, cfg.host, cfg.port, cfg.symbol) > 0:
+            await asyncio.to_thread(_close_symbol_positions, cfg.host, cfg.port, cfg.symbol)
+            await asyncio.sleep(1.0)
+
+        await data_client._connect()
+        await exec_client._connect()
+
+        for coid in ("HOM-E08b-SELL1", "HOM-E08b-SELL2"):
+            order = MarketOrder(
+                trader_id=msgbus.trader_id,
+                strategy_id=StrategyId("HOMOLOG-E08b"),
+                instrument_id=inst_id,
+                client_order_id=ClientOrderId(coid),
+                order_side=OrderSide.SELL,
+                quantity=Quantity.from_str("0.01"),
+                time_in_force=TimeInForce.IOC,
+                init_id=UUID4(),
+                ts_init=clock.timestamp_ns(),
+            )
+            cache.add_order(order)
+            cmd = SubmitOrder(
+                trader_id=msgbus.trader_id,
+                strategy_id=order.strategy_id,
+                order=order,
+                position_id=None,
+                client_id=exec_client.id,
+                command_id=UUID4(),
+                ts_init=clock.timestamp_ns(),
+            )
+            _vid, err, filled = await _submit_with_events(exec_client, cmd)
+            if err or not filled:
+                report.add(
+                    case_id,
+                    name,
+                    ScenarioStatus.FAIL,
+                    f"SELL leg {coid} failed: {err or 'not filled'}",
+                )
+                return
+
+        snap = await asyncio.to_thread(
+            rpyc_positions_snapshot, cfg.host, cfg.port, cfg.symbol,
+        )
+        short_legs = [p for p in snap if p["type"] == 1]
+        if len(short_legs) >= 2:
+            report.add(
+                case_id,
+                name,
+                ScenarioStatus.PASS,
+                f"positions_get({cfg.symbol})={len(snap)} ({len(short_legs)} SHORT legs)",
+                positions=len(snap),
+                short_legs=len(short_legs),
+            )
+        else:
+            report.add(
+                case_id,
+                name,
+                ScenarioStatus.FAIL,
+                f"Expected >=2 SHORT legs, bridge reports {len(snap)} total "
+                f"({len(short_legs)} SHORT)",
+                positions=len(snap),
+                short_legs=len(short_legs),
             )
     except Exception as exc:
         report.add(case_id, name, ScenarioStatus.FAIL, str(exc))

@@ -775,7 +775,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         order: Order,
         instrument: Instrument,
     ) -> MT5Order:
-        from nautilus_mt5.parsing.execution import map_order_type_and_action, map_filling_type
+        from nautilus_mt5.parsing.execution import map_order_type_and_action, resolve_type_filling
 
         mt5_order = MT5Order()
         mt5_order.orderRef = order.client_order_id.value
@@ -804,7 +804,14 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         else:
             mt5_order.price = 0.0
 
-        mt5_order.type_filling = map_filling_type(order.time_in_force)
+        filling_mode = (
+            int(instrument.info.get("filling_mode", 0))
+            if isinstance(instrument.info, dict)
+            else 0
+        )
+        mt5_order.type_filling = resolve_type_filling(
+            order.order_type, order.time_in_force, filling_mode,
+        )
         from nautilus_mt5.parsing.execution import MAP_TIME_IN_FORCE, ORDER_TIME_GTC
 
         mt5_order.type_time = MAP_TIME_IN_FORCE.get(order.time_in_force, ORDER_TIME_GTC)

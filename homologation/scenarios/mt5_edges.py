@@ -24,7 +24,7 @@ from nautilus_trader.model.identifiers import (
 from nautilus_trader.model.objects import Price, Quantity
 from nautilus_trader.model.orders import LimitOrder, MarketOrder, StopMarketOrder
 
-from nautilus_mt5 import TICKMILL_DEMO_PROFILE
+from nautilus_mt5.venue_profile import resolve_venue_profile
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
@@ -200,7 +200,7 @@ def _exec_stack(cfg: HomologationConfig, client_id: int, *, cancel_on_stop: bool
         terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
         external_rpyc=rpyc_cfg,
         instrument_provider=provider,
-        venue_profile=TICKMILL_DEMO_PROFILE,
+        venue_profile=cfg.venue_profile,
     )
     exec_config = MetaTrader5ExecClientConfig(
         client_id=client_id,

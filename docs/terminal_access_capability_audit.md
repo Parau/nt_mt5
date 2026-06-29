@@ -80,7 +80,7 @@ Aligned with `docs/execution_capability_matrix.md`.
 | Batch cancel / modify rejected explicit tests | Partial |
 | `history_orders_get` full historical order reconcile | Partial |
 | Instrument status streaming | **Unsupported** |
-| Multi-symbol WS (**D07** USTEC) | Tickmill homolog **PARTIAL** |
+| Multi-symbol WS (**D07** USTEC) | Tickmill homolog **DONE** (2026-06-29) |
 
 **Resolved (2026-06-28 Wave 4):** historical quotes via `copy_ticks_from`; `get_open_orders`; fill reports live path; cancel rejection 10013; FOK/DAY limit submit; stop trigger amend; open-on-start reconcile; `MAP_TIME_IN_FORCE` on submit.
 

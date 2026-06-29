@@ -20,7 +20,7 @@ from nautilus_trader.data.messages import SubscribeQuoteTicks
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.identifiers import InstrumentId, Symbol, TraderId, Venue
 
-from nautilus_mt5 import TICKMILL_DEMO_PROFILE
+from nautilus_mt5.venue_profile import resolve_venue_profile
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
@@ -63,7 +63,7 @@ def _data_client(cfg: HomologationConfig):
         terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
         external_rpyc=rpyc_cfg,
         instrument_provider=provider,
-        venue_profile=TICKMILL_DEMO_PROFILE,
+        venue_profile=resolve_venue_profile(cfg.venue_profile_name),
         feed=feed,
     )
     loop = asyncio.get_running_loop()
@@ -131,15 +131,13 @@ async def run_feed_service_restart_dedup(
         data_client, cache, clock = _data_client(cfg)
         inst_id = InstrumentId(Symbol(cfg.symbol), _VENUE)
 
-        orig_handle_data = data_client._handle_data
-
         def _spy_handle_data(data) -> None:
             if isinstance(data, QuoteTick):
                 tick_count[0] += 1
                 if phase[0] == "post" and data.ts_event in baseline_ts:
                     duplicates.append(data.ts_event)
                 seen_ts.add(data.ts_event)
-            orig_handle_data(data)
+            # Standalone client — no DataEngine on the bus; counting only.
 
         data_client._handle_data = _spy_handle_data
 
