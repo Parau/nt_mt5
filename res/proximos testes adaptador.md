@@ -345,6 +345,7 @@ Harness: `homologation/run_xp_closed_market.py` (`MT5_VENUE_PROFILE=xp_b3`, logi
 | Exec PETR4 | 2026-06-30 | `homologation/last_xp_petr4_exec_report.json` | **21/21 PASS** |
 | Exec DI1F27 | 2026-06-30 | `homologation/last_xp_di1f27_exec_report.json` | **21/21 PASS** |
 | Trade ticks D30/D31 | 2026-06-30 | `homologation/last_xp_trade_ticks_report.json` | WINQ26 PASS |
+| PETR4/DI1F27 data confirm | 2026-06-30 | `homologation/last_xp_petr4_di1f27_data_confirm.json`, `last_xp_di1f27_data_confirm.json` | D21/D30/D31 PASS; D02 harness timeout |
 | Wave3 | 2026-06-30 | `homologation/last_xp_wave3_report.json` | **4/4 PASS** |
 
 ### Closed market — runnable off-hours
@@ -397,6 +398,16 @@ set MT5_ENABLE_LIVE_EXECUTION=1
 set MT5_SYMBOL=PETR4
 set HOMOLOG_REPORT_JSON=homologation/last_xp_petr4_exec_report.json
 E:\miniconda\envs\trading\python.exe homologation\run_xp_exec_homologation.py
+```
+
+**XP data confirm CMD (quote + trade per symbol):**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18813
+set MT5_VENUE_PROFILE=xp_b3
+set MT5_SYMBOL=PETR4
+set HOMOLOG_REPORT_JSON=homologation/last_xp_petr4_di1f27_data_confirm.json
+E:\miniconda\envs\trading\python.exe homologation\run_xp_symbol_quote_trade_confirm.py
 ```
 
 **XP closed-market CMD:**

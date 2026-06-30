@@ -6,14 +6,19 @@ import pathlib
 
 import pytest
 
-from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
+from nautilus_trader.model.enums import AggressorSide
 from nautilus_trader.model.instruments import FuturesContract
 from nautilus_trader.model.objects import Currency, Price, Quantity
 
 from nautilus_mt5.data_types import MT5Symbol, MT5SymbolDetails
 from nautilus_mt5.feed.messages import WireTick
 from nautilus_mt5.parsing.instruments import parse_instrument
-from nautilus_mt5.tick_routing import route_wire_tick, quote_passes_sanity_gate
+from nautilus_mt5.tick_routing import (
+    mt5_flags_to_aggressor,
+    quote_passes_sanity_gate,
+    resolve_trade_aggressor,
+    route_wire_tick,
+)
 from nautilus_mt5 import XP_B3_PROFILE
 
 _TEST_DATA = pathlib.Path(__file__).parent.parent / "test_data"
@@ -62,3 +67,16 @@ def test_winq26_garbage_quote_fails_sanity_gate() -> None:
 def test_winq26_coherent_quote_passes_sanity_gate() -> None:
     inst = _instrument_from_fixture("symbol_info_winq26.json")
     assert quote_passes_sanity_gate(176280, 176300, 176290, inst) is True
+
+
+def test_mt5_flags_to_aggressor_xp_api_values() -> None:
+    # XP API flags (UI + 1024); see res/export ticks xp/README.md
+    assert mt5_flags_to_aggressor(1080) == AggressorSide.BUYER
+    assert mt5_flags_to_aggressor(1112) == AggressorSide.SELLER
+    assert mt5_flags_to_aggressor(1144) == AggressorSide.NO_AGGRESSOR
+    assert mt5_flags_to_aggressor(1028) == AggressorSide.NO_AGGRESSOR
+
+
+def test_resolve_trade_aggressor_respects_venue_gate() -> None:
+    assert resolve_trade_aggressor(1080, map_from_tick_flags=False) == AggressorSide.NO_AGGRESSOR
+    assert resolve_trade_aggressor(1080, map_from_tick_flags=True) == AggressorSide.BUYER

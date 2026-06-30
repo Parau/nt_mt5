@@ -185,6 +185,7 @@ def test_check_capability_unsupported_strict_does_not_raise():
 
 def test_tickmill_profile_name():
     assert TICKMILL_DEMO_PROFILE.name == "tickmill-demo"
+    assert TICKMILL_DEMO_PROFILE.map_tick_flags_to_aggressor is False
 
 
 def test_tickmill_profile_forex_is_currency_pair():
@@ -254,17 +255,21 @@ def test_tickmill_profile_unknown_mode_raises():
 
 def test_xp_profile_name():
     assert XP_B3_PROFILE.name == "xp-b3"
+    assert XP_B3_PROFILE.map_tick_flags_to_aggressor is True
 
 
 def test_xp_profile_futures_mode_33():
     cap = XP_B3_PROFILE.get_capability(SYMBOL_CALC_MODE_EXCH_FUTURES_V2)
     assert cap.nautilus_instrument_type is FuturesContract
-    assert cap.trade_ticks == CapabilityStatus.OBSERVED
+    assert cap.quote_ticks == CapabilityStatus.TESTED
+    assert cap.trade_ticks == CapabilityStatus.TESTED
 
 
 def test_xp_profile_equity_mode_32():
     cap = XP_B3_PROFILE.get_capability(SYMBOL_CALC_MODE_EXCH_STOCKS_V2)
     assert cap.nautilus_instrument_type is Equity
+    assert cap.quote_ticks == CapabilityStatus.TESTED
+    assert cap.trade_ticks == CapabilityStatus.TESTED
 
 
 def test_normalize_trade_calc_mode_aliases_legacy():

@@ -4,6 +4,11 @@ One-off probe: MT5 tick last/flags semantics via RPyC (no adapter changes).
 Usage (Windows CMD):
     set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && ^
     E:\\miniconda\\envs\\trading\\python.exe homologation\\tools\\probe_tick_semantics.py
+
+XP/B3 (pregão aberto):
+    set MT5_HOST=127.0.0.1 && set MT5_PORT=18813 && ^
+    set HOMOLOG_PROBE_SYMBOLS=WINQ26,WDON26,PETR4,DI1F27 && ^
+    E:\\miniconda\\envs\\trading\\python.exe homologation\\tools\\probe_tick_semantics.py
 """
 from __future__ import annotations
 
@@ -90,11 +95,16 @@ def analyze_ticks(label: str, ticks) -> None:
     with_last_price = 0
     with_volume_flag = 0
     bid_ask_only = 0
+    with_buy_flag = 0
+    with_sell_flag = 0
+    with_bid_ask = 0
     flag_counts: dict[int, int] = {}
 
     for t in rows:
         flags = int(_field(t, "flags", 0) or 0)
         last = float(_field(t, "last", 0) or 0)
+        bid = float(_field(t, "bid", 0) or 0)
+        ask = float(_field(t, "ask", 0) or 0)
         flag_counts[flags] = flag_counts.get(flags, 0) + 1
 
         if flags & TICK_FLAG_LAST:
@@ -103,14 +113,23 @@ def analyze_ticks(label: str, ticks) -> None:
             with_last_price += 1
         if flags & TICK_FLAG_VOLUME:
             with_volume_flag += 1
+        if bid > 0 and ask > 0 and ask > bid:
+            with_bid_ask += 1
+        if flags & TICK_FLAG_BUY:
+            with_buy_flag += 1
+        if flags & TICK_FLAG_SELL:
+            with_sell_flag += 1
         if (flags & (TICK_FLAG_BID | TICK_FLAG_ASK)) and not (flags & TICK_FLAG_LAST):
             bid_ask_only += 1
 
     print(f"  Total ticks     : {n}")
+    print(f"  bid/ask valid   : {with_bid_ask} ({100.0 * with_bid_ask / n:.1f}%)")
     print(f"  TICK_FLAG_LAST  : {with_last_flag} ({100.0 * with_last_flag / n:.1f}%)")
     print(f"  last > 0        : {with_last_price} ({100.0 * with_last_price / n:.1f}%)")
     print(f"  TICK_FLAG_VOLUME: {with_volume_flag} ({100.0 * with_volume_flag / n:.1f}%)")
     print(f"  bid/ask only    : {bid_ask_only} ({100.0 * bid_ask_only / n:.1f}%)")
+    print(f"  TICK_FLAG_BUY   : {with_buy_flag} ({100.0 * with_buy_flag / n:.1f}%)")
+    print(f"  TICK_FLAG_SELL  : {with_sell_flag} ({100.0 * with_sell_flag / n:.1f}%)")
     print("  Top flag values :")
     for flags, count in sorted(flag_counts.items(), key=lambda x: -x[1])[:8]:
         print(f"    flags={flags:3d} ({_flag_names(flags):12s}) count={count}")
@@ -145,15 +164,93 @@ def analyze_ticks(label: str, ticks) -> None:
             if shown >= 3:
                 break
 
+    quote_viable = with_bid_ask > 0 or bid_ask_only > 0
+    trade_viable = with_last_flag > 0 or with_last_price > 0
+    print("  Verdict:")
+    print(f"    QuoteTick (bid/ask) : {'YES' if quote_viable else 'NO'}")
+    print(f"    TradeTick (last/vol): {'YES' if trade_viable else 'NO'}")
+    if with_buy_flag or with_sell_flag:
+        print(
+            f"    BUY/SELL flags      : BUY={with_buy_flag} SELL={with_sell_flag} "
+            "(MT5 last-side hint, not exchange aggressor)"
+        )
+    else:
+        print("    BUY/SELL flags      : none in sample")
 
-def main() -> int:
-    host = os.environ.get("MT5_HOST", "127.0.0.1")
-    port = int(os.environ.get("MT5_PORT", "18812"))
 
-    print(f"Connecting RPyC {host}:{port} ...")
-    conn = rpyc.connect(host, port)
-    root = conn.root
+def _probe_symbols_from_env(port: int) -> tuple[str, ...] | None:
+    raw = os.environ.get("HOMOLOG_PROBE_SYMBOLS", "").strip()
+    if raw:
+        return tuple(s.strip() for s in raw.split(",") if s.strip())
+    if port == 18813:
+        return ("WINQ26", "WDON26", "PETR4", "DI1F27")
+    return None
 
+
+def _run_xp_probe(root, symbols: tuple[str, ...]) -> None:
+    sample = int(os.environ.get("HOMOLOG_PROBE_TICK_COUNT", "2000"))
+    lookback_mins = int(os.environ.get("HOMOLOG_PROBE_LOOKBACK_MINS", "60"))
+    now = datetime.now(timezone.utc)
+    live_from = int((now - timedelta(minutes=lookback_mins)).timestamp())
+
+    for sym in symbols:
+        try:
+            ok = root.symbol_select(sym, True)
+            print(f"symbol_select({sym}) -> {ok}")
+        except Exception as exc:
+            print(f"symbol_select({sym}) failed: {exc}")
+
+    for sym in symbols:
+        snap_anchor_sec: int | None = None
+        try:
+            snap = root.symbol_info_tick(sym)
+            if snap is not None:
+                msc = _field(snap, "time_msc")
+                if msc is not None and int(msc) > 0:
+                    snap_anchor_sec = int(int(msc) // 1000)
+        except Exception:
+            pass
+
+        from_sec = snap_anchor_sec - (lookback_mins * 60) if snap_anchor_sec else live_from
+        try:
+            ticks = root.copy_ticks_from(sym, from_sec, sample, COPY_TICKS_ALL)
+            anchor_note = (
+                f"anchor_msc={snap_anchor_sec * 1000}" if snap_anchor_sec else "anchor=wall_clock"
+            )
+            analyze_ticks(
+                f"{sym} copy_ticks_from {lookback_mins}min before {anchor_note} (max {sample}, from unix {from_sec})",
+                ticks,
+            )
+        except Exception as exc:
+            print(f"\n{sym} copy_ticks_from FAILED: {exc}")
+
+        try:
+            snap = root.symbol_info_tick(sym)
+            print(f"\n{'=' * 72}")
+            print(f"  {sym} symbol_info_tick (snapshot now)")
+            print(f"{'=' * 72}")
+            if snap:
+                fl = _field(snap, "flags")
+                if fl is None:
+                    fl = getattr(snap, "flags", None)
+                bid = float(_field(snap, "bid", 0) or 0)
+                ask = float(_field(snap, "ask", 0) or 0)
+                last = float(_field(snap, "last", 0) or 0)
+                print(
+                    f"  bid={bid} ask={ask} last={last} volume={_field(snap, 'volume')} "
+                    f"time_msc={_field(snap, 'time_msc')} flags={fl} ({_flag_names(int(fl or 0))})"
+                )
+                print(
+                    f"  snapshot QuoteTick: {'YES' if bid > 0 and ask > bid else 'NO'}  "
+                    f"TradeTick: {'YES' if last > 0 else 'NO'}"
+                )
+            else:
+                print("  None")
+        except Exception as exc:
+            print(f"\n{sym} snapshot FAILED: {exc}")
+
+
+def _run_tickmill_probe(root) -> None:
     for sym in ("USTEC", "BTCUSD"):
         try:
             ok = root.symbol_select(sym, True)
@@ -224,6 +321,24 @@ def main() -> int:
     except Exception as exc:
         print(f"\nBTCUSD snapshot FAILED: {exc}")
 
+
+def main() -> int:
+    host = os.environ.get("MT5_HOST", "127.0.0.1")
+    port = int(os.environ.get("MT5_PORT", "18812"))
+
+    print(f"Connecting RPyC {host}:{port} ...")
+    conn = rpyc.connect(host, port)
+    root = conn.root
+
+    xp_symbols = _probe_symbols_from_env(port)
+    if xp_symbols is not None:
+        print(f"XP/B3 probe mode — symbols: {','.join(xp_symbols)}")
+        _run_xp_probe(root, xp_symbols)
+        conn.close()
+        print("\nDone.")
+        return 0
+
+    _run_tickmill_probe(root)
     conn.close()
     print("\nDone.")
     return 0

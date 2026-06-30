@@ -39,7 +39,7 @@ Aligned with `docs/data_capability_matrix.md`.
 | **Instruments** | `symbols_get`, `symbol_info` | Provider load/request | TC-D01–D03 | Tickmill + XP closed (`run_closed_market.py`, `run_xp_closed_market.py`) | **Partial** |
 | **Live quotes** | WS feed (MQL5 Service); legacy `symbol_info_tick` poll | WS → `QuoteTick` when `feed.enabled=True` | TC-D20, `test_feed_*` | **Tickmill:** TC-HOM-D02. **XP/B3:** TC-HOM-D02 (`run_xp_open_market_feed.py`) | **Partial** |
 | **Historical quotes** | `copy_ticks_from`, `copy_ticks_range` | `_request_quote_ticks` → `copy_ticks_from` | TC-D21 matrix | **Tickmill:** TC-HOM-D21. **XP/B3:** TC-HOM-D21 closed + **open** (`run_xp_backlog_homologation.py`, 2026-06-30) | **Partial** |
-| **Trade ticks** | `copy_ticks_*`; RPyC `subscribe_ticks` AllLast | **Tickmill:** Unsupported. **XP/B3:** subscribe + request | TC-D30/D31 | **XP:** D21-T closed; D30/D31 open (`run_xp_trade_ticks_homologation.py`) | **Profile-dependent** |
+| **Trade ticks** | `copy_ticks_*`; RPyC `subscribe_ticks` AllLast | **Tickmill:** Unsupported. **XP/B3:** subscribe + request | TC-D30/D31 | **XP:** D30/D31 WINQ26, PETR4, DI1F27 (`run_xp_trade_ticks_homologation.py`, `run_xp_symbol_quote_trade_confirm.py`, 2026-06-30); `VenueProfile` **TESTED** | **Partial** (Tickmill unsupported) |
 | **Bars** | `copy_rates_*`; WS `subscribe_bars` | Hist + live WS bars | TC-D40/D41 | **Tickmill:** D03. **XP/B3:** D03 (`run_xp_open_market_feed.py`) | **Partial** |
 | **Order book** | `market_book_get` (wrapper) | Safe reject | TC-D10 | N/A | **Unsupported** |
 | **Instrument status** | N/A | N/A | N/A | N/A | **Unsupported** |
@@ -74,7 +74,7 @@ Aligned with `docs/execution_capability_matrix.md`.
 |-----|--------|
 | Order book Nautilus flow | **Unsupported** |
 | Tickmill TradeTick live/historical | **Unsupported** by design (`VenueProfile`) |
-| XP TradeTick live/historical (D30/D31) | Homolog **DONE** — WINQ26 (`run_xp_trade_ticks_homologation.py`, 2026-06-30) |
+| XP TradeTick live/historical (D30/D31) | Homolog **DONE** — WINQ26, PETR4, DI1F27 (`VenueProfile` **TESTED**, 2026-06-30) |
 | XP exec open market (E01–E10) | Homolog **DONE** — WDON26, PETR4, DI1F27 21/21 each (2026-06-30) |
 | XP D21 historical quotes (open) | Homolog **DONE** — `run_xp_backlog_homologation.py` (2026-06-30) |
 | XP D06 gateway restart | Homolog **DONE** — `run_xp_backlog_homologation.py` (2026-06-30) |
@@ -84,7 +84,7 @@ Aligned with `docs/execution_capability_matrix.md`.
 | Instrument status streaming | **Unsupported** |
 | Multi-symbol WS (**D07**) | Tickmill **DONE** (2026-06-29). XP/B3 **DONE** — feed suite + wave3 4/4 (PETR4=99 com pregão equity aberto, 2026-06-30) |
 
-**Resolved (2026-06-30 XP baseline):** open-market feed D02–D07; D06 gateway + D06-SVC; D21 open; exec full suite WDON26/PETR4/DI1F27; wave3 E10/E10b; trade ticks WINQ26. Continuous `WIN$`/`WDO$` excluded from live homolog (data-only).
+**Resolved (2026-06-30 XP baseline):** open-market feed D02–D07; D06 gateway + D06-SVC; D21 open; exec full suite WDON26/PETR4/DI1F27; wave3 E10/E10b; trade + quote ticks PETR4/DI1F27/WINQ26 (`VenueProfile` OBSERVED→TESTED). Continuous `WIN$`/`WDO$` excluded from live homolog (data-only).
 
 **Resolved (2026-06-28 Wave 4):** historical quotes via `copy_ticks_from`; `get_open_orders`; fill reports live path; cancel rejection 10013; FOK/DAY limit submit; stop trigger amend; open-on-start reconcile; `MAP_TIME_IN_FORCE` on submit.
 

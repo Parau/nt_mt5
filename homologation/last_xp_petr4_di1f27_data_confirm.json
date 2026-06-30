@@ -1,0 +1,87 @@
+{
+  "started_at": "2026-06-30T15:33:19.523286+00:00",
+  "summary": {
+    "total": 12,
+    "passed": 10,
+    "failed": 2,
+    "skipped": 0,
+    "ok": false,
+    "note": "D02 live quote stream failed on TradingNode shutdown timeout; D21/D30/D31 PASS for both symbols. D07 wave3 previously showed DI1F27=96 WS quotes in multi-symbol run."
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (PETR4)",
+      "status": "PASS",
+      "detail": "PETR4 bid=38.0 ask=38.01"
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Live QuoteTick stream (PETR4)",
+      "status": "FAIL",
+      "detail": "Node timeout after 100s — ticks=20 (quotes received; shutdown timeout)"
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "Historical QuoteTicks (PETR4)",
+      "status": "PASS",
+      "detail": "50 QuoteTicks sample bid=38.23 ask=38.25"
+    },
+    {
+      "case_id": "TC-HOM-D30-PETR4",
+      "name": "Live TradeTick stream (PETR4)",
+      "status": "PASS",
+      "detail": "31 trade ticks"
+    },
+    {
+      "case_id": "TC-HOM-D31",
+      "name": "Historical TradeTicks (PETR4)",
+      "status": "PASS",
+      "detail": "TradeTicks OK"
+    },
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (DI1F27)",
+      "status": "PASS",
+      "detail": "DI1F27 bid=14.055 ask=14.06"
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Live QuoteTick stream (DI1F27)",
+      "status": "FAIL",
+      "detail": "Node timeout after 90s — ticks=1 (multi-symbol D07 had 96 ticks)"
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "Historical QuoteTicks (DI1F27)",
+      "status": "PASS",
+      "detail": "50 QuoteTicks sample bid=14.185 ask=14.19"
+    },
+    {
+      "case_id": "TC-HOM-D30-DI1F27",
+      "name": "Live TradeTick stream (DI1F27)",
+      "status": "PASS",
+      "detail": "27 trade ticks"
+    },
+    {
+      "case_id": "TC-HOM-D31",
+      "name": "Historical TradeTicks (DI1F27)",
+      "status": "PASS",
+      "detail": "TradeTicks OK"
+    }
+  ],
+  "verdict": {
+    "PETR4": {
+      "quote_live": "partial (20 WS ticks; D02 harness timeout)",
+      "quote_hist": "PASS",
+      "trade_live": "PASS",
+      "trade_hist": "PASS"
+    },
+    "DI1F27": {
+      "quote_live": "partial (1 tick isolated D02; 96 in wave3 multi-symbol)",
+      "quote_hist": "PASS",
+      "trade_live": "PASS",
+      "trade_hist": "PASS"
+    }
+  }
+}

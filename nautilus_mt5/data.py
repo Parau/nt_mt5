@@ -120,9 +120,46 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         self._feed_config: FeedGatewayConfig = config.feed
         self._feed_gateway: InboundFeedGateway | None = None
         self._feed_handler: InboundFeedHandler | None = None
+        self._feed_quote_symbols: set[str] = set()
+        self._feed_trade_symbols: set[str] = set()
         self._feed_pending_symbols: set[str] = set()
         self._feed_pending_bars: set[tuple[str, str]] = set()
         self._feed_bar_types: dict[tuple[str, str], object] = {}
+
+    async def _subscribe_feed_symbol(
+        self,
+        mt5_symbol: str,
+        *,
+        quote: bool = False,
+        trade: bool = False,
+    ) -> None:
+        if quote:
+            self._feed_quote_symbols.add(mt5_symbol)
+        if trade:
+            self._feed_trade_symbols.add(mt5_symbol)
+        new_symbol = mt5_symbol not in self._feed_pending_symbols
+        self._feed_pending_symbols.add(mt5_symbol)
+        if new_symbol and self._feed_gateway is not None:
+            await self._feed_gateway.subscribe([mt5_symbol])
+
+    async def _unsubscribe_feed_symbol(
+        self,
+        mt5_symbol: str,
+        *,
+        quote: bool = False,
+        trade: bool = False,
+    ) -> None:
+        if quote:
+            self._feed_quote_symbols.discard(mt5_symbol)
+        if trade:
+            self._feed_trade_symbols.discard(mt5_symbol)
+        if mt5_symbol in self._feed_quote_symbols or mt5_symbol in self._feed_trade_symbols:
+            return
+        if mt5_symbol not in self._feed_pending_symbols:
+            return
+        self._feed_pending_symbols.discard(mt5_symbol)
+        if self._feed_gateway is not None:
+            await self._feed_gateway.unsubscribe([mt5_symbol])
 
     @property
     def feed_gateway(self) -> InboundFeedGateway | None:
@@ -257,7 +294,12 @@ class MetaTrader5DataClient(LiveMarketDataClient):
 
         ts_init = self._clock.timestamp_ns()
         for tick in batch.ticks:
-            quote_tick, trade_tick = route_wire_tick_to_nautilus(instrument, tick, ts_init)
+            quote_tick, trade_tick = route_wire_tick_to_nautilus(
+                instrument,
+                tick,
+                ts_init,
+                map_tick_flags_to_aggressor=self._venue_profile.map_tick_flags_to_aggressor,
+            )
             if quote_tick is not None:
                 self._handle_data(quote_tick)
             if trade_tick is not None:
@@ -335,9 +377,7 @@ class MetaTrader5DataClient(LiveMarketDataClient):
 
         if self._feed_config.enabled:
             mt5_symbol = sym.symbol
-            self._feed_pending_symbols.add(mt5_symbol)
-            if self._feed_gateway is not None:
-                await self._feed_gateway.subscribe([mt5_symbol])
+            await self._subscribe_feed_symbol(mt5_symbol, quote=True)
             return
 
         await self._client.subscribe_ticks(
@@ -376,9 +416,18 @@ class MetaTrader5DataClient(LiveMarketDataClient):
                 f"'{self._venue_profile.name}' — behavior not yet verified."
             )
 
+        try:
+            sym = MT5Symbol(**instrument.info["symbol"])
+        except Exception:
+            sym = MT5Symbol(symbol=instrument_id.symbol.value)
+
+        if self._feed_config.enabled:
+            await self._subscribe_feed_symbol(sym.symbol, trade=True)
+            return
+
         await self._client.subscribe_ticks(
             instrument_id=instrument_id,
-            symbol=MT5Symbol(**instrument.info["symbol"]),
+            symbol=sym,
             tick_type="AllLast",
             ignore_size=self._ignore_quote_tick_size_updates,
         )
@@ -441,15 +490,24 @@ class MetaTrader5DataClient(LiveMarketDataClient):
                 )
                 return
             mt5_symbol = self._mt5_symbol_from_instrument(instrument)
-            self._feed_pending_symbols.discard(mt5_symbol)
-            if self._feed_gateway is not None:
-                await self._feed_gateway.unsubscribe([mt5_symbol])
+            await self._unsubscribe_feed_symbol(mt5_symbol, quote=True)
             return
 
         await self._client.unsubscribe_ticks(instrument_id, "BidAsk")
 
     async def _unsubscribe_trade_ticks(self, command: UnsubscribeTradeTicks) -> None:
         instrument_id = command.instrument_id
+        if self._feed_config.enabled:
+            instrument = self._cache.instrument(instrument_id)
+            if instrument is None:
+                self._log.error(
+                    f"Cannot unsubscribe TradeTicks for {instrument_id}, Instrument not found.",
+                )
+                return
+            mt5_symbol = self._mt5_symbol_from_instrument(instrument)
+            await self._unsubscribe_feed_symbol(mt5_symbol, trade=True)
+            return
+
         await self._client.unsubscribe_ticks(instrument_id, "AllLast")
 
     async def _unsubscribe_bars(self, command: UnsubscribeBars) -> None:
@@ -603,6 +661,10 @@ class MetaTrader5DataClient(LiveMarketDataClient):
 
         ticks: list[QuoteTick | TradeTick] = []
         seen_events: set[int] = set()
+        map_aggressor = (
+            self._venue_profile.map_tick_flags_to_aggressor
+            and tick_type in ("TRADES", "AllLast")
+        )
 
         # Bounded window: one capped bridge call (copy_ticks_from, not copy_ticks_range).
         if start is not None:
@@ -614,6 +676,7 @@ class MetaTrader5DataClient(LiveMarketDataClient):
                 end_date_time=end,
                 use_rth=self._use_regular_trading_hours,
                 number_of_ticks=limit,
+                map_tick_flags_to_aggressor=map_aggressor,
             )
             if ticks_part:
                 ticks.extend(ticks_part[:limit])
@@ -632,6 +695,7 @@ class MetaTrader5DataClient(LiveMarketDataClient):
                 end_date_time=end,
                 use_rth=self._use_regular_trading_hours,
                 number_of_ticks=min(remaining, 1000),
+                map_tick_flags_to_aggressor=map_aggressor,
             )
             if not ticks_part:
                 break

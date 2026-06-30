@@ -104,6 +104,7 @@ class VenueProfile:
     name: str
     capabilities: dict  # dict[int, CalcModeCapability] — dict avoids hash issues
     strict: bool = False
+    map_tick_flags_to_aggressor: bool = False
 
     def get_capability(self, calc_mode: int) -> CalcModeCapability:
         """
@@ -278,20 +279,24 @@ Confirmed capabilities (2026-05-02):
 
 _B3_EQUITY_CAP = CalcModeCapability(
     nautilus_instrument_type=Equity,
-    quote_ticks=CapabilityStatus.OBSERVED,
-    trade_ticks=CapabilityStatus.OBSERVED,
+    quote_ticks=CapabilityStatus.TESTED,
+    trade_ticks=CapabilityStatus.TESTED,
     bars=CapabilityStatus.ASSUMED,
-    notes="B3 equities (e.g. PETR4). Lot size typically 100 shares.",
+    notes=(
+        "B3 equities (e.g. PETR4). Lot size typically 100 shares. "
+        "Homolog 2026-06-30: D21/D30/D31 + exec 21/21 (run_xp_symbol_quote_trade_confirm.py)."
+    ),
 )
 
 _B3_FUTURES_CAP = CalcModeCapability(
     nautilus_instrument_type=FuturesContract,
-    quote_ticks=CapabilityStatus.OBSERVED,
-    trade_ticks=CapabilityStatus.OBSERVED,
+    quote_ticks=CapabilityStatus.TESTED,
+    trade_ticks=CapabilityStatus.TESTED,
     bars=CapabilityStatus.ASSUMED,
     notes=(
-        "B3 exchange futures. Continuous series (WIN$, WDO$) are trade-tick-only; "
-        "nominals (WINQ26, WDON26) may carry bid/ask. Routing uses tick shape + trade_mode."
+        "B3 exchange futures. Continuous series (WIN$, WDO$) are trade-tick-only (no bid/ask); "
+        "nominals (WINQ26, WDON26, DI1F27) carry quote + trade. Routing uses tick shape + trade_mode. "
+        "Homolog 2026-06-30: WINQ26/PETR4/DI1F27 D21/D30/D31."
     ),
 )
 
@@ -304,13 +309,14 @@ XP_B3_PROFILE = VenueProfile(
         SYMBOL_CALC_MODE_EXCH_STOCKS: _B3_EQUITY_CAP,
         SYMBOL_CALC_MODE_EXCH_FUTURES: _B3_FUTURES_CAP,
     },
+    map_tick_flags_to_aggressor=True,
 )
 """
 Pre-built VenueProfile for XP Investimentos / B3 (XPMT5-DEMO probe 2026-06-26).
 
-- EXCH_STOCKS (32) → Equity
-- EXCH_FUTURES (33) → FuturesContract
-- Trade ticks OBSERVED on WIN$/WDO$/nominals; quote ticks symbol-dependent (see tick_routing).
+- EXCH_STOCKS (32) → Equity — quote + trade ticks **TESTED** (PETR4 homolog 2026-06-30)
+- EXCH_FUTURES (33) → FuturesContract — quote + trade ticks **TESTED** on nominals
+  (WINQ26, WDON26, DI1F27); continuous WIN$/WDO$ trade-only via tick_routing (see xp_b3_restrictions.md)
 """
 
 
