@@ -1,0 +1,81 @@
+{
+  "started_at": "2026-06-30T17:57:48.923273+00:00",
+  "summary": {
+    "total": 8,
+    "passed": 7,
+    "failed": 1,
+    "skipped": 0,
+    "ok": false
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=58312.5 ask=58322.5",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 58312.5,
+        "ask": 58322.5
+      }
+    },
+    {
+      "case_id": "TC-HOM-D08",
+      "name": "TradeTick subscribe gated by VenueProfile",
+      "status": "PASS",
+      "detail": "SubscribeTradeTicks returned without raise (UNSUPPORTED profile)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D10",
+      "name": "Order book unsupported (warning only)",
+      "status": "PASS",
+      "detail": "SubscribeOrderBook returned without raise",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "SubscribeInstruments unsupported (warning only)",
+      "status": "PASS",
+      "detail": "SubscribeInstruments returned without raise",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D08b",
+      "name": "RequestTradeTicks rejected by VenueProfile",
+      "status": "PASS",
+      "detail": "RequestTradeTicks returned without raise (VenueProfile UNSUPPORTED gate)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-AGG-TMb",
+      "name": "Aggressor routing disabled when Tickmill has no trade ticks",
+      "status": "PASS",
+      "detail": "no TRADES in window; routing OFF; AllLast ticks=0 with zero BUYER/SELLER",
+      "metadata": {
+        "ticks": 0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
+      "status": "PASS",
+      "detail": "Received 50 QuoteTick(s) sample bid=59356.0 ask=59369.0",
+      "metadata": {
+        "ticks": 50,
+        "bid": 59356.0,
+        "ask": 59369.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "FAIL",
+      "detail": "Node timeout after 85s \u2014 ticks=0",
+      "metadata": {
+        "ticks": 0
+      }
+    }
+  ]
+}
