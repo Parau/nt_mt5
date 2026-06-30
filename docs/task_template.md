@@ -26,6 +26,12 @@ If the task involves live MT5/RPyC validation, also read:
 
 - `docs/remote_mt5_test_gateway.md`
 
+If the task involves operational homologation on a real `TradingNode`, also read:
+
+- `docs/testing_contract.md` (Tier 1.5)
+- `res/proximos testes adaptador.md`
+- `docs/venue_profile.md` (when broker/profile-specific)
+
 If the task changes public examples or usage, also inspect:
 
 - `README.md`
@@ -171,6 +177,15 @@ If live tests are involved:
 - Do not submit orders unless `MT5_ENABLE_LIVE_EXECUTION=1`.
 ```
 
+If homologation is involved:
+
+```text
+- Add or update scenario in `homologation/scenarios/` and wire into the appropriate runner.
+- Record result in `res/proximos testes adaptador.md`.
+- Update capability matrix Live coverage column when the scenario passes.
+- Do not rely on homologation alone — keep Tier 1 deterministic coverage for the same behavior when feasible.
+```
+
 ---
 
 ## 10. Documentation requirements
@@ -182,6 +197,8 @@ Check all that apply:
 - [ ] Update `docs/terminal_access_capability_audit.md`.
 - [ ] Update `docs/decisions.md`.
 - [ ] Update `docs/testing_contract.md`.
+- [ ] Update `res/proximos testes adaptador.md` (homologation).
+- [ ] Update `docs/venue_profile.md` or broker restriction notes (`res/*_restrictions.md`).
 - [ ] Update `docs/remote_mt5_test_gateway.md`.
 - [ ] Update README or examples.
 - [ ] No docs update required; explain why.

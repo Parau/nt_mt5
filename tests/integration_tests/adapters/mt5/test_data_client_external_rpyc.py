@@ -9,7 +9,7 @@ Exercises the path:
     → MetaTrader5DataClient._subscribe_quote_ticks()
     → MetaTrader5Client.subscribe_ticks()     [partial: no live stream]
     → MetaTrader5DataClient._subscribe_bars()
-    → MetaTrader5Client.subscribe_historical_bars()  [partial: no live stream]
+    → InboundFeedGateway.subscribe_bars() when feed.enabled  [live closed bars via WS]
 
 No real MT5, no live env vars.
 
@@ -17,7 +17,7 @@ Capability notes (current state):
 - Instrument loading via provider: Supported (full parse_instrument pipeline)
 - QuoteTick subscription: Partial — subscription is registered but ticks do not
   flow without a real RPyC streaming server.
-- Bar subscription: Partial — same reason.
+- Bar subscription: Partial — requires `feed.enabled=True` and NT5TickFeedService (WS `subscribe_bars`).
 """
 import asyncio
 from unittest.mock import AsyncMock, patch
@@ -33,6 +33,7 @@ from nautilus_trader.core.uuid import UUID4
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
     ExternalRPyCTerminalConfig,
+    FeedGatewayConfig,
     MetaTrader5DataClientConfig,
     MetaTrader5InstrumentProviderConfig,
 )
@@ -186,30 +187,44 @@ async def test_data_client_subscribe_quote_ticks_unknown_instrument_logs_error(
 
 
 @pytest.mark.asyncio
-async def test_data_client_subscribe_bars_reaches_mt5_client(
-    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+async def test_data_client_subscribe_bars_uses_feed_gateway(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness, monkeypatch,
 ):
     """
-    _subscribe_bars() calls subscribe_historical_bars() on MetaTrader5Client
-    when the instrument is in the cache.
-
-    Capability: Partial — bars do not flow without a real streaming source.
+    _subscribe_bars() with feed.enabled sends subscribe_bars on the WS gateway.
     """
+    from unittest.mock import AsyncMock, MagicMock
+
     msgbus, cache, clock = nautilus_components
     loop = asyncio.get_running_loop()
 
     data_client = MT5LiveDataClientFactory.create(
-        loop=loop, name="MT5", config=_data_config("USTEC"),
-        msgbus=msgbus, cache=cache, clock=clock,
+        loop=loop,
+        name="MT5",
+        config=MetaTrader5DataClientConfig(
+            client_id=1,
+            terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
+            external_rpyc=ExternalRPyCTerminalConfig(host="127.0.0.1", port=18812),
+            venue_profile=TICKMILL_DEMO_PROFILE,
+            feed=FeedGatewayConfig(enabled=True, hello_timeout_secs=2.0),
+            instrument_provider=MetaTrader5InstrumentProviderConfig(
+                load_symbols=frozenset({MT5Symbol(symbol="USTEC")}),
+            ),
+        ),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
     )
+
+    async def _noop_feed_start(self):
+        return None
+
+    monkeypatch.setattr(data_client.__class__, "_start_feed_gateway", _noop_feed_start)
     await data_client._connect()
 
-    subscribe_historical_calls = []
-
-    async def _spy_subscribe_historical_bars(**kwargs):
-        subscribe_historical_calls.append(kwargs)
-
-    data_client._client.subscribe_historical_bars = _spy_subscribe_historical_bars
+    mock_gateway = MagicMock()
+    mock_gateway.subscribe_bars = AsyncMock()
+    data_client._feed_gateway = mock_gateway
 
     bar_type = BarType(
         instrument_id=_USTEC_ID,
@@ -225,5 +240,4 @@ async def test_data_client_subscribe_bars_reaches_mt5_client(
     )
     await data_client._subscribe_bars(command)
 
-    assert len(subscribe_historical_calls) == 1
-    assert subscribe_historical_calls[0]["bar_type"] == bar_type
+    mock_gateway.subscribe_bars.assert_awaited_once_with(["USTEC"], "M1")

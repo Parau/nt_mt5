@@ -14,6 +14,8 @@ from nautilus_trader.model.identifiers import Symbol
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.instruments import Cfd
 from nautilus_trader.model.instruments import CurrencyPair
+from nautilus_trader.model.instruments import Equity
+from nautilus_trader.model.instruments import FuturesContract
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Currency
 from nautilus_trader.model.objects import Price
@@ -73,6 +75,8 @@ def sec_type_to_asset_class(sec_type: str | None) -> AssetClass:
         return asset_class_from_str("CRYPTOCURRENCY")
     if "EQUIT" in upper or "STOCK" in upper or "SHARE" in upper:
         return asset_class_from_str("EQUITY")
+    if "FUTUR" in upper or upper in ("BMF", "BOVESPA"):
+        return asset_class_from_str("INDEX")
     if "BOND" in upper or "DEBT" in upper:
         return asset_class_from_str("BOND")
     if "ENERGY" in upper:
@@ -106,14 +110,16 @@ def parse_instrument(
         target_type = cap.nautilus_instrument_type
         if target_type is CurrencyPair:
             return parse_currency_pair_contract(details=symbol_details, instrument_id=instrument_id)
-        elif target_type is Cfd:
+        if target_type is Cfd:
             return parse_cfd_contract(details=symbol_details, instrument_id=instrument_id)
-        else:
-            raise ValueError(
-                f"Instrument type '{target_type.__name__}' for trade_calc_mode={calc_mode} "
-                "is declared in the profile but not yet implemented in the parser. "
-                "Only CurrencyPair and Cfd are currently supported."
-            )
+        if target_type is FuturesContract:
+            return parse_futures_contract(details=symbol_details, instrument_id=instrument_id)
+        if target_type is Equity:
+            return parse_equity_contract(details=symbol_details, instrument_id=instrument_id)
+        raise ValueError(
+            f"Instrument type '{target_type.__name__}' for trade_calc_mode={calc_mode} "
+            "is declared in the profile but not yet implemented in the parser."
+        )
 
     return parse_cfd_contract(details=symbol_details, instrument_id=instrument_id)
 
@@ -226,6 +232,85 @@ def parse_cfd_contract(
             ts_init=timestamp,
             info=symbol_details_to_dict(details),
         )
+
+
+def _futures_underlying(details: MT5SymbolDetails) -> str:
+    sym = details.symbol.symbol if details.symbol else ""
+    if sym.endswith("$"):
+        return sym[:-1]
+    # B3 month letter + 2-digit year suffix (WINQ26, WDON26, DI1F27).
+    m = re.match(r"^([A-Z0-9]+?)(?:[FGHJKMNQUVXZ]\d{2})$", sym)
+    if m:
+        return m.group(1)
+    return sym
+
+
+def _futures_asset_class(details: MT5SymbolDetails) -> AssetClass:
+    sym = details.symbol.symbol if details.symbol else ""
+    if sym.startswith("DI1"):
+        return AssetClass.DEBT
+    if details.under_sec_type:
+        return sec_type_to_asset_class(details.under_sec_type)
+    return AssetClass.INDEX
+
+
+def parse_futures_contract(
+    details: MT5SymbolDetails,
+    instrument_id: InstrumentId,
+) -> FuturesContract:
+    """Parse a B3 / exchange futures contract (``SYMBOL_CALC_MODE_EXCH_FUTURES`` 33)."""
+    price_precision: int = details.digits
+    size_precision: int = _tick_size_to_precision(details.volume_step)
+    timestamp = details.time
+    info = symbol_details_to_dict(details)
+
+    # DI1* prices are yield rates (%), not BRL notionals — preserve MT5 convention.
+    if details.symbol and details.symbol.symbol.startswith("DI1"):
+        info["price_semantics"] = "yield_rate_percent"
+
+    start_time = getattr(details, "start_time", 0) or 0
+    expiration_time = getattr(details, "expiration_time", 0) or 0
+    activation_ns = int(start_time) * 1_000_000_000 if start_time else 0
+    expiration_ns = int(expiration_time) * 1_000_000_000 if expiration_time else 0
+
+    return FuturesContract(
+        instrument_id=instrument_id,
+        raw_symbol=Symbol(details.symbol.symbol),
+        asset_class=_futures_asset_class(details),
+        currency=Currency.from_str(details.currency_profit),
+        price_precision=price_precision,
+        price_increment=Price(details.trade_tick_size, price_precision),
+        multiplier=Quantity(details.trade_contract_size, size_precision),
+        lot_size=Quantity(details.volume_min, size_precision),
+        underlying=_futures_underlying(details),
+        activation_ns=activation_ns,
+        expiration_ns=expiration_ns,
+        ts_event=timestamp,
+        ts_init=timestamp,
+        info=info,
+    )
+
+
+def parse_equity_contract(
+    details: MT5SymbolDetails,
+    instrument_id: InstrumentId,
+) -> Equity:
+    """Parse a B3 equity (``SYMBOL_CALC_MODE_EXCH_STOCKS`` 32)."""
+    price_precision: int = details.digits
+    size_precision: int = _tick_size_to_precision(details.volume_step)
+    timestamp = details.time
+
+    return Equity(
+        instrument_id=instrument_id,
+        raw_symbol=Symbol(details.symbol.symbol),
+        currency=Currency.from_str(details.currency_profit),
+        price_precision=price_precision,
+        price_increment=Price(details.trade_tick_size, price_precision),
+        lot_size=Quantity(details.volume_min, size_precision),
+        ts_event=timestamp,
+        ts_init=timestamp,
+        info=symbol_details_to_dict(details),
+    )
 
 
 def expiry_timestring_to_datetime(expiry: str) -> pd.Timestamp:

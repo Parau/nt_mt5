@@ -5,7 +5,6 @@
 >
 > “NautilusTrader” is used only to describe compatibility with the NautilusTrader open-source trading framework. This project is not an official NautilusTrader adapter, package, or integration.
 > 
-
 # Nautilus MetaTrader 5 Adapter 🌟
 
 This adapter allows for seamless integration between NautilusTrader and MetaTrader 5, providing capabilities for market data retrieval, order execution, and account management. It supports remote terminal access through a dedicated RPyC bridge and high-speed data streaming via MetaTrader 5 Expert Advisors (EA).
@@ -87,6 +86,33 @@ uv run python connect_with_external_rpyc.py
 
 **NOTE:** Ensure you have a running MT5 RPyC bridge accessible at the host and port specified in your `.env` file. ⚠️
 
+### Homologation (live operational validation)
+
+Beyond deterministic pytest, the `homologation/` directory contains standalone runners that drive a real `TradingNode` against a live MT5 session. Use these for operational sign-off and to update capability-matrix **Live coverage** rows.
+
+```cmd
+set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && E:\miniconda\envs\trading\python.exe homologation\run_open_market.py
+set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && E:\miniconda\envs\trading\python.exe homologation\run_closed_market.py
+set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && E:\miniconda\envs\trading\python.exe homologation\run_homologation.py
+```
+
+See `docs/testing_contract.md` (Tier 1.5) and `res/proximos testes adaptador.md` for scenario IDs and status.
+
+### Venue profiles (Tickmill vs XP/B3)
+
+Broker-specific behavior is controlled by `VenueProfile` in config — not separate adapters:
+
+- **`TICKMILL_DEMO_PROFILE`** (default) — CFD/FX; TradeTick unsupported by design.
+- **`XP_B3_PROFILE`** — B3 instruments (`WIN$`, etc.); historical TradeTick homologated closed-market; open pregão pending.
+
+XP closed-market homologation:
+
+```cmd
+set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && E:\miniconda\envs\trading\python.exe homologation\run_xp_closed_market.py
+```
+
+Switch the MT5 terminal login manually when changing brokers. Details: `docs/venue_profile.md`, `res/xp_b3_restrictions.md`.
+
 ### Detailed Steps:
 
 1. Clone the repository and navigate to the project directory (`nt_mt5`).
@@ -108,7 +134,7 @@ nautilus_mt5/
 │   ├── data.py              # MetaTrader5DataClient
 │   ├── execution.py         # MetaTrader5ExecutionClient
 │   ├── providers.py         # MetaTrader5InstrumentProvider
-│   ├── venue_profile.py     # VenueProfile, TICKMILL_DEMO_PROFILE
+│   ├── venue_profile.py     # VenueProfile, TICKMILL_DEMO_PROFILE, XP_B3_PROFILE
 │   ├── client/              # Low-level MetaTrader5Client (connection, market data, orders)
 │   ├── metatrader5/         # RPyC client wrapper + LocalPythonMT5
 │   └── parsing/             # MT5 → Nautilus instrument/execution parsers
@@ -128,6 +154,7 @@ nautilus_mt5/
 │   ├── memory/              # Memory-stability tests
 │   ├── support/             # Fake bridge, harnesses, shared helpers
 │   └── test_data/           # Real MT5 API payloads (JSON fixtures for unit tests)
+├── homologation/            # Tier 1.5 live TradingNode homologation runners
 ├── MQL5/                    # MQL5 scripts and EA module
 ├── docs/                    # Architecture and testing contracts, capability matrices
 ├── pyproject.toml           # Project configuration

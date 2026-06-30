@@ -135,7 +135,9 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
             async def _fetch():
                 import rpyc
                 try:
-                    res = await asyncio.to_thread(self._mt5_client['mt5'].positions_get, group=f"*{account_id}*")
+                    res = await asyncio.to_thread(
+                        self._mt5_client["mt5"].positions_get,
+                    )
                     if res is None:
                         return []
                     # obtain local copy to avoid Netrefs
@@ -168,6 +170,9 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
         for pos in all_positions:
             if isinstance(pos, dict):
                 # Raw dict from EXTERNAL_RPYC direct bridge call — convert to MT5Position.
+                pos_login = pos.get("login")
+                if pos_login is not None and str(pos_login) != str(account_id):
+                    continue
                 symbol_str = pos.get("symbol", "")
                 if not symbol_str:
                     continue
@@ -186,6 +191,9 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
         self,
         from_ts: int = 0,
         to_ts: int | None = None,
+        *,
+        group: str | None = None,
+        to_ts_buffer_secs: int = 300,
     ) -> list[dict]:
         """
         Retrieve historical deal records from MT5.
@@ -196,6 +204,11 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
             Start of the range as a Unix timestamp (seconds). Defaults to 0.
         to_ts : int, optional
             End of the range as a Unix timestamp (seconds). Defaults to current time.
+        group : str, optional
+            MT5 symbol group filter (e.g. ``"*BTCUSD*"``).
+        to_ts_buffer_secs : int
+            Seconds added to ``to_ts`` so deals slightly in the future (server skew)
+            are included. Matches exec-smoke ``to + 5 minutes`` pattern.
 
         Returns
         -------
@@ -206,11 +219,22 @@ class MetaTrader5ClientAccountMixin(BaseMixin):
 
         if to_ts is None:
             to_ts = int(_time.time())
+        to_ts = to_ts + to_ts_buffer_secs
 
         try:
-            res = await asyncio.to_thread(
-                self._mt5_client["mt5"].history_deals_get, from_ts, to_ts
-            )
+            if group:
+                res = await asyncio.to_thread(
+                    self._mt5_client["mt5"].history_deals_get,
+                    from_ts,
+                    to_ts,
+                    group=group,
+                )
+            else:
+                res = await asyncio.to_thread(
+                    self._mt5_client["mt5"].history_deals_get,
+                    from_ts,
+                    to_ts,
+                )
             if res is None:
                 return []
             res_local = rpyc.classic.obtain(res)

@@ -117,6 +117,48 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - This mode is intentionally separate from `EXTERNAL_RPYC` and must not silently fall back to RPyC behavior.
 - `DOCKERIZED` is not affected by this decision; it remains an internal backend of `MANAGED_TERMINAL` only.
 
+### 17. Live quote tick transport (WS feed)
+- Live quote ticks for `EXTERNAL_RPYC` deployments use an **MQL5 Service** (`CopyTicks` + cursor) pushing batches over **WebSocket** to an **InboundFeedGateway** in the Python adapter (`feed.enabled=True`).
+- RPyC **`symbol_info_tick` polling** is the legacy live path when `feed.enabled=False`; it returns snapshots (~1 Hz) and must not be used for homologation of tick-a-tick streaming (TC-HOM-D02).
+- Historical quote requests (`_request_quote_ticks`, `copy_ticks_*`) remain on-demand via RPyC regardless of feed mode.
+- Homologation **TC-HOM-D02** validates the WS feed path only; it requires `MT5_FEED_ENABLED=1` and a running `NT5TickFeedService`.
+
+### 18. Live bar transport (WS feed)
+- Live bar subscriptions (`SubscribeBars`) for supported timeframes (M1, M5, M15, M30, H1, H4, D1) use the same **MQL5 Service WebSocket** as quote ticks: adapter sends `subscribe_bars` / `unsubscribe_bars`; Service polls `CopyRates(shift=1)` and pushes closed bars as `op:bar`.
+- Requires `feed.enabled=True` on `MetaTrader5DataClientConfig`. Without the feed, live bar subscribe logs a warning and is ignored (no IB `req_real_time_bars` fallback).
+- Sub-second bar specs (e.g. 5s) are not on the WS wire and are rejected with a warning.
+- On-demand historical bars (`RequestBars` / `_request_bars`) use MT5-native **`copy_rates_*`** via RPyC (`copy_rates_from_pos` when `limit` is set; `copy_rates_range` when `start` is set). Legacy IB `req_historical_data` / `cancel_historical_data` removed from this path (D04b, 2026-06-27).
+- Homologation **TC-HOM-D03** validates live M1 bars via WS; run `homologation/run_bar_smoke.py` with `MT5_FEED_ENABLED=1`.
+- Homologation **TC-HOM-D04b** validates on-demand `RequestBars` via `_request_bars` → `copy_rates_from_pos` in `closed_market_suite.py`.
+- After WS disconnect, the MQL5 Service clears **bar** subscription state (`active=false`); quote symbol subs remain until explicit `unsubscribe`. The adapter replays pending quote and bar subs on the next `hello` after reconnect.
+
+### 19. RPyC bridge open orders (`orders_get`)
+- `EXTERNAL_RPYC` gateways must expose `exposed_orders_get` forwarding to MT5 `orders_get`.
+- Required for homologation **TC-HOM-E07** (modify volume verification) and for `generate_order_status_reports` when open pending orders exist.
+- Staging reference: `MQL5/refactoring/bridge/mt5_bridge_v007.py` (bridge v0.7).
+
+### 20. Multi-broker support via VenueProfile (Tickmill + XP/B3)
+- One adapter (`METATRADER_5`); broker differences are expressed only through **`VenueProfile` + config** (`MT5_VENUE_PROFILE`, symbols, `account_id`). No `if broker == "XP"` branches in core adapter code.
+- Live terminals on build 5833 report **`trade_calc_mode` 32/33** for B3 stocks/futures (not legacy 6/7). `XP_B3_PROFILE` declares both v2 and legacy aliases; `normalize_trade_calc_mode()` resolves lookups.
+- Quote vs `TradeTick` routing for B3 uses **`tick_routing`** (tick shape, `TRADE_MODE`, `$` continuous suffix) — not broker name.
+- Continuous B3 series (`WIN$`, `WDO$`) are **data-only** (`TRADE_MODE=DISABLED`); execution targets nominal contracts (`WINQ26`, `WDON26`).
+- Homologation runners: `run_closed_market.py` (Tickmill) and `run_xp_closed_market.py` (XP). **MT5 login must be switched manually** between brokers — the RPyC bridge binds to whichever terminal session is open.
+
+### 21. Historical quote ticks — MT5-native path (D21, 2026-06-28)
+- On-demand historical `QuoteTick` requests (`_request_quote_ticks`) must use MT5-native **`copy_ticks_from`** via `MetaTrader5Client.get_historical_ticks`.
+- Legacy Interactive Brokers **`req_historical_ticks`** / `cancel_historical_data` paths are removed from this adapter; do not reintroduce them.
+- RPyC payloads may be numpy structured tuples — parse by field name / index, not only `getattr`.
+- When `RequestQuoteTicks.limit > 0` and `start is None`, honor **`limit`** (do not always substitute `tick_capacity`). Use `tick_capacity` only when `limit=0`.
+- Homologation: **TC-HOM-D21** (`closed_market_suite.py`, `run_wave4_homologation.py`, `run_open_market.py`).
+
+### 22. Execution reconciliation and modify fixes (Wave 4, 2026-06-28)
+- **`get_open_orders`** must call MT5 `orders_get` synchronously (same pattern as `positions_get`) and normalize dict rows to `MT5Order` for `generate_order_status_reports`.
+- **`_parse_mt5_order_to_order_status_report`** resolves instruments by **symbol name**, not `find_with_symbol_id(symbol_string)`. Use `orderRef` or fall back to `str(order_id)` for `ClientOrderId` when `orderRef` is empty.
+- **`_modify_order`** uses `TRADE_ACTION_MODIFY` (`action=7`) via `MetaTrader5Client.modify_order`, not a new `place_order` submit.
+- **Stop trigger amend:** for `STOP_MARKET`, `ModifyOrder.trigger_price` maps to MT5 pending **`price`** (trigger), not `stoplimit`.
+- **`MAP_TIME_IN_FORCE`** must be applied on submit (`type_time`); do not hardcode GTC for all pending orders (required for **DAY** limit homologation **E06e**).
+- Homologation evidence: **E05b** fill reports, **E43** cancel rejection (10013), **E06de** FOK/DAY, **E07b** stop amend, **E81** open-on-start reconcile — see `res/proximos testes adaptador.md`.
+
 ## How to use this file
 
 When changing the adapter, ask:

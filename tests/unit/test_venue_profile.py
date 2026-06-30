@@ -4,7 +4,7 @@ Unit tests for the VenueProfile capability system.
 """
 import pytest
 
-from nautilus_trader.model.instruments import Cfd, CurrencyPair
+from nautilus_trader.model.instruments import Cfd, CurrencyPair, Equity, FuturesContract
 
 from nautilus_mt5.venue_profile import (
     SYMBOL_CALC_MODE_CFD,
@@ -12,7 +12,14 @@ from nautilus_mt5.venue_profile import (
     SYMBOL_CALC_MODE_CFDLEVERAGE,
     SYMBOL_CALC_MODE_FOREX,
     SYMBOL_CALC_MODE_FOREX_NO_LEVERAGE,
+    SYMBOL_CALC_MODE_EXCH_FUTURES,
+    SYMBOL_CALC_MODE_EXCH_FUTURES_V2,
+    SYMBOL_CALC_MODE_EXCH_STOCKS,
+    SYMBOL_CALC_MODE_EXCH_STOCKS_V2,
     TICKMILL_DEMO_PROFILE,
+    XP_B3_PROFILE,
+    normalize_trade_calc_mode,
+    resolve_venue_profile,
     CalcModeCapability,
     CapabilityStatus,
     VenueProfile,
@@ -238,3 +245,35 @@ def test_tickmill_profile_bars_status_is_tested_or_assumed(calc_mode):
 def test_tickmill_profile_unknown_mode_raises():
     with pytest.raises(ValueError, match="trade_calc_mode=99"):
         TICKMILL_DEMO_PROFILE.get_capability(99)
+
+
+# ---------------------------------------------------------------------------
+# XP_B3_PROFILE
+# ---------------------------------------------------------------------------
+
+
+def test_xp_profile_name():
+    assert XP_B3_PROFILE.name == "xp-b3"
+
+
+def test_xp_profile_futures_mode_33():
+    cap = XP_B3_PROFILE.get_capability(SYMBOL_CALC_MODE_EXCH_FUTURES_V2)
+    assert cap.nautilus_instrument_type is FuturesContract
+    assert cap.trade_ticks == CapabilityStatus.OBSERVED
+
+
+def test_xp_profile_equity_mode_32():
+    cap = XP_B3_PROFILE.get_capability(SYMBOL_CALC_MODE_EXCH_STOCKS_V2)
+    assert cap.nautilus_instrument_type is Equity
+
+
+def test_normalize_trade_calc_mode_aliases_legacy():
+    assert normalize_trade_calc_mode(SYMBOL_CALC_MODE_EXCH_FUTURES) == SYMBOL_CALC_MODE_EXCH_FUTURES_V2
+    assert normalize_trade_calc_mode(SYMBOL_CALC_MODE_EXCH_STOCKS) == SYMBOL_CALC_MODE_EXCH_STOCKS_V2
+
+
+def test_resolve_venue_profile():
+    assert resolve_venue_profile("tickmill") is TICKMILL_DEMO_PROFILE
+    assert resolve_venue_profile("xp_b3") is XP_B3_PROFILE
+    with pytest.raises(ValueError):
+        resolve_venue_profile("unknown")

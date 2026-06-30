@@ -5,6 +5,7 @@ Provides an API integration for the MetaTrader 5 Trading Platform.
 from nautilus_mt5.config import (
     DockerizedMT5TerminalConfig,
     ExternalRPyCTerminalConfig,
+    FeedGatewayConfig,
     LocalPythonTerminalConfig,
     ManagedTerminalConfig,
     MetaTrader5DataClientConfig,
@@ -20,6 +21,8 @@ from nautilus_mt5.venue_profile import (
     CalcModeCapability,
     VenueProfile,
     TICKMILL_DEMO_PROFILE,
+    XP_B3_PROFILE,
+    resolve_venue_profile,
 )
 
 __all__ = [
@@ -27,6 +30,7 @@ __all__ = [
     "CalcModeCapability",
     "DockerizedMT5TerminalConfig",
     "ExternalRPyCTerminalConfig",
+    "FeedGatewayConfig",
     "LocalPythonTerminalConfig",
     "ManagedTerminalConfig",
     "MetaTrader5DataClient",
@@ -38,5 +42,7 @@ __all__ = [
     "MT5LiveDataClientFactory",
     "MT5LiveExecClientFactory",
     "TICKMILL_DEMO_PROFILE",
+    "XP_B3_PROFILE",
     "VenueProfile",
+    "resolve_venue_profile",
 ]

@@ -1,5 +1,4 @@
 import asyncio
-from operator import attrgetter
 
 import pandas as pd
 
@@ -11,12 +10,30 @@ from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.data import TradeTick
 from nautilus_trader.model.identifiers import ClientId
+from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.identifiers import Symbol
 
 from nautilus_mt5.client.client import MetaTrader5Client
 from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.config import MetaTrader5DataClientConfig
-from nautilus_mt5.parsing.data import timedelta_to_duration_str
+from nautilus_mt5.feed.config import FeedGatewayConfig
+from nautilus_mt5.feed.converter import (
+    route_wire_tick_to_nautilus,
+    wire_bar_to_nautilus_bar,
+    wire_tick_to_quote_tick,
+)
+from nautilus_mt5.feed.gateway import InboundFeedGateway
+from nautilus_mt5.feed.handler import InboundFeedHandler
+from nautilus_mt5.feed.messages import (
+    BarMessage,
+    ErrorMessage,
+    HelloMessage,
+    HeartbeatMessage,
+    PongMessage,
+    TickBatchMessage,
+)
+from nautilus_mt5.parsing.data import bar_spec_to_wire_timeframe, timedelta_to_duration_str
 from nautilus_mt5.providers import MetaTrader5InstrumentProvider
 from nautilus_mt5.venue_profile import CapabilityStatus
 
@@ -100,6 +117,16 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         self._use_regular_trading_hours = config.use_regular_trading_hours
         self._ignore_quote_tick_size_updates = config.ignore_quote_tick_size_updates
         self._venue_profile = config.venue_profile
+        self._feed_config: FeedGatewayConfig = config.feed
+        self._feed_gateway: InboundFeedGateway | None = None
+        self._feed_handler: InboundFeedHandler | None = None
+        self._feed_pending_symbols: set[str] = set()
+        self._feed_pending_bars: set[tuple[str, str]] = set()
+        self._feed_bar_types: dict[tuple[str, str], object] = {}
+
+    @property
+    def feed_gateway(self) -> InboundFeedGateway | None:
+        return self._feed_gateway
 
     @property
     def instrument_provider(self) -> MetaTrader5InstrumentProvider:
@@ -124,8 +151,154 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         for instrument in self._instrument_provider.list_all():
             self._handle_data(instrument)
 
+        if self._feed_config.enabled:
+            await self._start_feed_gateway()
+
+    async def _start_feed_gateway(self) -> None:
+        handler = self._feed_handler or InboundFeedHandler()
+        self._feed_gateway = InboundFeedGateway(
+            config=self._feed_config,
+            handler=handler,
+            on_event=self._handle_feed_event,
+        )
+        self._feed_handler = self._feed_gateway.handler
+        await self._feed_gateway.start()
+        try:
+            hello = await self._feed_gateway.wait_for_hello()
+        except TimeoutError as exc:
+            self._log.error(
+                "MQL5 feed service did not send hello within "
+                f"{self._feed_config.hello_timeout_secs}s",
+            )
+            await self._feed_gateway.stop()
+            self._feed_gateway = None
+            raise RuntimeError(
+                "MQL5 inbound feed handshake timed out waiting for hello",
+            ) from exc
+
+        self._log.info(
+            f"MQL5 feed hello session={hello.session} symbols={list(hello.symbols)} "
+            f"bars={list(hello.bars)}",
+        )
+
+        pending = set(self._feed_pending_symbols)
+        pending |= self._feed_gateway.handler.subscription_state.pending_subscribe
+        if pending:
+            await self._feed_gateway.subscribe(sorted(pending))
+
+        await self._replay_pending_bar_subscriptions()
+
+    async def _replay_pending_quote_subscriptions(self) -> None:
+        if self._feed_gateway is None:
+            return
+
+        pending = set(self._feed_pending_symbols)
+        pending |= self._feed_gateway.handler.subscription_state.pending_subscribe
+        if pending:
+            await self._feed_gateway.subscribe(sorted(pending))
+
+    async def _restart_feed_gateway(self) -> None:
+        """Stop and restart the WS gateway, preserving dedup cursor state."""
+        if self._feed_gateway is not None:
+            self._feed_handler = self._feed_gateway.handler
+            await self._feed_gateway.stop()
+            self._feed_gateway = None
+        await self._start_feed_gateway()
+
+    async def _replay_pending_bar_subscriptions(self) -> None:
+        if self._feed_gateway is None:
+            return
+
+        pending = set(self._feed_pending_bars)
+        pending |= self._feed_gateway.handler.subscription_state.pending_bar_subscribe
+        by_timeframe: dict[str, list[str]] = {}
+        for symbol, timeframe in sorted(pending):
+            by_timeframe.setdefault(timeframe, []).append(symbol)
+
+        for timeframe, symbols in by_timeframe.items():
+            await self._feed_gateway.subscribe_bars(symbols, timeframe)
+
+    async def _handle_feed_event(self, event: object) -> None:
+        if isinstance(event, HelloMessage):
+            if self._feed_config.reconnect_notify:
+                self._log.info(
+                    f"MQL5 feed reconnected session={event.session} "
+                    f"symbols={list(event.symbols)} bars={list(event.bars)}",
+                )
+            await self._replay_pending_quote_subscriptions()
+            await self._replay_pending_bar_subscriptions()
+            return
+
+        if isinstance(event, TickBatchMessage):
+            self._handle_feed_ticks(event)
+            return
+
+        if isinstance(event, BarMessage):
+            self._handle_feed_bar(event)
+            return
+
+        if isinstance(event, ErrorMessage):
+            self._log.warning(
+                f"MQL5 feed service error code={event.code} message={event.message}",
+            )
+            return
+
+        if isinstance(event, (HeartbeatMessage, PongMessage)):
+            self._log.debug(f"MQL5 feed {event.__class__.__name__}")
+
+    def _handle_feed_ticks(self, batch: TickBatchMessage) -> None:
+        instrument_id = InstrumentId(Symbol(batch.symbol), MT5_VENUE)
+        instrument = self._cache.instrument(instrument_id)
+        if instrument is None:
+            self._log.debug(
+                f"No cached instrument for feed symbol {batch.symbol}; skipping ticks",
+            )
+            return
+
+        ts_init = self._clock.timestamp_ns()
+        for tick in batch.ticks:
+            quote_tick, trade_tick = route_wire_tick_to_nautilus(instrument, tick, ts_init)
+            if quote_tick is not None:
+                self._handle_data(quote_tick)
+            if trade_tick is not None:
+                self._handle_data(trade_tick)
+
+    def _handle_feed_bar(self, message: BarMessage) -> None:
+        wire = message.bar
+        key = (wire.symbol, wire.timeframe.upper())
+        bar_type = self._feed_bar_types.get(key)
+        if bar_type is None:
+            self._log.debug(
+                f"No active bar subscription for feed bar {wire.symbol}:{wire.timeframe}; skipping",
+            )
+            return
+
+        instrument_id = bar_type.instrument_id
+        instrument = self._cache.instrument(instrument_id)
+        if instrument is None:
+            self._log.debug(
+                f"No cached instrument for feed bar {wire.symbol}; skipping",
+            )
+            return
+
+        ts_init = self._clock.timestamp_ns()
+        bar = wire_bar_to_nautilus_bar(instrument, bar_type, wire, ts_init)
+        if bar is not None:
+            self._handle_data(bar)
+
+    def _mt5_symbol_from_instrument(self, instrument) -> str:
+        try:
+            sym_dict = instrument.info["symbol"]
+            return MT5Symbol(**sym_dict).symbol
+        except Exception:
+            return instrument.id.symbol.value
+
     async def _disconnect(self):
         self._client.registered_nautilus_clients.discard(self.id)
+        if self._feed_gateway is not None:
+            self._feed_handler = self._feed_gateway.handler
+            await self._feed_gateway.stop()
+            self._feed_gateway = None
         if (
             self._client.is_running
             and not self._client.registered_nautilus_clients
@@ -156,10 +329,16 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             return
 
         try:
-            sym_dict = instrument.info["symbol"]
-            sym = MT5Symbol(**sym_dict)
+            sym = MT5Symbol(**instrument.info["symbol"])
         except Exception:
             sym = MT5Symbol(symbol=instrument_id.symbol.value)
+
+        if self._feed_config.enabled:
+            mt5_symbol = sym.symbol
+            self._feed_pending_symbols.add(mt5_symbol)
+            if self._feed_gateway is not None:
+                await self._feed_gateway.subscribe([mt5_symbol])
+            return
 
         await self._client.subscribe_ticks(
             instrument_id=instrument_id,
@@ -210,19 +389,26 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             self._log.error(f"Cannot subscribe to {bar_type}, Instrument not found.")
             return
 
-        if bar_type.spec.timedelta.total_seconds() == 5:
-            await self._client.subscribe_realtime_bars(
-                bar_type=bar_type,
-                symbol=MT5Symbol(**instrument.info["symbol"]),
-                use_rth=self._use_regular_trading_hours,
-            )
-        else:
-            await self._client.subscribe_historical_bars(
-                bar_type=bar_type,
-                symbol=MT5Symbol(**instrument.info["symbol"]),
-                use_rth=self._use_regular_trading_hours,
-                handle_revised_bars=self._handle_revised_bars,
-            )
+        mt5_symbol = self._mt5_symbol_from_instrument(instrument)
+
+        if self._feed_config.enabled:
+            try:
+                wire_timeframe = bar_spec_to_wire_timeframe(bar_type.spec)
+            except ValueError as exc:
+                self._log.warning(str(exc))
+                return
+
+            key = (mt5_symbol, wire_timeframe)
+            self._feed_pending_bars.add(key)
+            self._feed_bar_types[key] = bar_type
+            if self._feed_gateway is not None:
+                await self._feed_gateway.subscribe_bars([mt5_symbol], wire_timeframe)
+            return
+
+        self._log.warning(
+            "Live bar subscribe requires feed.enabled=True and NT5TickFeedService; "
+            f"ignoring SubscribeBars for {bar_type}.",
+        )
 
     async def _subscribe_instrument_status(self, command: SubscribeInstrument) -> None:
         pass  # Subscribed as part of orderbook
@@ -247,6 +433,19 @@ class MetaTrader5DataClient(LiveMarketDataClient):
 
     async def _unsubscribe_quote_ticks(self, command: UnsubscribeQuoteTicks) -> None:
         instrument_id = command.instrument_id
+        if self._feed_config.enabled:
+            instrument = self._cache.instrument(instrument_id)
+            if instrument is None:
+                self._log.error(
+                    f"Cannot unsubscribe QuoteTicks for {instrument_id}, Instrument not found.",
+                )
+                return
+            mt5_symbol = self._mt5_symbol_from_instrument(instrument)
+            self._feed_pending_symbols.discard(mt5_symbol)
+            if self._feed_gateway is not None:
+                await self._feed_gateway.unsubscribe([mt5_symbol])
+            return
+
         await self._client.unsubscribe_ticks(instrument_id, "BidAsk")
 
     async def _unsubscribe_trade_ticks(self, command: UnsubscribeTradeTicks) -> None:
@@ -255,10 +454,32 @@ class MetaTrader5DataClient(LiveMarketDataClient):
 
     async def _unsubscribe_bars(self, command: UnsubscribeBars) -> None:
         bar_type = command.bar_type
-        if bar_type.spec.timedelta.total_seconds() == 5:
-            await self._client.unsubscribe_realtime_bars(bar_type)
-        else:
-            await self._client.unsubscribe_historical_bars(bar_type)
+        if self._feed_config.enabled:
+            instrument = self._cache.instrument(bar_type.instrument_id)
+            if instrument is None:
+                self._log.error(
+                    f"Cannot unsubscribe bars for {bar_type}, Instrument not found.",
+                )
+                return
+
+            mt5_symbol = self._mt5_symbol_from_instrument(instrument)
+            try:
+                wire_timeframe = bar_spec_to_wire_timeframe(bar_type.spec)
+            except ValueError as exc:
+                self._log.warning(str(exc))
+                return
+
+            key = (mt5_symbol, wire_timeframe)
+            self._feed_pending_bars.discard(key)
+            self._feed_bar_types.pop(key, None)
+            if self._feed_gateway is not None:
+                await self._feed_gateway.unsubscribe_bars([mt5_symbol], wire_timeframe)
+            return
+
+        self._log.warning(
+            "Live bar unsubscribe requires feed.enabled=True; "
+            f"ignoring UnsubscribeBars for {bar_type}.",
+        )
 
     async def _unsubscribe_instrument_status(self, command: UnsubscribeInstrumentStatus) -> None:
         pass  # Subscribed as part of orderbook
@@ -374,27 +595,61 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         start: pd.Timestamp | None = None,
         end: pd.Timestamp | None = None,
     ) -> list[QuoteTick | TradeTick]:
-        if not start:
+        if not limit:
             limit = self._cache.tick_capacity
 
         if not end:
             end = pd.Timestamp.utcnow()
 
         ticks: list[QuoteTick | TradeTick] = []
-        while (start and end > start) or (len(ticks) < limit > 0):
+        seen_events: set[int] = set()
+
+        # Bounded window: one capped bridge call (copy_ticks_from, not copy_ticks_range).
+        if start is not None:
             await self._client.wait_until_ready()
+            ticks_part = await self._client.get_historical_ticks(
+                symbol,
+                tick_type,
+                start_date_time=start,
+                end_date_time=end,
+                use_rth=self._use_regular_trading_hours,
+                number_of_ticks=limit,
+            )
+            if ticks_part:
+                ticks.extend(ticks_part[:limit])
+            ticks.sort(key=lambda x: x.ts_init)
+            return ticks
+
+        max_iterations = 100
+        iterations = 0
+        while len(ticks) < limit > 0 and iterations < max_iterations:
+            iterations += 1
+            await self._client.wait_until_ready()
+            remaining = max(limit - len(ticks), 1)
             ticks_part = await self._client.get_historical_ticks(
                 symbol,
                 tick_type,
                 end_date_time=end,
                 use_rth=self._use_regular_trading_hours,
+                number_of_ticks=min(remaining, 1000),
             )
             if not ticks_part:
                 break
-            end = pd.Timestamp(
-                min(ticks_part, key=attrgetter("ts_init")).ts_init, tz="UTC"
-            )
-            ticks.extend(ticks_part)
+
+            new_ticks = [t for t in ticks_part if t.ts_event not in seen_events]
+            for tick in new_ticks:
+                seen_events.add(tick.ts_event)
+            ticks.extend(new_ticks)
+
+            earliest_ns = min(t.ts_event for t in ticks_part)
+            new_end = pd.Timestamp(earliest_ns - 1, unit="ns", tz="UTC")
+            if new_end >= end:
+                break
+            end = new_end
+
+            if not new_ticks:
+                # Bridge returned only duplicates — keep paginating backward.
+                continue
 
         ticks.sort(key=lambda x: x.ts_init)
         return ticks
@@ -424,28 +679,21 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             end = pd.Timestamp.utcnow()
 
         if start:
-            duration = end - start
-            duration_str = timedelta_to_duration_str(duration)
+            duration_str = timedelta_to_duration_str(end - start)
         else:
             duration_str = (
                 "7 D" if bar_type.spec.timedelta.total_seconds() >= 60 else "1 D"
             )
 
-        bars: list[Bar] = []
-        while (start and end > start) or (len(bars) < limit > 0):
-            bars_part: list[Bar] = (
-                await self._client.get_historical_bars(  # TODO: consider realtime bars
-                    bar_type=bar_type,
-                    symbol=MT5Symbol(**instrument.info["symbol"]),
-                    use_rth=self._use_regular_trading_hours,
-                    end_date_time=end,
-                    duration=duration_str,
-                )
-            )
-            bars.extend(bars_part)
-            if not bars_part or start:
-                break
-            end = pd.Timestamp(min(bars, key=attrgetter("ts_event")).ts_event, tz="UTC")
+        bars: list[Bar] = await self._client.get_historical_bars(
+            bar_type=bar_type,
+            symbol=MT5Symbol(**instrument.info["symbol"]),
+            use_rth=self._use_regular_trading_hours,
+            end_date_time=end,
+            duration=duration_str,
+            start_date_time=start,
+            limit=limit if start is None else None,
+        )
 
         if bars:
             bars = list(set(bars))

@@ -71,13 +71,17 @@ SYMBOL_CALC_MODE_CFD = 2             # Generic CFD
 SYMBOL_CALC_MODE_CFDINDEX = 3        # CFD on an index (USTEC, SP500, etc.)
 SYMBOL_CALC_MODE_CFDLEVERAGE = 4     # CFD with leverage multiplier
 SYMBOL_CALC_MODE_FOREX_NO_LEVERAGE = 5
-SYMBOL_CALC_MODE_EXCH_STOCKS = 6     # Exchange stocks (real last price)
-SYMBOL_CALC_MODE_EXCH_FUTURES = 7    # Exchange futures (B3: WIN, WDO)
+SYMBOL_CALC_MODE_EXCH_STOCKS = 6     # Exchange stocks (legacy docs; live terminals may report 32)
+SYMBOL_CALC_MODE_EXCH_FUTURES = 7    # Exchange futures (legacy docs; live terminals may report 33)
 SYMBOL_CALC_MODE_EXCH_FUTURES_FORTS = 8
 SYMBOL_CALC_MODE_EXCH_BONDS = 9
 SYMBOL_CALC_MODE_EXCH_STOCKS_MOEX = 10
 SYMBOL_CALC_MODE_EXCH_BONDS_MOEX = 11
+SYMBOL_CALC_MODE_EXCH_STOCKS_V2 = 32 # Exchange stocks (XPMT5-DEMO build 5833: PETR4)
+SYMBOL_CALC_MODE_EXCH_FUTURES_V2 = 33 # Exchange futures (WIN$, WDON26, DI1F27)
 ```
+
+`normalize_trade_calc_mode()` maps legacy 6/7 to 32/33 when querying profiles that declare the v2 constants.
 
 ---
 
@@ -100,6 +104,25 @@ Covers Tickmill-Demo and equivalent OTC FX/CFD brokers:
 | 5 — FOREX_NO_LEVERAGE | `CurrencyPair` | ASSUMED | **UNSUPPORTED** | ASSUMED |
 
 `TradeTick` is `UNSUPPORTED` for all modes because Tickmill-Demo returns `last=0.0` for FX and CFD instruments (confirmed live 2026-05-02).
+
+### `XP_B3_PROFILE`
+
+```python
+from nautilus_mt5 import XP_B3_PROFILE, resolve_venue_profile
+
+profile = resolve_venue_profile("xp_b3")  # homologation env: MT5_VENUE_PROFILE=xp_b3
+```
+
+Covers XP Investimentos / B3 on XPMT5-DEMO (probe 2026-06-26):
+
+| `trade_calc_mode` | Instrument type | quote_ticks | trade_ticks | bars |
+|-------------------|-----------------|-------------|-------------|------|
+| 32 — EXCH_STOCKS | `Equity` | OBSERVED | OBSERVED | ASSUMED |
+| 33 — EXCH_FUTURES | `FuturesContract` | OBSERVED | OBSERVED | ASSUMED |
+
+Fine-grained quote vs trade routing uses `nautilus_mt5.tick_routing` (tick shape, `TRADE_MODE`, continuous `$` suffix) — not broker name checks.
+
+Homologation: `homologation/run_xp_closed_market.py` with `MT5_VENUE_PROFILE=xp_b3`.
 
 ---
 
@@ -155,6 +178,8 @@ When `venue_profile` is provided, `parse_instrument()` reads `symbol_details.tra
 
 - `CurrencyPair` → `parse_currency_pair_contract()`
 - `Cfd` → `parse_cfd_contract()`
+- `FuturesContract` → `parse_futures_contract()`
+- `Equity` → `parse_equity_contract()`
 - Unknown type → `ValueError`
 
 Without a profile (legacy path), all instruments default to `Cfd`.

@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../MT5-Docker"
+		}
+	],
+	"settings": {}
+}

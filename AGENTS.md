@@ -42,7 +42,7 @@
 - The canonical Tier 1 test infrastructure is `tests/support/fake_mt5_rpyc_bridge.py`. Use it for all integration tests that need an MT5 bridge. Improve the fake when it is insufficient — do not create parallel mocks.
 - Use mocks only where they keep the test focused; do not replace most of the adapter with mocks and still call it integration coverage.
 - Integration tests should pass through real adapter logic whenever practical.
-- Acceptance/smoke tests fall into two tiers. Tier 1 (deterministic, always runs, uses the fake bridge) is the default. Tier 2 (live acceptance, `tests/acceptance/` with `@pytest.mark.live`) is a legitimate but selective layer — only add a live test when the fake bridge structurally cannot cover it (real field names, real retcodes, real price constraints, real transport). See `docs/testing_contract.md` — Two-tier validation strategy — for the exact criteria.
+- Acceptance/smoke tests fall into three layers. **Tier 1** (deterministic, always runs, uses the fake bridge) is the default. **Tier 1.5** (`homologation/` — standalone `TradingNode` runners on real MT5; see `docs/testing_contract.md`) is the operational homologation gate for updating matrix **Live coverage**. **Tier 2** (live acceptance, `tests/acceptance/` with `@pytest.mark.live`) is a selective layer — only add a live test when the fake bridge structurally cannot cover it (real field names, real retcodes, real price constraints, real transport). See `docs/testing_contract.md` — Two-tier validation strategy — for Tier 1/2 criteria; Tier 1.5 is documented in the same file.
 - Never add a live test simply because a behavior is important. If the fake bridge can cover it adequately, Tier 1 is the right place.
 - Do not end tests with `assert True`.
 - Do not use `pytest.skip(...)` to hide missing coverage unless the test is genuinely environment-dependent and a replacement exists.
@@ -63,7 +63,7 @@
   - `docs/execution_capability_matrix.md`
   - `docs/decisions.md`
   - `docs/terminal_access_contract.md`
-- When a supported execution or data behavior is implemented or validated live, update the corresponding row in the capability matrix: `Deterministic coverage` if a Tier 1 test was added, `Live coverage` if a Tier 2 test was run and passed.
+- When a supported execution or data behavior is implemented or validated live, update the corresponding row in the capability matrix: `Deterministic coverage` if a Tier 1 test was added, `Live coverage` if a Tier 2 test or **Tier 1.5 homologation** scenario passed (`res/proximos testes adaptador.md`).
 
 ## 6) PR rules for coding agents
 - Stay inside the requested scope.
@@ -78,3 +78,49 @@
 - Separate implementation fixes from test-only fixes.
 - If a test reveals a production bug, fix the bug and mention it explicitly.
 - If coverage is still partial, say so clearly instead of implying the task is fully complete.
+
+## 7) Source of Truth
+For adapter development and testing protocols, you **must** strictly adhere to the official Nautilus Trader developer guidelines:
+
+* **Core Adapter Architecture:** [https://nautilustrader.io/docs/latest/developer_guide/adapters/](https://nautilustrader.io/docs/latest/developer_guide/adapters/)
+* **Data Client Specification & Testing:** [https://nautilustrader.io/docs/latest/developer_guide/spec_data_testing/](https://nautilustrader.io/docs/latest/developer_guide/spec_data_testing/)
+* **Execution Client Specification & Testing:** [https://nautilustrader.io/docs/latest/developer_guide/spec_exec_testing/](https://nautilustrader.io/docs/latest/developer_guide/spec_exec_testing/)
+
+> **Instruction:** Do not hallucinate class structures or test suites. Align the integration design exactly with the specifications detailed in these official documents.
+
+## 8) Running python
+To run python you must set the necessary enviroment variables and use the correct python enviroment with the proper packages installed for example set "MT5_HOST=127.0.0.1" && set "MT5_PORT=18812" && E:\miniconda\envs\trading\python.exe 
+
+
+Aqui está uma versão aprimorada para o seu `agents.md`. Ela corrige os erros ortográficos ("enviroment"), melhora a clareza dos comandos para o agente de IA e utiliza blocos de código isolados para garantir que a IA entenda a sintaxe exata da execução.
+
+---
+
+## 8) Python Execution Environment
+
+To execute any Python script in this project, you **must** explicitly configure the required environment variables and target the dedicated Conda interpreter to avoid global dependency conflicts.
+
+* **Minimum Required Variables:** `MT5_HOST` (MetaTrader gateway IP) and `MT5_PORT` (TCP socket port) to access the RPyC MT5 bridge.
+* **Target Interpreter:** Always use the absolute path of the `trading` environment.
+
+**Execution Template (Windows CMD):**
+
+```cmd
+set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && E:\miniconda\envs\trading\python.exe script_or_python_module.py
+```
+
+> **Instruction:** Never invoke a generic `python` command. You must explicitly pass the environment variables inline or verify their state before running any script.
+
+## 9) Code Style and Annotations
+STRICT REQUIREMENT: All generated code comments, annotations, and docstrings MUST strictly adhere to the following language and framework-specific constraints. No generic placeholders or narrative comments are allowed.
+
+**Preserve Existing Documentation:** Never delete, strip, or overwrite existing comments within the codebase unless they are strictly deprecated, obsolete, or directly impacted/invalidated by the new code changes or refactoring.
+
+### **Python:** 
+ - MANDATORY: Use native type hints for all public functions, methods, and service/model boundaries.
+ - REQUIRED: Write concise Google Style docstrings for trading rules, side effects, non-obvious core logic, Application Service API boundaries, Provider SPI / Transport SPI boundaries, Integration Adapter boundaries, and other public boundary objects. When necessary add comments with architectural Notes.
+### **MQL5 Code**  
+ - **Document the "Why", Not the "What":** Avoid trivial or redundant comments (e.g., do not write `// loops through the array`). Instead, explicitly document the mathematical, quantitative, or networking intent (e.g., `// Reverses the array topology so index [0] strictly represents the forming candle`).
+  - **Network & Execution Critical Paths:** Every native socket operation (`SocketCreate`, `SocketReceive`) and structural trade submission (`OrderSend`) must feature brief inline comments detailing buffer allocations, state expectations, or specific error-handling reasons.
+  - **Zero AI Conversational Fillers:** Never insert generic placeholders, conversational markers, or useless templates (such as `// Add your logic here` or `// Prepared by AI`). Code must be production-ready and fully articulated.
+ 

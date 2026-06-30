@@ -12,3 +12,4 @@ nautilus_mt5/*.so
 nautilus_mt5/*.html
 nautilus_mt5/*.c
 nautilus_mt5.egg-info
+*.bat

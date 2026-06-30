@@ -1,4 +1,5 @@
 
+import asyncio
 import functools
 from collections.abc import Callable
 from decimal import Decimal
@@ -17,14 +18,23 @@ from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.data import TradeTick
+from nautilus_trader.model.enums import AggressorSide
+from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.identifiers import TradeId
 
 
 from nautilus_mt5.data_types import MT5Symbol
+from nautilus_mt5.client.tick_poll import is_quote_tick_subscription
 from nautilus_mt5.common import Subscription
-from nautilus_mt5.parsing.data import bar_spec_to_bar_size
 from nautilus_mt5.parsing.data import what_to_show
 from nautilus_mt5.parsing.instruments import mt5_symbol_to_instrument_id
+from nautilus_mt5.parsing.rates import (
+    bar_spec_to_mt5_timeframe,
+    ib_duration_to_timedelta,
+    mql_rate_row_to_bar_data,
+    timestamp_to_utc_datetime,
+)
 
 
 class MarketDataTypeEnum:
@@ -174,6 +184,13 @@ class MetaTrader5ClientMarketDataMixin:
 
         """
 
+        if self.live_quote_feed_enabled and is_quote_tick_subscription(tick_type):
+            self._log.debug(
+                "Live quote feed enabled; ignoring RPyC quote tick subscription for "
+                f"{instrument_id} ({tick_type}).",
+            )
+            return
+
         name = (str(instrument_id), tick_type)
         # Hack for MetaTrader5 missing streaming tick subscription methods
         # Use symbol_info_tick for polling later or a custom RPyC exposed method
@@ -234,41 +251,21 @@ class MetaTrader5ClientMarketDataMixin:
         use_rth: bool,
     ) -> None:
         """
-        Subscribe to real-time bar data for a specified bar type.
+        Deprecated: live bars use the MQL5 WS feed (``feed.enabled=True``).
 
-        Parameters
-        ----------
-        bar_type : BarType
-            The type of bar to subscribe to.
-        symbol : MT5Symbol
-            The MetaTrader 5 symbol details for the instrument.
-        use_rth : bool
-            Whether to use regular trading hours (RTH) only.
-
+        IB ``req_real_time_bars`` is not supported on the MT5 RPyC bridge.
         """
-        name = str(bar_type)
-        await self._subscribe(
-            name,
-            self._mt5_client['mt5'].req_real_time_bars,
-            self._mt5_client['mt5'].cancel_real_time_bars,
-            symbol,
-            bar_type.spec.step,
-            what_to_show(bar_type),
-            use_rth,
+        self._log.warning(
+            "subscribe_realtime_bars is deprecated; enable feed.enabled on DataClientConfig "
+            f"and use SubscribeBars via NT5TickFeedService (ignored for {bar_type}).",
         )
 
     async def unsubscribe_realtime_bars(self, bar_type: BarType) -> None:
-        """
-        Unsubscribes from real-time bar data for a specified bar type.
-
-        Parameters
-        ----------
-        bar_type : BarType
-            The type of bar to unsubscribe from.
-
-        """
-        name = str(bar_type)
-        await self._unsubscribe(name, self._mt5_client['mt5'].cancel_real_time_bars)
+        """Deprecated — see ``subscribe_realtime_bars``."""
+        self._log.warning(
+            "unsubscribe_realtime_bars is deprecated; use feed.enabled WS path "
+            f"(ignored for {bar_type}).",
+        )
 
     async def subscribe_historical_bars(
         self,
@@ -278,70 +275,21 @@ class MetaTrader5ClientMarketDataMixin:
         handle_revised_bars: bool,
     ) -> None:
         """
-        Subscribe to historical bar data for a specified bar type and symbol. It
-        allows configuration for regular trading hours and handling of revised bars.
+        Deprecated: live bar subscribe uses WS ``subscribe_bars``, not IB hooks.
 
-        Parameters
-        ----------
-        bar_type : BarType
-            The type of bar to subscribe to.
-        symbol : MT5Symbol
-            The MetaTrader 5 symbol details for the instrument.
-        use_rth : bool
-            Whether to use regular trading hours (RTH) only.
-        handle_revised_bars : bool
-            Whether to handle revised bars or not.
-
+        Historical on-demand bars remain via ``get_historical_bars`` / ``copy_rates_*``.
         """
-
-        name = str(bar_type)
-        subscription = await self._subscribe(
-            name,
-            self.subscribe_historical_bars,
-            self._mt5_client['mt5'].cancel_historical_data,
-            bar_type=bar_type,
-            symbol=symbol,
-            use_rth=use_rth,
-            handle_revised_bars=handle_revised_bars,
-        )
-        if not subscription:
-            return
-
-        # Check and download the gaps or approx 300 bars whichever is less
-        # last_bar: Bar = self._cache.bar(bar_type)
-
-
-        # self._mt5_client['mt5'].req_historical_data(
-        #     req_id=subscription.req_id,
-        #     symbol=symbol,
-        #     end_datetime="",
-        #     duration_str=timedelta_to_duration_str(duration),
-        #     bar_size_setting=bar_size_setting,
-        #     what_to_show=what_to_show(bar_type),
-        #     use_rth=use_rth,
-        #     format_date=2,
-        #     keep_up_to_date=True,
-        # )
-        self._mt5_client['mt5'].req_real_time_bars(
-            req_id=subscription.req_id,
-            symbol=symbol,
-            bar_size="",
-            what_to_show=what_to_show(bar_type),
-            use_rth=use_rth,
+        self._log.warning(
+            "subscribe_historical_bars is deprecated; enable feed.enabled on DataClientConfig "
+            f"and use SubscribeBars via NT5TickFeedService (ignored for {bar_type}).",
         )
 
     async def unsubscribe_historical_bars(self, bar_type: BarType) -> None:
-        """
-        Unsubscribe from historical bar data for a specified bar type.
-
-        Parameters
-        ----------
-        bar_type : BarType
-            The type of bar to unsubscribe from.
-
-        """
-        name = str(bar_type)
-        await self._unsubscribe(name, self._mt5_client['mt5'].cancel_historical_data)
+        """Deprecated — see ``subscribe_historical_bars``."""
+        self._log.warning(
+            "unsubscribe_historical_bars is deprecated; use feed.enabled WS path "
+            f"(ignored for {bar_type}).",
+        )
 
     async def get_historical_bars(
         self,
@@ -349,69 +297,107 @@ class MetaTrader5ClientMarketDataMixin:
         symbol: MT5Symbol,
         use_rth: bool,
         end_date_time: pd.Timestamp,
-        duration: str,
+        duration: str = "7 D",
         timeout: int = 60,
+        *,
+        start_date_time: pd.Timestamp | None = None,
+        limit: int | None = None,
     ) -> list[Bar]:
         """
-        Request and retrieve historical bar data for a specified bar type.
+        Request historical bars via MT5-native ``copy_rates_*`` (RPyC bridge).
 
-        Parameters
-        ----------
-        bar_type : BarType
-            The type of bar for which historical data is requested.
-        symbol : MT5Symbol
-            The MetaTrader 5 symbol details for the instrument.
-        use_rth : bool
-            Whether to use regular trading hours (RTH) only for the data.
-        end_date_time : str
-            The end time for the historical data request, formatted "%Y%m%d-%H:%M:%S".
-        duration : str
-            The duration for which historical data is requested, formatted as a string.
-        timeout : int, optional
-            The maximum time in seconds to wait for the historical data response.
-
-        Returns
-        -------
-        list[Bar]
-
+        Uses ``copy_rates_range`` when ``start_date_time`` is set, otherwise
+        ``copy_rates_from_pos`` with ``limit`` (default 1000).
         """
-        # Ensure the requested `end_date_time` is in UTC and set formatDate=2 to ensure returned dates are in UTC.
+        del timeout  # synchronous copy_rates; kept for call-site compatibility
+
+        if use_rth:
+            self._log.debug(
+                f"use_rth=True ignored for MT5 copy_rates historical bars ({bar_type})",
+            )
+
         if end_date_time.tzinfo is None:
             end_date_time = end_date_time.replace(tzinfo=ZoneInfo("UTC"))
         else:
             end_date_time = end_date_time.astimezone(ZoneInfo("UTC"))
 
-        name = (bar_type, end_date_time)
-        if not (request := self._requests.get(name=name)):
-            req_id = self._next_req_id()
-            bar_size_setting = bar_spec_to_bar_size(bar_type.spec)
-            request = self._requests.add(
-                req_id=req_id,
-                name=name,
-                handle=functools.partial(
-                    self._mt5_client['mt5'].req_historical_data,
-                    req_id=req_id,
-                    symbol=symbol,
-                    end_datetime=end_date_time.strftime("%Y%m%d %H:%M:%S %Z"),
-                    duration_str=duration,
-                    bar_size_setting=bar_size_setting,
-                    what_to_show=what_to_show(bar_type),
-                    use_rth=use_rth,
-                    format_date=2,
-                    keep_up_to_date=False,
-                ),
-                cancel=functools.partial(
-                    self._mt5_client['mt5'].cancel_historical_data, req_id=req_id
+        mt5_symbol = symbol.symbol
+        timeframe = bar_spec_to_mt5_timeframe(bar_type.spec)
+        mt5 = self._mt5_client["mt5"]
+
+        try:
+            mt5.symbol_select(mt5_symbol, True)
+        except Exception as exc:
+            self._log.warning(f"symbol_select({mt5_symbol}) failed: {exc}")
+
+        rates = await asyncio.to_thread(
+            self._copy_rates,
+            mt5,
+            mt5_symbol,
+            timeframe,
+            end_date_time,
+            duration,
+            start_date_time,
+            limit,
+        )
+        if not rates:
+            return []
+
+        ts_init = self._clock.timestamp_ns()
+        bars: list[Bar] = []
+        for row in reversed(rates):
+            bar_data = mql_rate_row_to_bar_data(mt5_symbol, row)
+            if bar_data.time <= 0 or bar_data.close <= 0.0:
+                continue
+            bars.append(
+                await self._mt5_bar_to_nautilus_bar(
+                    bar_type=bar_type,
+                    bar=bar_data,
+                    ts_init=ts_init,
                 ),
             )
-            if not request:
-                return []
-            self._log.debug(f"req_historical_data: {request.req_id=}, {symbol=}")
-            request.handle()
-            return await self._await_request(request, timeout, default_value=[])
+        return bars
+
+    def _copy_rates(
+        self,
+        mt5: Any,
+        symbol: str,
+        timeframe: int,
+        end_date_time: pd.Timestamp,
+        duration: str,
+        start_date_time: pd.Timestamp | None,
+        limit: int | None,
+    ) -> list[Any]:
+        if start_date_time is not None:
+            if start_date_time.tzinfo is None:
+                start_date_time = start_date_time.tz_localize("UTC")
+            else:
+                start_date_time = start_date_time.tz_convert("UTC")
+            raw = mt5.copy_rates_range(
+                symbol,
+                timeframe,
+                timestamp_to_utc_datetime(start_date_time),
+                timestamp_to_utc_datetime(end_date_time),
+            )
         else:
-            self._log.info(f"Request already exist for {request}")
+            count = limit if limit is not None and limit > 0 else 1000
+            raw = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
+            if raw is None or len(raw) == 0:
+                delta = ib_duration_to_timedelta(duration)
+                date_from = end_date_time - delta
+                raw = mt5.copy_rates_range(
+                    symbol,
+                    timeframe,
+                    timestamp_to_utc_datetime(date_from),
+                    timestamp_to_utc_datetime(end_date_time),
+                )
+
+        if raw is None:
+            self._log.warning(
+                f"copy_rates returned None for {symbol} timeframe={timeframe}",
+            )
             return []
+        return list(raw)
 
     async def get_historical_ticks(
         self,
@@ -421,65 +407,157 @@ class MetaTrader5ClientMarketDataMixin:
         end_date_time: pd.Timestamp | str = "",
         use_rth: bool = True,
         timeout: int = 60,
+        number_of_ticks: int = 1000,
     ) -> list[QuoteTick | TradeTick] | None:
         """
         Request and retrieve historical tick data for a specified symbol and tick
-        type.
-
-        Parameters
-        ----------
-        symbol : MT5Symbol
-            The MetaTrader 5 symbol details for the instrument.
-        tick_type : str
-            The type of tick data to request (e.g., 'BID_ASK', 'TRADES').
-        start_date_time : pd.Timestamp | str, optional
-            The start time for the historical data request. Can be a pandas Timestamp
-            or a string formatted as 'YYYYMMDD HH:MM:SS [TZ]'.
-        end_date_time : pd.Timestamp | str, optional
-            The end time for the historical data request. Same format as start_date_time.
-        use_rth : bool, optional
-            Whether to use regular trading hours (RTH) only for the data.
-        timeout : int, optional
-            The maximum time in seconds to wait for the historical data response.
-
-        Returns
-        -------
-        list[QuoteTick | TradeTick] | ``None``
-
+        type via MT5-native ``copy_ticks_from``.
         """
-        if isinstance(start_date_time, pd.Timestamp):
-            start_date_time = start_date_time.strftime("%Y%m%d %H:%M:%S %Z")
-        if isinstance(end_date_time, pd.Timestamp):
-            end_date_time = end_date_time.strftime("%Y%m%d %H:%M:%S %Z")
+        import time as _time
 
-        name = (str(mt5_symbol_to_instrument_id(symbol)), tick_type)
-        if not (request := self._requests.get(name=name)):
-            req_id = self._next_req_id()
-            request = self._requests.add(
-                req_id=req_id,
-                name=name,
-                handle=functools.partial(
-                    self._mt5_client['mt5'].req_historical_ticks,
-                    req_id=req_id,
-                    symbol=symbol,
-                    start_date_time=start_date_time,
-                    end_date_time=end_date_time,
-                    number_of_ticks=1000,
-                    what_to_show=tick_type,
-                    use_rth=use_rth,
-                    ignore_size=False,
-                ),
-                cancel=functools.partial(
-                    self._mt5_client['mt5'].cancel_historical_data, req_id=req_id
-                ),
-            )
-            if not request:
-                return None
-            request.handle()
-            return await self._await_request(request, timeout)
+        mt5 = self._mt5_client["mt5"]
+        symbol_str = symbol.symbol
+
+        if isinstance(end_date_time, pd.Timestamp):
+            end_ts = int(end_date_time.timestamp())
+        elif isinstance(end_date_time, str) and end_date_time.strip():
+            end_ts = int(pd.Timestamp(end_date_time).timestamp())
         else:
-            self._log.info(f"Request already exist for {request}")
-            return None
+            end_ts = int(_time.time())
+
+        if isinstance(start_date_time, pd.Timestamp):
+            from_ts = int(start_date_time.timestamp())
+        elif isinstance(start_date_time, str) and start_date_time.strip():
+            from_ts = int(pd.Timestamp(start_date_time).timestamp())
+        else:
+            from_ts = None
+
+        flags = getattr(mt5, "COPY_TICKS_ALL", 0)
+        try:
+            # Prefer copy_ticks_from with a count cap — copy_ticks_range pulls the entire window
+            # (e.g. 800k+ ticks over 7 days on WDON26) and is only for uncapped requests.
+            if from_ts is not None and number_of_ticks > 0:
+                raw = await asyncio.to_thread(
+                    mt5.copy_ticks_from,
+                    symbol_str,
+                    from_ts,
+                    number_of_ticks,
+                    flags,
+                )
+            elif from_ts is not None and from_ts < end_ts and hasattr(mt5, "copy_ticks_range"):
+                raw = await asyncio.to_thread(
+                    mt5.copy_ticks_range,
+                    symbol_str,
+                    from_ts,
+                    end_ts,
+                    flags,
+                )
+            else:
+                if from_ts is None:
+                    from_ts = end_ts - 86_400
+                raw = await asyncio.to_thread(
+                    mt5.copy_ticks_from,
+                    symbol_str,
+                    from_ts,
+                    number_of_ticks or 1000,
+                    flags,
+                )
+        except Exception as exc:
+            self._log.warning(f"copy_ticks failed for {symbol_str}: {exc}")
+            return []
+
+        if raw is None or len(raw) == 0:
+            return []
+
+        try:
+            import rpyc
+            rows = rpyc.classic.obtain(list(raw))
+        except Exception:
+            rows = list(raw)
+
+        instrument_id = mt5_symbol_to_instrument_id(symbol)
+        instrument = self._cache.instrument(instrument_id)
+        if instrument is None:
+            self._log.warning(
+                f"Instrument {instrument_id} not in cache for historical ticks",
+            )
+            return []
+
+        ticks_out: list[QuoteTick | TradeTick] = []
+        for row in rows:
+            bid = ask = last = 0.0
+            volume = 0.0
+            time_sec = 0
+            time_msc = None
+            try:
+                if hasattr(row, "dtype"):
+                    bid = float(row["bid"])
+                    ask = float(row["ask"])
+                    last = float(row["last"])
+                    volume = float(row["volume"]) if "volume" in row.dtype.names else 0.0
+                    time_sec = int(row["time"])
+                    time_msc = row["time_msc"] if "time_msc" in row.dtype.names else None
+                elif isinstance(row, dict):
+                    bid = float(row.get("bid", 0) or 0)
+                    ask = float(row.get("ask", 0) or 0)
+                    last = float(row.get("last", 0) or 0)
+                    volume = float(row.get("volume", 0) or 0)
+                    time_sec = int(row.get("time", 0) or 0)
+                    time_msc = row.get("time_msc")
+                elif isinstance(row, (tuple, list)) and len(row) >= 3:
+                    time_sec = int(row[0])
+                    bid = float(row[1])
+                    ask = float(row[2])
+                    last = float(row[3]) if len(row) > 3 else 0.0
+                    volume = float(row[4]) if len(row) > 4 else 0.0
+                    time_msc = row[5] if len(row) > 5 else None
+                else:
+                    bid = float(getattr(row, "bid", 0) or 0)
+                    ask = float(getattr(row, "ask", 0) or 0)
+                    last = float(getattr(row, "last", 0) or 0)
+                    volume = float(getattr(row, "volume", 0) or 0)
+                    time_sec = int(getattr(row, "time", 0) or 0)
+                    time_msc = getattr(row, "time_msc", None)
+            except (TypeError, KeyError, IndexError, ValueError):
+                continue
+
+            if time_msc:
+                ts_event = int(time_msc) * 1_000_000
+            elif time_sec:
+                ts_event = int(pd.Timestamp.fromtimestamp(time_sec, tz=pytz.utc).value)
+            else:
+                continue
+
+            if tick_type in ("TRADES", "AllLast"):
+                if last <= 0:
+                    continue
+                trade_size = volume if volume > 0 else 1.0
+                ticks_out.append(TradeTick(
+                    instrument_id=instrument_id,
+                    price=instrument.make_price(last),
+                    size=instrument.make_qty(trade_size),
+                    aggressor_side=AggressorSide.NO_AGGRESSOR,
+                    trade_id=TradeId(str(time_sec)),
+                    ts_event=ts_event,
+                    ts_init=max(self._clock.timestamp_ns(), ts_event),
+                ))
+            else:
+                if bid <= 0 or ask <= 0:
+                    continue
+                ticks_out.append(QuoteTick(
+                    instrument_id=instrument_id,
+                    bid_price=instrument.make_price(bid),
+                    ask_price=instrument.make_price(ask),
+                    bid_size=instrument.make_qty(0),
+                    ask_size=instrument.make_qty(0),
+                    ts_event=ts_event,
+                    ts_init=max(self._clock.timestamp_ns(), ts_event),
+                ))
+
+        ticks_out.sort(key=lambda t: t.ts_init)
+        if number_of_ticks > 0 and len(ticks_out) > number_of_ticks:
+            ticks_out = ticks_out[-number_of_ticks:]
+        return ticks_out
 
     #
     # misc.
@@ -750,6 +828,45 @@ class MetaTrader5ClientMarketDataMixin:
         )
 
         await self._handle_data(quote_tick)
+
+    async def process_tick_by_tick_all_last(
+        self,
+        *,
+        req_id: int,
+        time: int,
+        last_price: float,
+        volume: Decimal,
+    ) -> None:
+        """Return AllLast / trade tick data from symbol_info_tick polling."""
+        if not (subscription := self._subscriptions.get(req_id=req_id)):
+            return
+
+        if last_price <= 0.0:
+            self._log.debug(
+                f"Discarding invalid TradeTick (last={last_price}) for req_id={req_id}.",
+            )
+            return
+
+        instrument_id = InstrumentId.from_str(subscription.name[0])
+        instrument = self._cache.instrument(instrument_id)
+        if instrument is None:
+            self._log.warning(
+                f"Instrument {instrument_id} not found in cache for req_id={req_id}. Skipping TradeTick.",
+            )
+            return
+
+        ts_event = await self._convert_mt5_timestamp_to_pandas_timestamp(time)
+        trade_qty = volume if volume > 0 else Decimal(1)
+        trade_tick = TradeTick(
+            instrument_id=instrument_id,
+            price=instrument.make_price(last_price),
+            size=instrument.make_qty(trade_qty),
+            aggressor_side=AggressorSide.NO_AGGRESSOR,
+            trade_id=TradeId(str(time)),
+            ts_event=ts_event,
+            ts_init=max(self._clock.timestamp_ns(), ts_event),
+        )
+        await self._handle_data(trade_tick)
 
     async def process_realtime_bar(
         self,

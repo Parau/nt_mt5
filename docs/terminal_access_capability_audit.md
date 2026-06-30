@@ -1,97 +1,109 @@
 # Terminal Access Capability Audit
 
-## Objetivo da auditoria
+Last aligned with capability matrices and homologation: **2026-06-28**.
 
-Esta auditoria tem como objetivo verificar a coerência entre o modo `EXTERNAL_RPYC` (Terminal Access), a superfície RPC disponível no gateway e as capabilities efetivamente suportadas pelo adapter `nt_mt5`.
+## Purpose
 
-A auditoria separa explicitamente:
-1.  **Superfície RPC disponível no gateway**: Métodos expostos pelo gateway RPyC externo.
-2.  **Wiring terminal_access funcional**: Se o adapter está corretamente conectado e roteando para esses métodos.
-3.  **Capability Nautilus efetivamente suportada**: Se o fluxo completo de dados ou execução do NautilusTrader está implementado e funcional.
-4.  **Capability documentada como unsupported/conditional**: Estado oficial da capability perante o usuário.
+Verify coherence between `EXTERNAL_RPYC` terminal access, the RPyC gateway RPC surface, and capabilities effectively supported by `nt_mt5` at the **Nautilus adapter** boundary.
 
----
+This audit separates:
 
-## Definições de status
+1. **Gateway RPC surface** — methods exposed by the external RPyC bridge.
+2. **Terminal-access wiring** — adapter routes to those methods correctly.
+3. **Nautilus-level capability** — full DataClient / ExecClient flow produces correct domain objects and lifecycle behavior.
+4. **Documented status** — matches `docs/data_capability_matrix.md` and `docs/execution_capability_matrix.md`.
 
-Para evitar que a disponibilidade de um método RPC seja confundida com suporte funcional completo no NautilusTrader, esta auditoria usa os seguintes status:
-
-- **Supported**: existe implementação produtiva, o fluxo Nautilus-level é exercitado, há teste determinístico cobrindo o comportamento e a documentação/matriz de capability está alinhada.
-- **Partial**: a superfície RPC, o wrapper ou o wiring existe, mas ainda falta cobertura completa do fluxo Nautilus-level, DataTester/ExecTester, geração de reports, reconciliação ou documentação rastreável.
-- **Unsupported**: não implementado no adapter Nautilus e deve falhar de forma segura ou ser documentado como indisponível.
-- **Planned**: trabalho futuro intencional, ainda não suportado operacionalmente.
-
-Uma capability não deve ser marcada como **Supported** apenas porque o gateway externo expõe um método, ou porque o wrapper consegue roteá-lo.
+Broker differences use **`VenueProfile`** (`TICKMILL_DEMO_PROFILE`, `XP_B3_PROFILE`) — not separate adapters. See `docs/decisions.md` §20 and `docs/venue_profile.md`.
 
 ---
 
-## Data Capabilities
+## Status definitions
 
-Auditado contra `docs/data_capability_matrix.md`.
+| Status | Meaning |
+|--------|---------|
+| **Supported** | Production path, Nautilus-level flow exercised, deterministic tests, docs aligned. |
+| **Partial** | RPC/wiring exists; missing full Nautilus flow, homologation, reports, or profile-specific validation. |
+| **Unsupported** | Not implemented; fails safely and documented. |
+| **Profile-dependent** | Behavior differs by `VenueProfile` (e.g. TradeTick on Tickmill vs XP/B3). |
 
-| Capability | Gateway RPC disponível | Adapter suporta hoje | Teste determinístico existe | Status/documentação |
-|---|---|---|---|---|
-| **Instruments** | `symbols_get`, `symbol_info`, `symbol_select` | Sim, parcial/indireto via provider | ✅ TC-D01, TC-D03 em `test_data_tester_matrix_external_rpyc.py`; validado live em `test_external_rpyc_data_tester.py` (USTEC, Tickmill-Demo) | **Partial** |
-| **Quotes/ticks** | `symbol_info_tick` | Sim, via polling/background path | ✅ TC-D20 em `test_data_tester_matrix_external_rpyc.py`; bid/ask live confirmados em `test_external_rpyc_data_tester.py` | **Partial** |
-| **Historical ticks** | `copy_ticks_range`, `copy_ticks_from` | Sim, por superfície RPC/wrapper | ✅ TC-D21 em `test_data_tester_matrix_external_rpyc.py`. **Atenção**: gateway RPyC rejeita `datetime` com `(-2, Invalid arguments)` — passar Unix timestamp `int` como `date_from` | **Partial** |
-| **Trade ticks** | `copy_ticks_*` expõe campo `last`, mas `last=0.0` sempre para CFD indexes (USTEC/Tickmill) | Decisão documentada: `copy_ticks_*` tem semântica QuoteTick, não TradeTick | ✅ TC-D30 XFAIL em `test_external_rpyc_data_tester.py` confirma `last=0.0` live. TC-D30 documentado em `test_data_tester_matrix_external_rpyc.py` | **Partial** — não promover para Supported sem mapeamento MT5-native de TradeTick |
-| **Bars** | `copy_rates_from_pos`, `copy_rates_range` | Sim, por superfície RPC/wrapper | ✅ TC-D40, TC-D41 em `test_data_tester_matrix_external_rpyc.py`; M1 e M5 validados live em `test_external_rpyc_data_tester.py` (USTEC) | **Partial** |
-| **Order book** | `market_book_get` (disponível no wrapper) | Não — rejeição segura implementada | ✅ TC-D10 em `test_data_tester_matrix_external_rpyc.py` valida log de warning ao tentar subscribe | **Unsupported** |
-| **Instrument status** | N/A | Não | Não | **Unsupported** |
-| **Lifecycle** | `shutdown` | Sim, parcial para stop/unsubscribe | Parcial; lifecycle de cada subscription/request suportado ainda deve ter cobertura explícita | **Partial** |
+Gateway method availability alone does **not** imply **Supported**.
 
 ---
 
-## Execution Capabilities
+## Data capabilities
 
-Auditado contra `docs/execution_capability_matrix.md`.
+Aligned with `docs/data_capability_matrix.md`.
 
-| Capability | Gateway RPC disponível | Adapter suporta hoje | Teste determinístico existe | Status/documentação |
-|---|---|---|---|---|
-| **Market orders** | `order_send` | Sim, por wiring/submit path | Sim (`tests/integration/test_external_rpyc_execution_flow.py`), mas ainda deve provar lifecycle Nautilus completo, como submitted/accepted/filled ou reports equivalentes | **Partial** |
-| **Limit orders** | `order_send` | Sim, parcial por wiring `order_send` | Parcial; precisa validar lifecycle, status e TIFs suportados | **Partial** |
-| **Cancel orders** | `order_send` (`TRADE_ACTION_REMOVE`) | Sim, parcial por ticket/cancel path | Parcial; precisa cobrir cancel lifecycle, invalid cancel, stop cleanup e/ou batch behavior quando suportado | **Partial** |
-| **Modify orders** | `order_send` (`TRADE_ACTION_MODIFY`) | Não no nível Nautilus operacional | Não | **Unsupported** |
-| **Positions reconciliation** | `positions_get` | Sim, parcial por consulta/wrapper | Sim (`tests/integration/test_external_rpyc_execution_flow.py`), mas reconciliação Nautilus-level ainda deve ser explicitamente validada | **Partial** |
-| **Orders history** | `history_orders_get` | Sim, parcial por consulta/wrapper | Sim (`tests/integration/test_external_rpyc_execution_flow.py`), mas geração de `OrderStatusReport`/reconciliação completa precisa cobertura explícita | **Partial** |
-| **Deals history** | `history_deals_get` | Sim, parcial por consulta/wrapper | Sim (`tests/integration/test_external_rpyc_execution_flow.py`), mas `FillReport` ainda precisa implementação/cobertura completa | **Partial** |
-| **Unsupported TIF/type** | N/A (lógica interna do adapter) | Planejado/necessário como comportamento de rejeição segura | Cobertura específica ainda deve validar rejeição antes do envio ao venue | **Planned** |
+| Capability | Gateway RPC | Adapter (Nautilus) | Deterministic tests | Homologation / live | Status |
+|---|---|---|---|---|---|
+| **Instruments** | `symbols_get`, `symbol_info` | Provider load/request | TC-D01–D03 | Tickmill + XP closed (`run_closed_market.py`, `run_xp_closed_market.py`) | **Partial** |
+| **Live quotes** | WS feed (MQL5 Service); legacy `symbol_info_tick` poll | WS → `QuoteTick` when `feed.enabled=True` | TC-D20, `test_feed_*` | **TC-HOM-D02** (`run_open_market.py`, Tickmill) | **Partial** |
+| **Historical quotes** | `copy_ticks_from`, `copy_ticks_range` | `_request_quote_ticks` → `get_historical_ticks` → **`copy_ticks_from`** (IB `req_historical_ticks` removed, 2026-06-28) | TC-D21 matrix | **TC-HOM-D21** (Tickmill); XP closed | **Partial** — live Nautilus-level OK; promote to Supported when DataEngine path is required |
+| **Trade ticks** | `copy_ticks_*` (`last` field) | **Tickmill:** gated **Unsupported**. **XP/B3:** **Partial** (OBSERVED) | TC-D30/D31 + XP unit tests | XP **TC-HOM-D21-T** closed; live WS OPEN (pregão) | **Profile-dependent** |
+| **Bars** | `copy_rates_*`; WS `subscribe_bars` | Hist + live WS bars | TC-D40/D41 | D03/D04b homolog | **Partial** |
+| **Order book** | `market_book_get` (wrapper) | Safe reject | TC-D10 | N/A | **Unsupported** |
+| **Instrument status** | N/A | N/A | N/A | N/A | **Unsupported** |
+| **Lifecycle / unsubscribe** | `shutdown`; WS unsubscribe | D70 wiring + homolog D05 | TC-D70 | **TC-HOM-D05** | **Partial** |
 
----
-
-## Gaps Identificados
-
-Os seguintes itens representam lacunas conhecidas entre a superfície RPC e o suporte efetivo do adapter, mapeados para planejamento futuro:
-
-- **Order Book**: Embora o wrapper `MetaTrader5.py` exponha `market_book_get`, o adapter Nautilus não possui o componente de Order Book provider/subscriber implementado para MT5. Permanece como **Unsupported**.
-- **Trade ticks**: **Decisão documentada (Step 06)**: para CFD indexes como USTEC no Tickmill-Demo, o campo `last` de `copy_ticks_*` é sempre `0.0`. Portanto `copy_ticks_*` fornece semântica de QuoteTick, não TradeTick. A capability permanece **Partial** até que um mapeamento MT5-native de TradeTick seja explicitamente definido e testado.
-- **Bars em nível Nautilus**: TC-D40/D41 validados live (M1: 5 bars, M5: 10 bars do USTEC). Falta cobertura do fluxo Nautilus-level completo: parsing → `Bar` → handler. **Nota operacional**: gateway RPyC retorna `np.void` (numpy structured array) — usar indexação por nome (`bar["open"]`) em vez de `getattr`.
-- **Modify Orders**: O gateway pode suportar modificação via `order_send`, mas o fluxo Nautilus operacional de modificação ainda não está suportado. Permanece como **Unsupported**.
-- **Cancelamento em nível Nautilus**: O cancelamento unitário via ticket está funcional em nível parcial, mas o cancelamento em massa (`cancel_all_orders`), cancel-on-stop e rejeições de cancelamento ainda requerem cobertura mais robusta.
-- **Lifecycle de market/limit orders**: `order_send` funcionando não prova, sozinho, o ciclo Nautilus completo de ordem submetida, aceita, preenchida, cancelada ou rejeitada.
-- **Fill reports**: `history_deals_get` disponível não implica suporte completo a `FillReport`. É necessário converter deals MT5 em reports Nautilus, cobrir a reconciliação e atualizar a matriz de execução.
-- **Instrument Status**: O MT5 não fornece streaming nativo de status de instrumento (Open/Closed) via API Python simples de forma eficiente; requer mapeamento customizado ou polling.
-- **Unsupported TIF/type**: A rejeição de tipo de ordem ou TIF não suportado deve ser testada explicitamente, preferencialmente antes do envio ao venue.
+**Operational note:** pass Unix `int` timestamps to `copy_ticks_from` on RPyC — `datetime` may fail with `(-2, Invalid arguments)`.
 
 ---
 
-## Regras de Interpretação
+## Execution capabilities
 
-1.  **Existência de método != Capability**: A existência de um método `exposed_` no gateway RPyC ou no wrapper `MetaTrader5` não implica, por si só, que a capability NautilusTrader correspondente está suportada.
-2.  **Critério de Suporte**: Uma capability só é declarada **Supported** quando houver comportamento produtivo implementado, fluxo Nautilus-level exercitado, documentação coerente e teste determinístico validando o comportamento.
-3.  **Status parcial é esperado durante evolução**: Quando há superfície RPC e wiring funcional, mas ainda falta DataTester, ExecTester, reports, reconciliação ou fluxo Nautilus completo, use **Partial**.
-4.  **Segurança em Falhas**: O modo `EXTERNAL_RPYC` deve lançar `RuntimeError` informativo se o gateway não expuser um método RPC obrigatório para uma capability declarada como **Supported**.
-5.  **Matrizes são fonte operacional de status**: `docs/data_capability_matrix.md` e `docs/execution_capability_matrix.md` devem refletir o mesmo status desta auditoria. Se uma capability mudar de estado, atualize ambos os documentos.
-6.  **Validação live é suplementar**: Testes com MT5 real/gateway RPyC real são úteis para validação operacional, mas não substituem cobertura determinística com fake bridge e fluxo Nautilus-level.
+Aligned with `docs/execution_capability_matrix.md`.
+
+| Capability | Gateway RPC | Adapter (Nautilus) | Deterministic tests | Homologation (Tickmill) | Status |
+|---|---|---|---|---|---|
+| **Market orders** | `order_send` | Submit + fill lifecycle | TC-EL-02/03/07/20 | **E01** round-trip | **Supported** |
+| **Limit orders** | `order_send` pending | GTC/IOC/FOK/DAY mapping via `MAP_TIME_IN_FORCE` + `type_filling` | TC-EL-18/19 | **E03**, **E06**, **E06de** | **Partial** |
+| **Stop orders** | `order_send` pending | STOP_MARKET / STOP_LIMIT | TC-EL-21–24 | **E02**, **E07b** trigger amend | **Partial** |
+| **Modify orders** | `order_send` `action=7` | `_modify_order` → `modify_order` | TC-EL-11 | **E07**, **E07b** | **Partial** |
+| **Cancel orders** | `order_send` `action=8` | `_cancel_order` | TC-EL-10/12 | **E03**, **E43** (10013), **E04a** | **Partial** |
+| **Unsupported type/TIF** | N/A (pre-venue) | `validate_order_pre_venue` | TC-EL-13/14 | N/A | **Supported** |
+| **Position reconcile** | `positions_get` | `generate_position_status_reports` | TC-EL-06 | **E05**, **E81** | **Partial** |
+| **Order reports** | `orders_get` | `generate_order_status_reports` via `get_open_orders` (2026-06-28 fix) | TC-EL-08/09 | **E81** pending overlap | **Partial** |
+| **Fill reports** | `history_deals_get` | `generate_fill_reports` | TC-EL-04/05 | **E05b** | **Partial** |
+| **Stop lifecycle** | `order_send`, `positions_get` | `cancel_on_stop`, `close_on_stop` on `_disconnect` | TC-EL-15–17 | **E04**, **E04b**, **E10b** | **Supported** |
+| **XP/B3 execution** | Same RPC surface | Not homologated open-market yet | Tier 1 stubs only | OPEN (pregão) | **Planned** / profile TBD |
 
 ---
 
-## Referências
+## Known gaps (still open)
+
+| Gap | Status |
+|-----|--------|
+| Order book Nautilus flow | **Unsupported** |
+| Tickmill TradeTick live/historical | **Unsupported** by design (`VenueProfile`) |
+| XP TradeTick live stream | **Partial** — closed-market hist OK; open pregão pending |
+| XP execution homologation | Not started (open market) |
+| Batch cancel / modify rejected explicit tests | Partial |
+| `history_orders_get` full historical order reconcile | Partial |
+| Instrument status streaming | **Unsupported** |
+| Multi-symbol WS (**D07** USTEC) | Tickmill homolog **DONE** (2026-06-29) |
+
+**Resolved (2026-06-28 Wave 4):** historical quotes via `copy_ticks_from`; `get_open_orders`; fill reports live path; cancel rejection 10013; FOK/DAY limit submit; stop trigger amend; open-on-start reconcile; `MAP_TIME_IN_FORCE` on submit.
+
+---
+
+## Interpretation rules
+
+1. **RPC method ≠ capability** — exposure in gateway/wrapper is necessary but not sufficient.
+2. **Supported** requires production behavior + Nautilus-level exercise + deterministic tests + matrix alignment.
+3. **Homologation** (`homologation/`) is the manual operational gate on real MT5; see `docs/testing_contract.md` Tier 1.5.
+4. **Matrices are authoritative for status** — update this audit when matrices change.
+5. **VenueProfile** — always state broker/profile when claiming data or execution behavior.
+
+---
+
+## References
+
 - `docs/adapter_contract.md`
 - `docs/terminal_access_contract.md`
 - `docs/testing_contract.md`
 - `docs/data_capability_matrix.md`
 - `docs/execution_capability_matrix.md`
 - `docs/decisions.md`
-- `docs/remote_mt5_test_gateway.md`
-- `docs/specs/spec_terminal_access_with_gateway.md`
+- `docs/venue_profile.md`
+- `res/proximos testes adaptador.md` — homologation tracker
+- `res/tickmill_restrictions.md` / `res/xp_b3_restrictions.md` — broker profiles

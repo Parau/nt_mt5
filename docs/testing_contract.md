@@ -39,6 +39,7 @@ The NautilusTrader testing guide identifies: unit, integration, acceptance, perf
 | Performance benchmarks | Implemented | `tests/performance/` |
 | Memory-stability | Implemented | `tests/memory/` |
 | Live acceptance (Tier 2) | Implemented — manual only | `tests/acceptance/` |
+| Homologation (Tier 1.5) | Implemented — manual operational gate | `homologation/` |
 | Property-based tests | Not implemented — deferred | — |
 | Fuzzing | Not implemented — out of scope | — |
 
@@ -181,6 +182,38 @@ The test suite is organized into two tiers with complementary, non-overlapping p
 
 Tier 1 covers the full lifecycle of every supported capability through the real adapter code path, using a deterministic fake that returns controlled retcodes and order results. The fake bridge must be kept accurate: when a real MT5 field name or behavior changes, the fake must be updated to match.
 
+### Tier 1.5 — Homologation (manual operational gate)
+
+| Attribute | Detail |
+|---|---|
+| Location | `homologation/` — runners, scenarios, shared harness (`homologation/common.py`) |
+| Infrastructure | Real MT5 terminal + RPyC bridge; optional WS feed (`NT5TickFeedService`, port 8765) |
+| Runs in CI | No — requires live MT5 session and correct broker login |
+| Purpose | End-to-end Nautilus `TradingNode` validation on real accounts; operational sign-off before promoting matrix rows to live coverage |
+
+Homologation is **not** a third pytest tier inside `tests/`. It is a curated set of standalone runners that exercise the adapter the way operators run it:
+
+| Runner | When to use |
+|---|---|
+| `homologation/run_homologation.py` | Full Tickmill suite (open + closed subsets) |
+| `homologation/run_open_market.py` | US session open — quotes, bars, execution smoke |
+| `homologation/run_closed_market.py` | Tickmill closed-market data + exec subset |
+| `homologation/run_xp_closed_market.py` | XP/B3 closed market (`XP_B3_PROFILE`, login switch required) |
+| `homologation/run_wave4_homologation.py` | Focused Wave 4 exec/data scenarios (E05b, E43, E06de, E07b, E81, D21) |
+| `homologation/run_e05b_homologation.py` / `run_e43_homologation.py` | Single-scenario deep dives |
+
+**Venue profiles:** set `VenueProfile` via config (`TICKMILL_DEMO_PROFILE` default, `XP_B3_PROFILE` for B3). Broker-specific gates (e.g. TradeTick unsupported on Tickmill, supported on XP) are profile-dependent — see `docs/venue_profile.md` and `res/xp_b3_restrictions.md`.
+
+**Tracker:** `res/proximos testes adaptador.md` records homologation IDs (TC-HOM-*), pass/fail, and production fixes discovered during runs.
+
+**Execution environment (Windows):**
+
+```cmd
+set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && E:\miniconda\envs\trading\python.exe homologation\run_open_market.py
+```
+
+Switch MT5 terminal login manually when changing brokers (Tickmill ↔ XP). The RPyC bridge binds to whichever session is open.
+
 ### Tier 2 — Live acceptance (manual / on-demand)
 
 | Attribute | Detail |
@@ -237,6 +270,7 @@ The `tests/` tree has a fixed, documented layout. Each directory has a single, w
 | `tests/memory/` | Unintended growth across connect/disconnect/subscribe cycles | Real adapter structures | Yes |
 | `tests/support/` | Shared test infrastructure (fake bridge, harnesses, helpers); not a test suite itself | N/A | N/A |
 | `tests/live/` | Raw bridge tests without the adapter stack (RPyC only; `@pytest.mark.live`) | Real MT5 + real RPyC gateway | No (manual) |
+| `homologation/` | **Tier 1.5** — full `TradingNode` operational homologation on real MT5; not part of `pytest` CI | Real MT5 + RPyC (+ WS feed when enabled) | No (manual) |
 | `tests/test_data/` | Static JSON fixture files with **real MT5 API payloads** captured via `examples/capture_symbol_info_fixtures.py`; consumed by unit tests for direct parser testing; contains no `test_*.py` files | N/A | N/A |
 
 ### Layer decision rules

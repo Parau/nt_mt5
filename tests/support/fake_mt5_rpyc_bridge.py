@@ -92,7 +92,7 @@ class FakeMT5RPyCRoot:
 
     def exposed_symbols_get(self, *args, **kwargs) -> List[str]:
         self._record_call("symbols_get", args, kwargs)
-        return ["EURUSD", "USTEC", "BTCUSD"]
+        return ["EURUSD", "USTEC", "BTCUSD", "WDON26", "WIN$", "WINQ26", "PETR4", "DI1F27"]
 
     def exposed_symbol_info(self, symbol: str, *args, **kwargs) -> Optional[Dict[str, Any]]:
         self._record_call("symbol_info", (symbol, *args), kwargs)
@@ -171,6 +171,130 @@ class FakeMT5RPyCRoot:
                 "ask": 78001.00,
                 "trade_calc_mode": 2,  # SYMBOL_CALC_MODE_CFD
             }
+        if symbol == "WDON26":
+            return {
+                "name": "WDON26",
+                "path": r"BMF\WDON26",
+                "visible": True,
+                "select": True,
+                "digits": 1,
+                "point": 0.5,
+                "spread": 1,
+                "spread_float": True,
+                "volume_step": 1,
+                "volume_min": 1,
+                "volume_max": 50000,
+                "trade_tick_size": 0.5,
+                "trade_contract_size": 1.0,
+                "currency_base": "BRL",
+                "currency_profit": "BRL",
+                "currency_margin": "BRL",
+                "under_sec_type": "FUTURES",
+                "description": "DOLAR MINI",
+                "time": 0,
+                "bid": 5178.5,
+                "ask": 5179.0,
+                "last": 5178.5,
+                "trade_calc_mode": 33,
+                "trade_mode": 4,
+                "filling_mode": 3,
+                "start_time": 1700000000,
+                "expiration_time": 1782868500,
+            }
+        if symbol in ("WIN$", "WDO$"):
+            return {
+                "name": symbol,
+                "path": rf"BMF\SERIES CONTINUAS\{symbol}",
+                "visible": True,
+                "select": True,
+                "digits": 0 if symbol == "WIN$" else 3,
+                "point": 1.0 if symbol == "WIN$" else 0.001,
+                "spread": 0,
+                "spread_float": True,
+                "volume_step": 1,
+                "volume_min": 1,
+                "volume_max": 25000,
+                "trade_tick_size": 1.0 if symbol == "WIN$" else 0.001,
+                "trade_contract_size": 1.0,
+                "currency_profit": "BRL",
+                "under_sec_type": "FUTURES",
+                "description": f"{symbol} continuous",
+                "time": 0,
+                "bid": 0.0,
+                "ask": 0.0,
+                "last": 176290.0,
+                "trade_calc_mode": 33,
+                "trade_mode": 0,
+                "filling_mode": 3,
+                "start_time": 1700000000,
+            }
+        if symbol == "WINQ26":
+            return {
+                "name": "WINQ26",
+                "path": r"BMF\WINQ26",
+                "visible": True,
+                "select": True,
+                "digits": 0,
+                "point": 5.0,
+                "volume_step": 1,
+                "volume_min": 1,
+                "volume_max": 25000,
+                "trade_tick_size": 5.0,
+                "trade_contract_size": 1.0,
+                "currency_profit": "BRL",
+                "under_sec_type": "FUTURES",
+                "time": 0,
+                "bid": 192490.0,
+                "ask": 157495.0,
+                "last": 176290.0,
+                "trade_calc_mode": 33,
+                "trade_mode": 4,
+                "filling_mode": 3,
+                "expiration_time": 1786583700,
+            }
+        if symbol == "PETR4":
+            return {
+                "name": "PETR4",
+                "path": r"BOVESPA\A VISTA\PETR4",
+                "visible": True,
+                "select": True,
+                "digits": 2,
+                "point": 0.01,
+                "volume_step": 100,
+                "volume_min": 100,
+                "volume_max": 1000000,
+                "trade_tick_size": 0.01,
+                "currency_profit": "BRL",
+                "under_sec_type": "EQUITY",
+                "bid": 37.90,
+                "ask": 38.13,
+                "last": 38.06,
+                "trade_calc_mode": 32,
+                "trade_mode": 4,
+                "filling_mode": 3,
+            }
+        if symbol == "DI1F27":
+            return {
+                "name": "DI1F27",
+                "path": r"BMF\DI1F27",
+                "visible": True,
+                "select": True,
+                "digits": 3,
+                "point": 0.005,
+                "volume_step": 1,
+                "volume_min": 1,
+                "volume_max": 50000,
+                "trade_tick_size": 0.005,
+                "currency_profit": "BRL",
+                "under_sec_type": "FUTURES",
+                "bid": 14.05,
+                "ask": 14.06,
+                "last": 14.055,
+                "trade_calc_mode": 33,
+                "trade_mode": 4,
+                "filling_mode": 3,
+                "expiration_time": 1798675859,
+            }
         return None
 
     def exposed_symbol_info_tick(self, symbol: str, *args, **kwargs) -> Optional[Dict[str, Any]]:
@@ -198,6 +322,26 @@ class FakeMT5RPyCRoot:
                 "ask": 78001.00,
                 "last": 78000.50,
                 "time": 1700000000,
+            }
+        if symbol == "WIN$":
+            return {
+                "symbol": "WIN$",
+                "bid": 0.0,
+                "ask": 0.0,
+                "last": 176290.0,
+                "volume": 10,
+                "flags": 1336,
+                "time_msc": 1700000000000,
+            }
+        if symbol == "WDON26":
+            return {
+                "symbol": "WDON26",
+                "bid": 5178.5,
+                "ask": 5179.0,
+                "last": 5178.5,
+                "volume": 2,
+                "flags": 1368,
+                "time_msc": 1700000000000,
             }
         return None
 
@@ -245,6 +389,20 @@ class FakeMT5RPyCRoot:
                 "real_volume": 10,
             }
         ] * count
+
+    def exposed_copy_rates_range(
+        self,
+        symbol: str,
+        timeframe: int,
+        date_from: Any,
+        date_to: Any,
+    ) -> List[Dict[str, Any]]:
+        self._record_call(
+            "copy_rates_range",
+            (symbol, timeframe, date_from, date_to),
+            {},
+        )
+        return self.exposed_copy_rates_from_pos(symbol, timeframe, 0, 10)
 
     def exposed_copy_ticks_range(self, symbol: str, date_from: Any, date_to: Any, flags: int) -> List[Dict[str, Any]]:
         self._record_call("copy_ticks_range", (symbol, date_from, date_to, flags), {})
@@ -298,6 +456,42 @@ class FakeMT5RPyCRoot:
                     "ask": 78001.00,
                     "last": 78000.50,
                     "flags": 0,
+                }
+            ] * count
+        if symbol == "WIN$":
+            return [
+                {
+                    "time": 1700000000,
+                    "time_msc": 1700000000000,
+                    "bid": 0.0,
+                    "ask": 0.0,
+                    "last": 176290.0,
+                    "volume": 10,
+                    "flags": 1336,
+                }
+            ] * count
+        if symbol == "WDON26":
+            return [
+                {
+                    "time": 1700000000,
+                    "time_msc": 1700000000000,
+                    "bid": 5178.5,
+                    "ask": 5179.0,
+                    "last": 5178.5,
+                    "volume": 3,
+                    "flags": 1368,
+                }
+            ] * count
+        if symbol == "WINQ26":
+            return [
+                {
+                    "time": 1700000000,
+                    "time_msc": 1700000000000,
+                    "bid": 192490.0,
+                    "ask": 157495.0,
+                    "last": 176290.0,
+                    "volume": 5,
+                    "flags": 1336,
                 }
             ] * count
         return [

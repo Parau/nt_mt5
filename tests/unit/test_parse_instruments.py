@@ -26,7 +26,7 @@ import pathlib
 import pytest
 
 from nautilus_trader.model.enums import AssetClass
-from nautilus_trader.model.instruments import Cfd, CurrencyPair
+from nautilus_trader.model.instruments import Cfd, CurrencyPair, Equity, FuturesContract
 from nautilus_trader.model.objects import Price, Quantity
 
 from nautilus_mt5.data_types import MT5Symbol, MT5SymbolDetails
@@ -37,7 +37,7 @@ from nautilus_mt5.parsing.instruments import (
     mt5_symbol_to_instrument_id,
     sec_type_to_asset_class,
 )
-from nautilus_mt5 import TICKMILL_DEMO_PROFILE
+from nautilus_mt5 import TICKMILL_DEMO_PROFILE, XP_B3_PROFILE
 
 # ---------------------------------------------------------------------------
 # Fixture loading helpers
@@ -70,6 +70,26 @@ def btcusd_details() -> MT5SymbolDetails:
     return _load_symbol_details("symbol_info_btcusd.json")
 
 
+@pytest.fixture()
+def wdon26_details() -> MT5SymbolDetails:
+    return _load_symbol_details("symbol_info_wdon26.json")
+
+
+@pytest.fixture()
+def petr4_details() -> MT5SymbolDetails:
+    return _load_symbol_details("symbol_info_petr4.json")
+
+
+@pytest.fixture()
+def win_dollar_details() -> MT5SymbolDetails:
+    return _load_symbol_details("symbol_info_win_dollar.json")
+
+
+@pytest.fixture()
+def di1f27_details() -> MT5SymbolDetails:
+    return _load_symbol_details("symbol_info_di1f27.json")
+
+
 # ---------------------------------------------------------------------------
 # parse_instrument — instrument type dispatch
 # ---------------------------------------------------------------------------
@@ -97,6 +117,31 @@ def test_parse_btcusd_with_profile_yields_cfd(btcusd_details):
     """BTCUSD (CFD, mode=2) with profile resolves to Cfd."""
     result = parse_instrument(btcusd_details, venue_profile=TICKMILL_DEMO_PROFILE)
     assert isinstance(result, Cfd)
+
+
+def test_parse_wdon26_with_xp_profile_yields_futures(wdon26_details):
+    result = parse_instrument(wdon26_details, venue_profile=XP_B3_PROFILE)
+    assert isinstance(result, FuturesContract)
+    assert result.underlying == "WDO"
+    assert result.quote_currency.code == "BRL"
+
+
+def test_parse_petr4_with_xp_profile_yields_equity(petr4_details):
+    result = parse_instrument(petr4_details, venue_profile=XP_B3_PROFILE)
+    assert isinstance(result, Equity)
+    assert int(result.lot_size) == 100
+
+
+def test_parse_win_dollar_with_xp_profile_yields_futures(win_dollar_details):
+    result = parse_instrument(win_dollar_details, venue_profile=XP_B3_PROFILE)
+    assert isinstance(result, FuturesContract)
+    assert result.info["trade_mode"] == 0
+
+
+def test_parse_di1f27_price_semantics(di1f27_details):
+    result = parse_instrument(di1f27_details, venue_profile=XP_B3_PROFILE)
+    assert isinstance(result, FuturesContract)
+    assert result.info.get("price_semantics") == "yield_rate_percent"
 
 
 # ---------------------------------------------------------------------------

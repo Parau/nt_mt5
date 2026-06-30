@@ -7,6 +7,9 @@ from nautilus_trader.model.enums import TimeInForce
 from nautilus_mt5.parsing.execution import (
     MT5_ORDER_TYPE_TO_ORDER_SIDE,
     MT5_ORDER_TYPE_TO_ORDER_TYPE,
+    ORDER_FILLING_FOK,
+    ORDER_FILLING_IOC,
+    ORDER_FILLING_RETURN,
     ORDER_TYPE_BUY,
     ORDER_TYPE_SELL,
     ORDER_TYPE_BUY_LIMIT,
@@ -19,6 +22,7 @@ from nautilus_mt5.parsing.execution import (
     ORDER_TIME_SPECIFIED_DAY,
     SUPPORTED_ORDER_TYPES,
     SUPPORTED_TIME_IN_FORCE,
+    resolve_type_filling,
     validate_order_pre_venue,
 )
 from nautilus_mt5.execution import MetaTrader5ExecutionClient
@@ -140,3 +144,27 @@ def test_validate_order_pre_venue_error_message_names_the_bad_value():
 
     with pytest.raises(ValueError, match="GTD"):
         validate_order_pre_venue(OrderType.MARKET, TimeInForce.GTD)
+
+
+# ---------------------------------------------------------------------------
+# resolve_type_filling — market deal filling from symbol bitmask
+# ---------------------------------------------------------------------------
+
+def test_resolve_type_filling_market_gtc_ioc_only_symbol():
+    """Tickmill-style IOC-only bitmask (2) → IOC for market GTC."""
+    assert resolve_type_filling(OrderType.MARKET, TimeInForce.GTC, 2) == ORDER_FILLING_IOC
+
+
+def test_resolve_type_filling_market_gtc_fok_and_ioc_prefers_ioc():
+    """XP-style FOK+IOC bitmask (3) → IOC preferred over FOK for market GTC."""
+    assert resolve_type_filling(OrderType.MARKET, TimeInForce.GTC, 3) == ORDER_FILLING_IOC
+
+
+def test_resolve_type_filling_market_fok_uses_explicit_tif():
+    """Explicit FOK TIF maps directly; validate_filling_mode rejects IOC-only symbols."""
+    assert resolve_type_filling(OrderType.MARKET, TimeInForce.FOK, 2) == ORDER_FILLING_FOK
+
+
+def test_resolve_type_filling_limit_gtc_unchanged_return():
+    """Pending limits keep RETURN for GTC regardless of market-only bitmask."""
+    assert resolve_type_filling(OrderType.LIMIT, TimeInForce.GTC, 2) == ORDER_FILLING_RETURN

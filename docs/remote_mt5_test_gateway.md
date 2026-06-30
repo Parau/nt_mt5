@@ -103,6 +103,29 @@ Um smoke live de execução demo deve exigir opt-in explícito, por exemplo:
 MT5_ENABLE_LIVE_EXECUTION=1 pytest -m "live and external_rpyc and demo_execution" tests/live/test_external_rpyc_exec_smoke.py
 ```
 
+## Homologação operacional (Tier 1.5)
+
+Além dos testes `pytest` live, o diretório `homologation/` contém runners standalone que exercitam um `TradingNode` completo contra MT5 real. Esta camada é o **gate operacional** para atualizar a coluna **Live coverage** das capability matrices.
+
+Exemplo (Tickmill, mercado aberto):
+
+```cmd
+set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && python homologation\run_open_market.py
+```
+
+Exemplo (XP/B3, pregão fechado):
+
+```cmd
+set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && set MT5_VENUE_PROFILE=xp_b3 && python homologation\run_xp_closed_market.py
+```
+
+Regras:
+
+- Homologação **não** substitui Tier 1 (fake bridge); complementa com cenários E2E reais.
+- Resultados e IDs TC-HOM-* ficam em `res/proximos testes adaptador.md`.
+- Trocar login do terminal MT5 manualmente ao mudar de broker (Tickmill ↔ XP).
+- Ver `docs/testing_contract.md` — Tier 1.5 — para a lista completa de runners.
+
 ## Fluxo de Operação
 
 Ao conectar-se via `MT5TerminalAccessMode.EXTERNAL_RPYC`, o adaptador estabelece um link RPC. O gateway atua como um proxy transparente para a API nativa do MetaTrader 5, devolvendo resultados brutos que são normalizados pelo adaptador na camada de borda, transformando-os em tipos de domínio do NautilusTrader.
@@ -113,7 +136,7 @@ Para entender a base arquitetural que sustenta este gateway, consulte:
 
 - **`docs/adapter_contract.md`**: Define a arquitetura em camadas do adaptador e como ele consome o transporte venue-native.
 - **`docs/terminal_access_contract.md`**: Estabelece o contrato público e os modos de acesso (`EXTERNAL_RPYC` vs `MANAGED_TERMINAL`).
-- **`docs/testing_contract.md`**: Define a estratégia de testes e deixa claro que a suíte determinística principal é a autoridade de correção, não a validação via gateway.
+- **`docs/testing_contract.md`**: Define a estratégia de testes (Tier 1 determinístico, Tier 1.5 homologação, Tier 2 live) e deixa claro que a suíte determinística principal é a autoridade de correção, não a validação via gateway.
 - **`docs/decisions.md`**: Registra as decisões estáveis de arquitetura (como o venue `METATRADER_5`) que este gateway deve respeitar.
 - **`docs/specs/spec_terminal_access_with_gateway.md`**: Contém a especificação técnica detalhada da superfície RPC suportada e serve como a principal referência arquitetural para este modo de acesso.
 - **`docs/ai_agent_guidelines.md`**: Define regras para evitar que agentes confundam validação live com regressão determinística.

@@ -1,0 +1,119 @@
+{
+  "started_at": "2026-06-29T13:08:04.608653+00:00",
+  "summary": {
+    "total": 7,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo USTEC bid=29421.78 ask=29422.58",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 29421.78,
+        "ask": 29422.58
+      }
+    },
+    {
+      "case_id": "TC-HOM-D06",
+      "name": "WS feed stop/start + cursor dedup",
+      "status": "PASS",
+      "detail": "baseline=2241 after_gateway=12 post=157 unique_ts=2380 dup=0",
+      "metadata": {
+        "baseline_ticks": 2241,
+        "post_phase_ticks": 157,
+        "unique_ts": 2380,
+        "gateway_restart": true,
+        "service_restart": false
+      }
+    },
+    {
+      "case_id": "TC-HOM-D07",
+      "name": "Multi-symbol WS quote stream",
+      "status": "PASS",
+      "detail": "BTCUSD=1; USTEC=2",
+      "metadata": {
+        "symbols": [
+          "BTCUSD",
+          "USTEC"
+        ],
+        "tick_counts": {
+          "BTCUSD.METATRADER_5": 1,
+          "USTEC.METATRADER_5": 2
+        },
+        "transport": "ws_feed"
+      }
+    },
+    {
+      "case_id": "TC-HOM-E06",
+      "name": "Limit IOC fill vs passive cancel",
+      "status": "PASS",
+      "detail": "E06b=OK: passive IOC @27947.76 pending=1 err=None; E06c=OK: LIMIT IOC mapping OK (Tickmill may keep pending @29420.89); E06a=OK: MARKET IOC fill",
+      "metadata": {
+        "sub_results": [
+          [
+            "E06b",
+            true,
+            "passive IOC @27947.76 pending=1 err=None"
+          ],
+          [
+            "E06c",
+            true,
+            "LIMIT IOC mapping OK (Tickmill may keep pending @29420.89)"
+          ],
+          [
+            "E06a",
+            true,
+            "MARKET IOC fill"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E07",
+      "name": "Modify volume on pending limit",
+      "status": "PASS",
+      "detail": "venue=265511577 price\u219227950.45 (Tickmill BTCUSD ignores volume-only modify)",
+      "metadata": {
+        "venue_order_id": "265511577",
+        "volume": 0.01,
+        "price_open": 27950.45
+      }
+    },
+    {
+      "case_id": "TC-HOM-E08",
+      "name": "Hedging two same-side positions (BUY + BUY)",
+      "status": "PASS",
+      "detail": "positions_get(USTEC)=2 (two BUY legs on hedging account)",
+      "metadata": {
+        "positions": 2
+      }
+    },
+    {
+      "case_id": "TC-HOM-E09",
+      "name": "Real retcodes (invalid volume / stops)",
+      "status": "PASS",
+      "detail": "E09a=OK: invalid volume: Invalid volume; E09b=OK: invalid BUY STOP @26473.24: Invalid price",
+      "metadata": {
+        "sub_results": [
+          [
+            "E09a",
+            true,
+            "invalid volume: Invalid volume"
+          ],
+          [
+            "E09b",
+            true,
+            "invalid BUY STOP @26473.24: Invalid price"
+          ]
+        ]
+      }
+    }
+  ]
+}

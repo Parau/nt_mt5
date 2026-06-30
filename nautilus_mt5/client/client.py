@@ -23,6 +23,7 @@ from nautilus_mt5.client.market_data import MetaTrader5ClientMarketDataMixin
 from nautilus_mt5.client.order import MetaTrader5ClientOrderMixin
 from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.client.types import TerminalConnectionState
+from nautilus_mt5.client.tick_poll import is_quote_tick_subscription, is_trade_tick_subscription
 from nautilus_mt5.common import Requests, Subscriptions
 
 
@@ -113,6 +114,7 @@ class MetaTrader5Client(Component,
 
         # MarketDataMixin
         self._bar_type_to_last_bar = {}
+        self._live_quote_feed_enabled: bool = False
 
         # OrderMixin
         self._exec_id_details: dict[
@@ -124,6 +126,19 @@ class MetaTrader5Client(Component,
 
         # Start client
         self._request_id_seq: int = 10000
+
+    @property
+    def live_quote_feed_enabled(self) -> bool:
+        return self._live_quote_feed_enabled
+
+    @live_quote_feed_enabled.setter
+    def live_quote_feed_enabled(self, enabled: bool) -> None:
+        self._live_quote_feed_enabled = bool(enabled)
+
+    def _should_poll_quote_ticks(self, tick_type: str) -> bool:
+        if self._live_quote_feed_enabled and is_quote_tick_subscription(tick_type):
+            return False
+        return True
 
     def _start(self) -> None:
         """
@@ -252,14 +267,19 @@ class MetaTrader5Client(Component,
         except Exception as e:
             self._log.exception(f"Error occurred while canceling tasks: {e}", e)
 
-        if self._mt5_client.get('mt5'):
-            if hasattr(self._mt5_client['mt5'], 'disconnect'):
-                self._mt5_client['mt5'].disconnect()
-            elif hasattr(self._mt5_client['mt5'], 'shutdown'):
+        mt5_wrapper = self._mt5_client.get('mt5')
+        if mt5_wrapper is not None:
+            if hasattr(mt5_wrapper, 'disconnect'):
                 try:
-                    self._mt5_client['mt5'].shutdown()
+                    mt5_wrapper.disconnect()
+                except Exception as e:
+                    self._log.warning(f"Error calling disconnect on mt5 client: {e}")
+            elif hasattr(mt5_wrapper, 'shutdown'):
+                try:
+                    mt5_wrapper.shutdown()
                 except Exception as e:
                     self._log.warning(f"Error calling shutdown on mt5 client: {e}")
+            self._mt5_client['mt5'] = None
         self._account_ids = set()
         self.registered_nautilus_clients = set()
 
@@ -435,21 +455,27 @@ class MetaTrader5Client(Component,
             The asyncio Task that has been completed.
 
         """
-        if task.exception():
+        if task.cancelled():
+            self._log.debug(f"Task `{task.get_name()}` was cancelled.")
+            return
+
+        exc = task.exception()
+        if exc is not None:
             self._log.error(
-                f"Error on `{task.get_name()}`: {task.exception()!r}",
+                f"Error on `{task.get_name()}`: {exc!r}",
             )
-        else:
-            if actions:
-                try:
-                    actions()
-                except Exception as e:
-                    self._log.error(
-                        f"Failed triggering action {actions.__name__} on `{task.get_name()}`: "
-                        f"{e!r}",
-                    )
-            if success:
-                self._log.info(success, LogColor.GREEN)
+            return
+
+        if actions:
+            try:
+                actions()
+            except Exception as e:
+                self._log.error(
+                    f"Failed triggering action {actions.__name__} on `{task.get_name()}`: "
+                    f"{e!r}",
+                )
+        if success:
+            self._log.info(success, LogColor.GREEN)
 
     def subscribe_event(self, name: str, handler: Callable) -> None:
         """
@@ -559,8 +585,16 @@ class MetaTrader5Client(Component,
                 for req_id in sub_keys:
                     sub = self._subscriptions.get(req_id)
                     if sub and isinstance(sub.name, tuple) and len(sub.name) > 1:
-                        name1 = sub.name[1].lower()
-                        if "tick" in name1 or "bid" in name1 or "ask" in name1:
+                        tick_type = sub.name[1]
+                        if not self._should_poll_quote_ticks(tick_type) and not is_trade_tick_subscription(tick_type):
+                            continue
+                        name1 = tick_type.lower()
+                        if (
+                            is_trade_tick_subscription(tick_type)
+                            or "tick" in name1
+                            or "bid" in name1
+                            or "ask" in name1
+                        ):
                             # symbol is at index 1 in the partial args (index 0 is req_id)
                             symbol = sub.handle.args[1]
                             try:
@@ -576,11 +610,25 @@ class MetaTrader5Client(Component,
                                         time_msc = tick.get("time_msc", 0)
                                         bid = tick.get("bid", 0.0)
                                         ask = tick.get("ask", 0.0)
+                                        last = tick.get("last", 0.0)
+                                        volume = tick.get("volume", 0)
+                                        flags = tick.get("flags", 0)
                                     else:
                                         time_msc = getattr(tick, "time_msc", 0)
                                         bid = getattr(tick, "bid", 0.0)
                                         ask = getattr(tick, "ask", 0.0)
-                                    tick_dict = {"time_msc": time_msc, "bid": bid, "ask": ask}
+                                        last = getattr(tick, "last", 0.0)
+                                        volume = getattr(tick, "volume", 0)
+                                        flags = getattr(tick, "flags", 0)
+                                    tick_dict = {
+                                        "time_msc": time_msc,
+                                        "bid": bid,
+                                        "ask": ask,
+                                        "last": last,
+                                        "volume": volume,
+                                        "flags": flags,
+                                        "tick_type": tick_type,
+                                    }
                                     data = {"type": "tick", "data": tick_dict, "symbol": symbol.symbol}
                                     self._internal_msg_queue.put_nowait(data)
                                     self._log.debug(f"Queued tick for {symbol.symbol}: {tick_dict}")
@@ -647,30 +695,42 @@ class MetaTrader5Client(Component,
             if msg.get("type") == "tick":
                 tick = msg.get("data")
                 symbol = msg.get("symbol")
+                tick_type = tick.get("tick_type", "BidAsk") if isinstance(tick, dict) else "BidAsk"
                 # Route to the market data mixin
                 if hasattr(self, 'process_tick_by_tick_bid_ask'):
                     # Find the subscription for this symbol
                     found_req_id = None
+                    found_tick_type = tick_type
                     for rid, name in self._subscriptions._req_id_to_name.items():
                         if isinstance(name, tuple) and len(name) > 1:
-                            n1 = name[1].lower()
-                            if "tick" in n1 or "bid" in n1 or "ask" in n1:
+                            sub_tick_type = name[1]
+                            if is_trade_tick_subscription(sub_tick_type) or is_quote_tick_subscription(sub_tick_type):
                                 sub = self._subscriptions.get(rid)
                                 # handle.args = (req_id, symbol, tick_type, ...)
                                 if sub and len(sub.handle.args) > 1 and sub.handle.args[1].symbol == symbol:
                                     found_req_id = rid
+                                    found_tick_type = sub_tick_type
                                     break
 
                     if found_req_id is not None:
                         from decimal import Decimal
-                        await self.process_tick_by_tick_bid_ask(
-                            req_id=found_req_id,
-                            time=tick["time_msc"],
-                            bid_price=tick["bid"],
-                            ask_price=tick["ask"],
-                            bid_size=Decimal(0),
-                            ask_size=Decimal(0),
-                        )
+                        if is_trade_tick_subscription(found_tick_type):
+                            if hasattr(self, "process_tick_by_tick_all_last"):
+                                await self.process_tick_by_tick_all_last(
+                                    req_id=found_req_id,
+                                    time=tick["time_msc"],
+                                    last_price=tick.get("last", 0.0),
+                                    volume=Decimal(tick.get("volume", 0)),
+                                )
+                        else:
+                            await self.process_tick_by_tick_bid_ask(
+                                req_id=found_req_id,
+                                time=tick["time_msc"],
+                                bid_price=tick["bid"],
+                                ask_price=tick["ask"],
+                                bid_size=Decimal(0),
+                                ask_size=Decimal(0),
+                            )
         return True
 
     async def _run_msg_handler_processor(self):

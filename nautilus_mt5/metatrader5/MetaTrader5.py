@@ -670,6 +670,21 @@ account properties:
                 f"external_rpyc gateway does not expose required method: login"
             ) from exc
 
+    def disconnect(self) -> None:
+        """
+        Close the local RPyC transport only.
+
+        For EXTERNAL_RPYC gateways the terminal is shared and owned by the bridge
+        process — do not call ``exposed_shutdown`` on client teardown.
+        """
+        conn = getattr(self, "_MetaTrader5__conn", None)
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            self.__conn = None
+
     def shutdown(self,*args,**kwargs):
         r'''
 # shutdown

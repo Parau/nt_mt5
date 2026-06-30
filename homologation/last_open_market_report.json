@@ -1,0 +1,126 @@
+{
+  "started_at": "2026-06-29T15:00:13.588309+00:00",
+  "summary": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=59337.0 ask=59347.0",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 59337.0,
+        "ask": 59347.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D01",
+      "name": "Quote ticks via TradingNode",
+      "status": "PASS",
+      "detail": "Received 3 ticks (last bid=59281.0 ask=59291.0)",
+      "metadata": {
+        "ticks": 3
+      }
+    },
+    {
+      "case_id": "TC-HOM-E01",
+      "name": "Market round-trip (BUY \u2192 SELL)",
+      "status": "PASS",
+      "detail": "BUY 0.01@59296.00 \u2192 SELL @59284.50",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "PASS",
+      "detail": "1122 ticks in 60s (max inter-tick gap 0.6s, transport=ws_feed)",
+      "metadata": {
+        "ticks": 1122,
+        "max_gap_secs": 0.6146135999988473,
+        "duration_secs": 60.0,
+        "transport": "ws_feed",
+        "feed_uri": "ws://0.0.0.0:8765/mt5-feed"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D03",
+      "name": "Live bar subscribe M1",
+      "status": "PASS",
+      "detail": "Received 1 M1 bar(s) (transport=ws_feed)",
+      "metadata": {
+        "bars": 1
+      }
+    },
+    {
+      "case_id": "TC-HOM-D05",
+      "name": "Unsubscribe on stop (quotes/bars)",
+      "status": "PASS",
+      "detail": "quotes unsubscribed on stop (3 ticks); bars=OK",
+      "metadata": {
+        "ticks": 3,
+        "bar_stream_ready": true
+      }
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
+      "status": "PASS",
+      "detail": "Received 50 QuoteTick(s) sample bid=60289.5 ask=60299.5",
+      "metadata": {
+        "ticks": 50,
+        "bid": 60289.5,
+        "ask": 60299.5
+      }
+    },
+    {
+      "case_id": "TC-HOM-E05",
+      "name": "Reconcile orders/positions on reconnect",
+      "status": "PASS",
+      "detail": "mass_status positions=0 bridge.positions_get(BTCUSD)=0",
+      "metadata": {
+        "bridge_positions": 0,
+        "report_positions": 0,
+        "order_reports": 0,
+        "fill_reports": 0
+      }
+    },
+    {
+      "case_id": "TC-HOM-E05b",
+      "name": "Fill reports after market fill (history_deals_get)",
+      "status": "PASS",
+      "detail": "fill_reports=188 after poll=32s; venue_order_id=265689959; fresh order not in history yet; path validated via prior deal; sample trade_id=226835850 side=1 qty=0.01 px=60471.00",
+      "metadata": {
+        "fill_reports": 188,
+        "poll_secs": 32.0,
+        "lookback_mins": 1440
+      }
+    },
+    {
+      "case_id": "TC-HOM-E81",
+      "name": "Open-on-start reconcile (positions + pending orders)",
+      "status": "PASS",
+      "detail": "E81a=OK: position_reports=1 bridge_positions=1; E81b=OK: pending_reports=1 bridge_pending=1 overlap=1",
+      "metadata": {
+        "sub_results": [
+          [
+            "E81a",
+            true,
+            "position_reports=1 bridge_positions=1"
+          ],
+          [
+            "E81b",
+            true,
+            "pending_reports=1 bridge_pending=1 overlap=1"
+          ]
+        ]
+      }
+    }
+  ]
+}

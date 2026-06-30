@@ -1,0 +1,41 @@
+{
+  "started_at": "2026-06-29T12:39:53.081732+00:00",
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=59824.0 ask=59837.0",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 59824.0,
+        "ask": 59837.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D07",
+      "name": "Multi-symbol WS quote stream",
+      "status": "PASS",
+      "detail": "BTCUSD=1; USTEC=3",
+      "metadata": {
+        "symbols": [
+          "BTCUSD",
+          "USTEC"
+        ],
+        "tick_counts": {
+          "BTCUSD.METATRADER_5": 1,
+          "USTEC.METATRADER_5": 3
+        },
+        "transport": "ws_feed"
+      }
+    }
+  ]
+}

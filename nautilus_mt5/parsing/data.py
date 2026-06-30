@@ -47,6 +47,31 @@ def generate_trade_id(ts_event: int, price: float, size: Decimal) -> TradeId:
     return trade_id
 
 
+def bar_spec_to_wire_timeframe(bar_spec: BarSpecification) -> str:
+    """
+    Map a Nautilus bar spec to the MQL5 Service wire timeframe token (M1, M5, …).
+
+    Must stay aligned with ``NT5TimeframeFromString`` in ``NT5FeedWire.mqh``.
+    """
+    aggregation = bar_spec.aggregation
+    step = bar_spec.step
+    if aggregation == BarAggregation.MINUTE:
+        mapping = {1: "M1", 5: "M5", 15: "M15", 30: "M30"}
+        wire = mapping.get(step)
+        if wire is not None:
+            return wire
+    elif aggregation == BarAggregation.HOUR:
+        mapping = {1: "H1", 4: "H4"}
+        wire = mapping.get(step)
+        if wire is not None:
+            return wire
+    elif aggregation == BarAggregation.DAY and step == 1:
+        return "D1"
+    raise ValueError(
+        f"MQL5 feed service does not support wire timeframe for {bar_spec!r}",
+    )
+
+
 def bar_spec_to_bar_size(bar_spec: BarSpecification) -> str:
     aggregation = bar_spec.aggregation
     step = bar_spec.step
