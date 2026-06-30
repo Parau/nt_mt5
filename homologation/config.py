@@ -16,7 +16,7 @@ def _profile_defaults(profile_name: str) -> dict[str, str]:
             "broker": "XPMT5-DEMO",
             "symbol": "WDON26",
             "account": "56822578",
-            "multi_symbols": "WDON26,PETR4,DI1F27,WIN$",
+            "multi_symbols": "WDON26,PETR4,DI1F27,WINQ26",
         }
     return {
         "broker": "Tickmill-Demo",

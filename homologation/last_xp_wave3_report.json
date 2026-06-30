@@ -1,0 +1,65 @@
+{
+  "started_at": "2026-06-30T13:10:14.503950+00:00",
+  "summary": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=56822578 server=XPMT5-DEMO WDON26 bid=5180.5 ask=5181.0",
+      "metadata": {
+        "login": 56822578,
+        "server": "XPMT5-DEMO",
+        "bid": 5180.5,
+        "ask": 5181.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D07",
+      "name": "Multi-symbol WS quote stream",
+      "status": "PASS",
+      "detail": "WDON26=100; PETR4=99; DI1F27=96; WINQ26=1",
+      "metadata": {
+        "symbols": [
+          "WDON26",
+          "PETR4",
+          "DI1F27",
+          "WINQ26"
+        ],
+        "tick_counts": {
+          "WDON26.METATRADER_5": 100,
+          "PETR4.METATRADER_5": 99,
+          "DI1F27.METATRADER_5": 96,
+          "WINQ26.METATRADER_5": 1
+        },
+        "transport": "ws_feed"
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10",
+      "name": "Multi-leg position reconcile (mass_status vs bridge)",
+      "status": "PASS",
+      "detail": "bridge=3 L=2.0 S=1.0 reports=3 L=2.0 S=1.0",
+      "metadata": {
+        "bridge_count": 3,
+        "report_count": 3
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10b",
+      "name": "close_on_stop clears multi-leg book",
+      "status": "PASS",
+      "detail": "positions 2\u21920 via close_on_stop",
+      "metadata": {
+        "before": 2,
+        "after": 0
+      }
+    }
+  ]
+}

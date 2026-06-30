@@ -14,7 +14,7 @@ from collections.abc import Callable
 from nautilus_trader.config import StrategyConfig
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.enums import OrderSide, TimeInForce
-from nautilus_trader.model.events import OrderFilled, OrderRejected
+from nautilus_trader.model.events import OrderDenied, OrderFilled, OrderRejected
 from nautilus_trader.model.identifiers import ClientOrderId
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.trading.strategy import Strategy
@@ -23,6 +23,7 @@ from homologation.config import HomologationConfig
 from homologation.node_factory import build_trading_node, instrument_id
 from homologation.report import HomologationReport, ScenarioStatus
 from homologation.scenarios.node_runner import NodeStopGate, run_node_until, stop_node_from_strategy
+from homologation.support.order_specs import homolog_order_qty_str
 
 
 class _Phase(Enum):
@@ -37,6 +38,7 @@ class _SuiteConfig(StrategyConfig, frozen=True):
     instrument_id: object
     min_ticks: int
     enable_execution: bool
+    order_quantity: str
 
 
 class _SuiteStrategy(Strategy):
@@ -93,6 +95,10 @@ class _SuiteStrategy(Strategy):
         self._phase = _Phase.ABORTED
         self._fail("e01", f"Order rejected: {event.reason}")
 
+    def on_order_denied(self, event: OrderDenied) -> None:
+        self._phase = _Phase.ABORTED
+        self._fail("e01", f"Order denied: {event.reason}")
+
     def on_order_filled(self, event: OrderFilled) -> None:
         if event.client_order_id == self._buy_order_id:
             self._buy_fill_px = float(event.last_px)
@@ -115,7 +121,7 @@ class _SuiteStrategy(Strategy):
         instrument = self.cache.instrument(self.config.instrument_id)
         if instrument and instrument.min_quantity:
             return instrument.min_quantity
-        return Quantity.from_str("0.01")
+        return Quantity.from_str(self.config.order_quantity)
 
     def _submit_buy(self) -> None:
         qty = self._min_quantity()
@@ -183,6 +189,7 @@ async def run_trading_node_suite(cfg: HomologationConfig, report: HomologationRe
                 instrument_id=inst_id,
                 min_ticks=cfg.min_quote_ticks,
                 enable_execution=cfg.enable_execution,
+                order_quantity=homolog_order_qty_str(cfg),
             ),
             done=done,
             outcome=outcome,
@@ -197,18 +204,30 @@ async def run_trading_node_suite(cfg: HomologationConfig, report: HomologationRe
     except TimeoutError:
         strategy = strategy_holder[0]
         tick_count = strategy.tick_count if strategy is not None else 0
-        report.add(
-            "TC-HOM-D01",
-            "Quote ticks via TradingNode",
-            ScenarioStatus.FAIL,
-            f"Timeout after {cfg.scenario_timeout_secs}s — ticks={tick_count}",
-        )
+        d01_passed = outcome.get("d01_ok") or tick_count >= cfg.min_quote_ticks
+        if d01_passed:
+            last_bid = strategy.last_bid if strategy is not None else None
+            last_ask = strategy.last_ask if strategy is not None else None
+            report.add(
+                "TC-HOM-D01",
+                "Quote ticks via TradingNode",
+                ScenarioStatus.PASS,
+                f"Received {tick_count} ticks (last bid={last_bid} ask={last_ask})",
+                ticks=tick_count,
+            )
+        else:
+            report.add(
+                "TC-HOM-D01",
+                "Quote ticks via TradingNode",
+                ScenarioStatus.FAIL,
+                f"Timeout after {cfg.scenario_timeout_secs}s — ticks={tick_count}",
+            )
         if cfg.enable_execution:
             report.add(
                 "TC-HOM-E01",
                 "Market round-trip (BUY → SELL)",
                 ScenarioStatus.FAIL,
-                "Suite timed out before round-trip completed",
+                outcome.get("e01_detail") or "Suite timed out before round-trip completed",
             )
         return
     except Exception as exc:

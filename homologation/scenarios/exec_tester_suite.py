@@ -24,7 +24,7 @@ from nautilus_trader.model.identifiers import (
 from nautilus_trader.model.objects import Price, Quantity
 from nautilus_trader.model.orders import LimitOrder, MarketOrder, StopMarketOrder
 
-from nautilus_mt5 import TICKMILL_DEMO_PROFILE
+from nautilus_mt5.venue_profile import resolve_venue_profile
 from nautilus_mt5.parsing.execution import SYMBOL_FILLING_FOK
 from nautilus_mt5.client.types import MT5TerminalAccessMode
 from nautilus_mt5.config import (
@@ -38,6 +38,18 @@ from nautilus_mt5.factories import MT5LiveDataClientFactory, MT5LiveExecClientFa
 
 from homologation.config import HomologationConfig
 from homologation.report import HomologationReport, ScenarioStatus
+from homologation.support.order_specs import (
+    align_to_tick,
+    away_buy_stop,
+    away_sell_stop,
+    format_price,
+    homolog_invalid_volume_str,
+    homolog_order_qty,
+    homolog_order_qty_modify_str,
+    homolog_order_qty_str,
+    homolog_price_tick,
+    passive_limit_price,
+)
 from homologation.support.bridge_probe import (
     rpyc_cancel_all_pending,
     rpyc_cancel_order,
@@ -122,12 +134,13 @@ def _build_clients(cfg: HomologationConfig, *, cancel_on_stop: bool, close_on_st
     provider = MetaTrader5InstrumentProviderConfig(
         load_symbols=frozenset({MT5Symbol(symbol=cfg.symbol, broker=cfg.broker)}),
     )
+    profile = resolve_venue_profile(cfg.venue_profile_name)
     data_config = MetaTrader5DataClientConfig(
         client_id=2,
         terminal_access=MT5TerminalAccessMode.EXTERNAL_RPYC,
         external_rpyc=rpyc_cfg,
         instrument_provider=provider,
-        venue_profile=TICKMILL_DEMO_PROFILE,
+        venue_profile=profile,
     )
     exec_config = MetaTrader5ExecClientConfig(
         client_id=2,
@@ -151,6 +164,15 @@ def _build_clients(cfg: HomologationConfig, *, cancel_on_stop: bool, close_on_st
         msgbus=msgbus, cache=cache, clock=clock,
     )
     return data_client, exec_client, msgbus, cache, clock
+
+
+def _qty_bundle(cfg: HomologationConfig) -> tuple[Quantity, Quantity, float]:
+    tick = homolog_price_tick(cfg)
+    return (
+        homolog_order_qty(cfg),
+        Quantity.from_str(homolog_order_qty_modify_str(cfg)),
+        tick,
+    )
 
 
 async def run_limit_gtc_cancel(cfg: HomologationConfig, report: HomologationReport) -> None:
@@ -177,7 +199,8 @@ async def run_limit_gtc_cancel(cfg: HomologationConfig, report: HomologationRepo
         await data_client._connect()
         await exec_client._connect()
         bid, _ask = _get_prices(cfg.host, cfg.port, cfg.symbol)
-        limit_px = round(bid * 0.95, 2)
+        qty, _qty_mod, px_tick = _qty_bundle(cfg)
+        limit_px = passive_limit_price(bid, px_tick)
 
         order = LimitOrder(
             trader_id=msgbus.trader_id,
@@ -185,8 +208,8 @@ async def run_limit_gtc_cancel(cfg: HomologationConfig, report: HomologationRepo
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E03-LIM"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
-            price=Price.from_str(f"{limit_px:.2f}"),
+            quantity=qty,
+            price=Price.from_str(format_price(limit_px, px_tick)),
             time_in_force=TimeInForce.GTC,
             init_id=UUID4(),
             ts_init=clock.timestamp_ns(),
@@ -274,7 +297,8 @@ async def run_cancel_rejection(cfg: HomologationConfig, report: HomologationRepo
         await data_client._connect()
         await exec_client._connect()
         bid, _ask = _get_prices(cfg.host, cfg.port, cfg.symbol)
-        limit_px = round(bid * 0.95, 2)
+        qty, _qty_mod, px_tick = _qty_bundle(cfg)
+        limit_px = passive_limit_price(bid, px_tick)
 
         order = LimitOrder(
             trader_id=msgbus.trader_id,
@@ -282,8 +306,8 @@ async def run_cancel_rejection(cfg: HomologationConfig, report: HomologationRepo
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E43-LIM"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
-            price=Price.from_str(f"{limit_px:.2f}"),
+            quantity=qty,
+            price=Price.from_str(format_price(limit_px, px_tick)),
             time_in_force=TimeInForce.GTC,
             init_id=UUID4(),
             ts_init=clock.timestamp_ns(),
@@ -449,17 +473,18 @@ async def run_limit_ioc_scenarios(cfg: HomologationConfig, report: HomologationR
         await data_client._connect()
         await exec_client._connect()
         bid, ask = await asyncio.to_thread(_get_prices, cfg.host, cfg.port, cfg.symbol)
+        qty, _qty_mod, px_tick = _qty_bundle(cfg)
 
         # E06b: passive BUY LIMIT IOC far from market → no working pending left
-        passive_px = round(bid * 0.95, 2)
+        passive_px = passive_limit_price(bid, px_tick)
         passive = LimitOrder(
             trader_id=msgbus.trader_id,
             strategy_id=StrategyId("HOMOLOG-E06b"),
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E06b-PASS"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
-            price=Price.from_str(f"{passive_px:.2f}"),
+            quantity=qty,
+            price=Price.from_str(format_price(passive_px, px_tick)),
             time_in_force=TimeInForce.IOC,
             init_id=UUID4(),
             ts_init=clock.timestamp_ns(),
@@ -510,15 +535,15 @@ async def run_limit_ioc_scenarios(cfg: HomologationConfig, report: HomologationR
         # supported (use MARKET IOC in E06a); IOC cancel with no pending left is the expected path.
         try:
             _bid_c, ask_c = await asyncio.to_thread(_get_prices, cfg.host, cfg.port, cfg.symbol)
-            limit_ioc_px = round(ask_c, 2)
+            limit_ioc_px = align_to_tick(ask_c, px_tick)
             agg_limit = LimitOrder(
                 trader_id=msgbus.trader_id,
                 strategy_id=StrategyId("HOMOLOG-E06c"),
                 instrument_id=inst_id,
                 client_order_id=ClientOrderId("HOM-E06c-LIM"),
                 order_side=OrderSide.SELL,
-                quantity=Quantity.from_str("0.01"),
-                price=Price.from_str(f"{limit_ioc_px:.2f}"),
+                quantity=qty,
+                price=Price.from_str(format_price(limit_ioc_px, px_tick)),
                 time_in_force=TimeInForce.IOC,
                 init_id=UUID4(),
                 ts_init=clock.timestamp_ns(),
@@ -585,7 +610,7 @@ async def run_limit_ioc_scenarios(cfg: HomologationConfig, report: HomologationR
                 instrument_id=inst_id,
                 client_order_id=ClientOrderId("HOM-E06a-FILL"),
                 order_side=OrderSide.BUY,
-                quantity=Quantity.from_str("0.01"),
+                quantity=qty,
                 time_in_force=TimeInForce.IOC,
                 init_id=UUID4(),
                 ts_init=clock.timestamp_ns(),
@@ -662,7 +687,9 @@ async def run_modify_volume(cfg: HomologationConfig, report: HomologationReport)
         await data_client._connect()
         await exec_client._connect()
         bid, _ask = await asyncio.to_thread(_get_prices, cfg.host, cfg.port, cfg.symbol)
-        limit_px = round(bid * 0.95, 2)
+        qty, qty_mod, px_tick = _qty_bundle(cfg)
+        limit_px = passive_limit_price(bid, px_tick)
+        target_vol = float(homolog_order_qty_modify_str(cfg))
 
         order = LimitOrder(
             trader_id=msgbus.trader_id,
@@ -670,8 +697,8 @@ async def run_modify_volume(cfg: HomologationConfig, report: HomologationReport)
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E07-MOD"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
-            price=Price.from_str(f"{limit_px:.2f}"),
+            quantity=qty,
+            price=Price.from_str(format_price(limit_px, px_tick)),
             time_in_force=TimeInForce.GTC,
             init_id=UUID4(),
             ts_init=clock.timestamp_ns(),
@@ -694,15 +721,15 @@ async def run_modify_volume(cfg: HomologationConfig, report: HomologationReport)
         _apply_accepted(order, cache, exec_client.account_id, venue_order_id, clock)
 
         # Tickmill rejects volume-only modify (retcode 10025); include a price nudge.
-        modify_px = round(limit_px + 1.0, 2)
+        modify_px = align_to_tick(limit_px + px_tick, px_tick)
         modify_cmd = ModifyOrder(
             trader_id=msgbus.trader_id,
             strategy_id=order.strategy_id,
             instrument_id=inst_id,
             client_order_id=order.client_order_id,
             venue_order_id=VenueOrderId(venue_order_id),
-            quantity=Quantity.from_str("0.02"),
-            price=Price.from_str(f"{modify_px:.2f}"),
+            quantity=qty_mod,
+            price=Price.from_str(format_price(modify_px, px_tick)),
             trigger_price=None,
             command_id=UUID4(),
             ts_init=clock.timestamp_ns(),
@@ -731,14 +758,14 @@ async def run_modify_volume(cfg: HomologationConfig, report: HomologationReport)
 
         volume = rpyc_order_volume(matched[0])
         price_open = float(matched[0].get("price_open", 0.0))
-        vol_ok = abs(volume - 0.02) < 1e-6
+        vol_ok = abs(volume - target_vol) < 1e-6
         price_ok = abs(price_open - modify_px) < 1e-6
         if vol_ok:
             report.add(
                 case_id,
                 name,
                 ScenarioStatus.PASS,
-                f"venue={venue_order_id} volume 0.01→{volume}",
+                f"venue={venue_order_id} volume {homolog_order_qty_str(cfg)}→{volume}",
                 venue_order_id=venue_order_id,
                 volume=volume,
             )
@@ -757,7 +784,7 @@ async def run_modify_volume(cfg: HomologationConfig, report: HomologationReport)
                 case_id,
                 name,
                 ScenarioStatus.FAIL,
-                f"Expected volume 0.02 or price {modify_px:.2f}, bridge volume={volume} price={price_open}",
+                f"Expected volume {target_vol} or price {modify_px:.2f}, bridge volume={volume} price={price_open}",
                 venue_order_id=venue_order_id,
                 volume=volume,
                 price_open=price_open,
@@ -803,7 +830,8 @@ async def run_limit_fok_day_scenarios(cfg: HomologationConfig, report: Homologat
         )
         fok_supported = bool(filling_mode & SYMBOL_FILLING_FOK)
         bid, _ask = await asyncio.to_thread(_get_prices, cfg.host, cfg.port, cfg.symbol)
-        passive_px = round(bid * 0.95, 2)
+        qty, _qty_mod, px_tick = _qty_bundle(cfg)
+        passive_px = passive_limit_price(bid, px_tick)
 
         for tif, sid in ((TimeInForce.FOK, "E06d"), (TimeInForce.DAY, "E06e")):
             order = LimitOrder(
@@ -812,8 +840,8 @@ async def run_limit_fok_day_scenarios(cfg: HomologationConfig, report: Homologat
                 instrument_id=inst_id,
                 client_order_id=ClientOrderId(f"HOM-{sid}-LIM"),
                 order_side=OrderSide.BUY,
-                quantity=Quantity.from_str("0.01"),
-                price=Price.from_str(f"{passive_px:.2f}"),
+                quantity=qty,
+                price=Price.from_str(format_price(passive_px, px_tick)),
                 time_in_force=tif,
                 init_id=UUID4(),
                 ts_init=clock.timestamp_ns(),
@@ -913,8 +941,9 @@ async def run_modify_stop_trigger(cfg: HomologationConfig, report: HomologationR
         await data_client._connect()
         await exec_client._connect()
         _bid, ask = await asyncio.to_thread(_get_prices, cfg.host, cfg.port, cfg.symbol)
-        trigger_px = round(ask * 1.05, 2)
-        new_trigger_px = round(ask * 1.06, 2)
+        qty, _qty_mod, px_tick = _qty_bundle(cfg)
+        trigger_px = away_buy_stop(ask, px_tick, factor=1.05)
+        new_trigger_px = away_buy_stop(ask, px_tick, factor=1.06)
 
         stop = StopMarketOrder(
             trader_id=msgbus.trader_id,
@@ -922,8 +951,8 @@ async def run_modify_stop_trigger(cfg: HomologationConfig, report: HomologationR
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E07b-STP"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
-            trigger_price=Price.from_str(f"{trigger_px:.2f}"),
+            quantity=qty,
+            trigger_price=Price.from_str(format_price(trigger_px, px_tick)),
             trigger_type=TriggerType.DEFAULT,
             time_in_force=TimeInForce.GTC,
             init_id=UUID4(),
@@ -957,7 +986,7 @@ async def run_modify_stop_trigger(cfg: HomologationConfig, report: HomologationR
             venue_order_id=VenueOrderId(venue_order_id),
             quantity=None,
             price=None,
-            trigger_price=Price.from_str(f"{new_trigger_px:.2f}"),
+            trigger_price=Price.from_str(format_price(new_trigger_px, px_tick)),
             command_id=UUID4(),
             ts_init=clock.timestamp_ns(),
         )
@@ -1016,6 +1045,7 @@ async def run_hedging_positions(cfg: HomologationConfig, report: HomologationRep
     try:
         await data_client._connect()
         await exec_client._connect()
+        qty, _, _px_tick = _qty_bundle(cfg)
 
         buy = MarketOrder(
             trader_id=msgbus.trader_id,
@@ -1023,7 +1053,7 @@ async def run_hedging_positions(cfg: HomologationConfig, report: HomologationRep
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E08-BUY1"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
+            quantity=qty,
             time_in_force=TimeInForce.IOC,
             init_id=UUID4(),
             ts_init=clock.timestamp_ns(),
@@ -1034,7 +1064,7 @@ async def run_hedging_positions(cfg: HomologationConfig, report: HomologationRep
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E08-BUY2"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
+            quantity=qty,
             time_in_force=TimeInForce.IOC,
             init_id=UUID4(),
             ts_init=clock.timestamp_ns(),
@@ -1121,6 +1151,7 @@ async def run_hedging_sell_positions(cfg: HomologationConfig, report: Homologati
 
         await data_client._connect()
         await exec_client._connect()
+        qty, _, _px_tick = _qty_bundle(cfg)
 
         for coid in ("HOM-E08b-SELL1", "HOM-E08b-SELL2"):
             order = MarketOrder(
@@ -1129,104 +1160,7 @@ async def run_hedging_sell_positions(cfg: HomologationConfig, report: Homologati
                 instrument_id=inst_id,
                 client_order_id=ClientOrderId(coid),
                 order_side=OrderSide.SELL,
-                quantity=Quantity.from_str("0.01"),
-                time_in_force=TimeInForce.IOC,
-                init_id=UUID4(),
-                ts_init=clock.timestamp_ns(),
-            )
-            cache.add_order(order)
-            cmd = SubmitOrder(
-                trader_id=msgbus.trader_id,
-                strategy_id=order.strategy_id,
-                order=order,
-                position_id=None,
-                client_id=exec_client.id,
-                command_id=UUID4(),
-                ts_init=clock.timestamp_ns(),
-            )
-            _vid, err, filled = await _submit_with_events(exec_client, cmd)
-            if err or not filled:
-                report.add(
-                    case_id,
-                    name,
-                    ScenarioStatus.FAIL,
-                    f"SELL leg {coid} failed: {err or 'not filled'}",
-                )
-                return
-
-        snap = await asyncio.to_thread(
-            rpyc_positions_snapshot, cfg.host, cfg.port, cfg.symbol,
-        )
-        short_legs = [p for p in snap if p["type"] == 1]
-        if len(short_legs) >= 2:
-            report.add(
-                case_id,
-                name,
-                ScenarioStatus.PASS,
-                f"positions_get({cfg.symbol})={len(snap)} ({len(short_legs)} SHORT legs)",
-                positions=len(snap),
-                short_legs=len(short_legs),
-            )
-        else:
-            report.add(
-                case_id,
-                name,
-                ScenarioStatus.FAIL,
-                f"Expected >=2 SHORT legs, bridge reports {len(snap)} total "
-                f"({len(short_legs)} SHORT)",
-                positions=len(snap),
-                short_legs=len(short_legs),
-            )
-    except Exception as exc:
-        report.add(case_id, name, ScenarioStatus.FAIL, str(exc))
-    finally:
-        try:
-            from homologation.scenarios.mt5_edges import _close_symbol_positions
-
-            await asyncio.to_thread(_close_symbol_positions, cfg.host, cfg.port, cfg.symbol)
-        except Exception:
-            pass
-        try:
-            await exec_client._disconnect()
-            await data_client._disconnect()
-        except Exception:
-            pass
-
-
-async def run_hedging_sell_positions(cfg: HomologationConfig, report: HomologationReport) -> None:
-    """TC-HOM-E08b: hedging account holds two independent SELL legs."""
-    case_id = "TC-HOM-E08b"
-    name = "Hedging two same-side positions (SELL + SELL)"
-
-    if not cfg.enable_execution:
-        report.add(case_id, name, ScenarioStatus.SKIP, "Set MT5_ENABLE_LIVE_EXECUTION=1")
-        return
-
-    reset_mt5_client_cache()
-    inst_id = InstrumentId(Symbol(cfg.symbol), _VENUE)
-    data_client, exec_client, msgbus, cache, clock = _build_clients(
-        cfg, cancel_on_stop=False, close_on_stop=False,
-    )
-
-    try:
-        from homologation.scenarios.mt5_edges import _close_symbol_positions
-        from homologation.support.bridge_probe import rpyc_positions_snapshot
-
-        if await asyncio.to_thread(rpyc_positions_count, cfg.host, cfg.port, cfg.symbol) > 0:
-            await asyncio.to_thread(_close_symbol_positions, cfg.host, cfg.port, cfg.symbol)
-            await asyncio.sleep(1.0)
-
-        await data_client._connect()
-        await exec_client._connect()
-
-        for coid in ("HOM-E08b-SELL1", "HOM-E08b-SELL2"):
-            order = MarketOrder(
-                trader_id=msgbus.trader_id,
-                strategy_id=StrategyId("HOMOLOG-E08b"),
-                instrument_id=inst_id,
-                client_order_id=ClientOrderId(coid),
-                order_side=OrderSide.SELL,
-                quantity=Quantity.from_str("0.01"),
+                quantity=qty,
                 time_in_force=TimeInForce.IOC,
                 init_id=UUID4(),
                 ts_init=clock.timestamp_ns(),

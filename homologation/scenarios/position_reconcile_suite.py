@@ -32,9 +32,13 @@ from homologation.support.bridge_probe import (
     rpyc_positions_volume_summary,
 )
 from homologation.support.clients import reset_mt5_client_cache
+from homologation.support.order_specs import homolog_order_qty, homolog_order_qty_str
 
 _VENUE = Venue("METATRADER_5")
-_QTY = "0.01"
+
+
+def _qty(cfg: HomologationConfig) -> Quantity:
+    return homolog_order_qty(cfg)
 
 
 async def _flat_symbol(cfg: HomologationConfig) -> tuple[bool, str]:
@@ -54,6 +58,7 @@ async def _market_ioc(
     inst_id: InstrumentId,
     side: OrderSide,
     client_order_id: str,
+    cfg: HomologationConfig,
     *,
     strategy_tag: str = "HOMOLOG-E10",
 ) -> tuple[bool, str]:
@@ -63,7 +68,7 @@ async def _market_ioc(
         instrument_id=inst_id,
         client_order_id=ClientOrderId(client_order_id),
         order_side=side,
-        quantity=Quantity.from_str(_QTY),
+        quantity=_qty(cfg),
         time_in_force=TimeInForce.IOC,
         init_id=UUID4(),
         ts_init=clock.timestamp_ns(),
@@ -132,7 +137,7 @@ async def run_position_reconcile(cfg: HomologationConfig, report: HomologationRe
         ]
         for side, coid in legs:
             ok, detail = await _market_ioc(
-                exec_client, cache, msgbus, clock, inst_id, side, coid,
+                exec_client, cache, msgbus, clock, inst_id, side, coid, cfg,
             )
             if not ok:
                 report.add(case_id, name, ScenarioStatus.FAIL, detail)
@@ -148,9 +153,10 @@ async def run_position_reconcile(cfg: HomologationConfig, report: HomologationRe
 
         rep_count, rep_long, rep_short = _report_volumes(mass.position_reports, inst_id)
 
+        qty = float(homolog_order_qty_str(cfg))
         count_ok = bridge_count == rep_count == 3
-        long_ok = abs(bridge_long - rep_long) < 1e-6 and abs(bridge_long - 0.02) < 1e-6
-        short_ok = abs(bridge_short - rep_short) < 1e-6 and abs(bridge_short - 0.01) < 1e-6
+        long_ok = abs(bridge_long - rep_long) < 1e-6 and abs(bridge_long - 2 * qty) < 1e-6
+        short_ok = abs(bridge_short - rep_short) < 1e-6 and abs(bridge_short - qty) < 1e-6
 
         if count_ok and long_ok and short_ok:
             report.add(
@@ -212,7 +218,7 @@ async def run_close_on_stop_multi(cfg: HomologationConfig, report: HomologationR
         await exec_open._connect()
         for coid in ("HOM-E10b-B1", "HOM-E10b-B2"):
             ok, detail = await _market_ioc(
-                exec_open, cache, msgbus, clock, inst_id, OrderSide.BUY, coid,
+                exec_open, cache, msgbus, clock, inst_id, OrderSide.BUY, coid, cfg,
             )
             if not ok:
                 report.add(case_id, name, ScenarioStatus.FAIL, detail)
@@ -278,6 +284,7 @@ async def _open_mixed_book_1l1s(
     msgbus,
     clock,
     inst_id: InstrumentId,
+    cfg: HomologationConfig,
     *,
     strategy_tag: str,
     sell_coid: str,
@@ -285,13 +292,13 @@ async def _open_mixed_book_1l1s(
 ) -> tuple[bool, str]:
     """Flat → SELL (short) → BUY (long) for a minimal hedging mixed book."""
     ok, detail = await _market_ioc(
-        exec_client, cache, msgbus, clock, inst_id, OrderSide.SELL, sell_coid,
+        exec_client, cache, msgbus, clock, inst_id, OrderSide.SELL, sell_coid, cfg,
         strategy_tag=strategy_tag,
     )
     if not ok:
         return False, detail
     ok, detail = await _market_ioc(
-        exec_client, cache, msgbus, clock, inst_id, OrderSide.BUY, buy_coid,
+        exec_client, cache, msgbus, clock, inst_id, OrderSide.BUY, buy_coid, cfg,
         strategy_tag=strategy_tag,
     )
     if not ok:
@@ -324,7 +331,7 @@ async def run_minimal_mixed_book(cfg: HomologationConfig, report: HomologationRe
         await exec_client._connect()
 
         ok, detail = await _open_mixed_book_1l1s(
-            exec_client, cache, msgbus, clock, inst_id,
+            exec_client, cache, msgbus, clock, inst_id, cfg,
             strategy_tag="HOMOLOG-E10c",
             sell_coid="HOM-E10c-SELL1",
             buy_coid="HOM-E10c-BUY1",
@@ -336,9 +343,10 @@ async def run_minimal_mixed_book(cfg: HomologationConfig, report: HomologationRe
         bridge_count, bridge_long, bridge_short = await asyncio.to_thread(
             rpyc_positions_volume_summary, cfg.host, cfg.port, cfg.symbol,
         )
+        qty = float(homolog_order_qty_str(cfg))
         count_ok = bridge_count == 2
-        long_ok = abs(bridge_long - 0.01) < 1e-6
-        short_ok = abs(bridge_short - 0.01) < 1e-6
+        long_ok = abs(bridge_long - qty) < 1e-6
+        short_ok = abs(bridge_short - qty) < 1e-6
 
         if count_ok and long_ok and short_ok:
             report.add(
@@ -353,7 +361,7 @@ async def run_minimal_mixed_book(cfg: HomologationConfig, report: HomologationRe
                 case_id,
                 name,
                 ScenarioStatus.FAIL,
-                f"Expected 2 legs L=0.01 S=0.01, got bridge={bridge_count} "
+                f"Expected 2 legs L={qty} S={qty}, got bridge={bridge_count} "
                 f"L={bridge_long} S={bridge_short}",
                 bridge_count=bridge_count,
             )
@@ -392,7 +400,7 @@ async def run_close_on_stop_mixed(cfg: HomologationConfig, report: HomologationR
         await data_open._connect()
         await exec_open._connect()
         ok, detail = await _open_mixed_book_1l1s(
-            exec_open, cache, msgbus, clock, inst_id,
+            exec_open, cache, msgbus, clock, inst_id, cfg,
             strategy_tag="HOMOLOG-E10d",
             sell_coid="HOM-E10d-SELL1",
             buy_coid="HOM-E10d-BUY1",
@@ -404,7 +412,8 @@ async def run_close_on_stop_mixed(cfg: HomologationConfig, report: HomologationR
         before_count, before_long, before_short = await asyncio.to_thread(
             rpyc_positions_volume_summary, cfg.host, cfg.port, cfg.symbol,
         )
-        if before_count != 2 or before_long < 0.01 or before_short < 0.01:
+        qty = float(homolog_order_qty_str(cfg))
+        if before_count != 2 or before_long < qty or before_short < qty:
             report.add(
                 case_id,
                 name,

@@ -1,0 +1,37 @@
+{
+  "started_at": "2026-06-30T14:14:31.845917+00:00",
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=56822578 server=XPMT5-DEMO WDON26 bid=5175.0 ask=5176.0",
+      "metadata": {
+        "login": 56822578,
+        "server": "XPMT5-DEMO",
+        "bid": 5175.0,
+        "ask": 5176.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D06",
+      "name": "WS feed stop/start + cursor dedup",
+      "status": "PASS",
+      "detail": "baseline=794 after_gateway=2 post=31 unique_ts=878 dup=0 service_restart=manual",
+      "metadata": {
+        "baseline_ticks": 794,
+        "post_phase_ticks": 31,
+        "unique_ts": 878,
+        "gateway_restart": true,
+        "service_restart": true
+      }
+    }
+  ]
+}

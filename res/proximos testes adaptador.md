@@ -338,6 +338,14 @@ Harness: `homologation/run_xp_closed_market.py` (`MT5_VENUE_PROFILE=xp_b3`, logi
 |-----|------------|--------|--------|
 | Closed market | 2026-06-28 12:54+ | `homologation/last_xp_closed_market_report.json` | **15/17 PASS** (D08b/D21-T TradeTick size=0) |
 | Closed market (re-run) | 2026-06-28 | `homologation/last_xp_closed_market_report.json` | **17/17 PASS** (login 56822578, WDON26) |
+| Open feed | 2026-06-29 | `homologation/last_xp_open_market_feed_report.json` | **7/7 PASS** |
+| D06 + D21 open | 2026-06-30 | `homologation/last_xp_backlog_report.json` | **3/3 PASS** |
+| D06-SVC | 2026-06-30 | `homologation/last_xp_d06_svc_report.json` | **2/2 PASS** — service_restart=manual |
+| Exec WDON26 | 2026-06-30 | `homologation/last_xp_exec_report.json` | **21/21 PASS** |
+| Exec PETR4 | 2026-06-30 | `homologation/last_xp_petr4_exec_report.json` | **21/21 PASS** |
+| Exec DI1F27 | 2026-06-30 | `homologation/last_xp_di1f27_exec_report.json` | **21/21 PASS** |
+| Trade ticks D30/D31 | 2026-06-30 | `homologation/last_xp_trade_ticks_report.json` | WINQ26 PASS |
+| Wave3 | 2026-06-30 | `homologation/last_xp_wave3_report.json` | **4/4 PASS** |
 
 ### Closed market — runnable off-hours
 
@@ -345,34 +353,60 @@ Harness: `homologation/run_xp_closed_market.py` (`MT5_VENUE_PROFILE=xp_b3`, logi
 |----|----------|--------|-------|
 | TC-HOM-PF | Bridge + account + symbol_info | **DONE** | login 56822578, BRL |
 | TC-HOM-D01-CM | Instrument load | **DONE** | WDON26 default |
-| TC-HOM-D01-CM-XP | Multi-symbol load | **DONE** | WDON26,PETR4,DI1F27,WIN$,WINQ26 |
+| TC-HOM-D01-CM-XP | Multi-symbol load | **DONE** | WDON26,PETR4,DI1F27,WINQ26 |
 | TC-HOM-D04a/b/c | Historical bars + ticks | **DONE** | 7-day lookback for ticks off-hours |
-| TC-HOM-D21 | RequestQuoteTicks | **DONE** | WDON26,PETR4,DI1F27 |
-| TC-HOM-D21-T | RequestTradeTicks | **DONE** | WIN$,WINQ26 (size default=1 when vol=0) |
+| TC-HOM-D21 | RequestQuoteTicks | **DONE** | WDON26,PETR4,DI1F27 (closed + open 2026-06-30) |
+| TC-HOM-D21-T | RequestTradeTicks | **DONE** | WINQ26,WDON26 nominals (WIN$/WDO$ data-only, excluded) |
 | TC-HOM-D08/D08b | Trade tick subscribe/request | **DONE** | Profile allows (inverse of Tickmill) |
 | TC-HOM-E-CONN / E-EDGE1 | Exec connect | **DONE** | |
 | TC-HOM-E-SUBMIT | Off-hours limit/stop shape | **DONE** | WDON26,PETR4,DI1F27 submitted |
 
-### Open market — OPEN (pregão B3)
+### Open market — DONE (pregão B3, 2026-06-30)
 
 | ID | Scenario | Status | Notes |
 |----|----------|--------|-------|
-| TC-HOM-D02 | WS sustained stream | **OPEN** | Needs live ticks |
-| TC-HOM-D03/D05 | Live bars WS | **OPEN** | |
-| TC-HOM-D06/D06-SVC | Feed resilience | **OPEN** | |
-| TC-HOM-D07 | Multi-symbol WS | **OPEN** | |
-| TC-HOM-E01 | Market round-trip + fill | **OPEN** | WDON26 first |
-| TC-HOM-E02–E10 | Stops, hedging, mass status | **OPEN** | |
-| WINQ26 quotes | QuoteTick sanity in session | **OPEN** | Off-hours bid/ask unreliable |
+| TC-HOM-D02 | WS sustained stream | **DONE** | `run_xp_open_market_feed.py` |
+| TC-HOM-D03/D05 | Live bars WS + unsubscribe | **DONE** | |
+| TC-HOM-D06 | Feed gateway restart + dedup | **DONE** | `run_xp_backlog_homologation.py` |
+| TC-HOM-D06-SVC | Service manual restart | **DONE** | `run_d06_svc_homologation.py` (2026-06-30) |
+| TC-HOM-D07 | Multi-symbol WS | **DONE** | `run_wave3_homologation.py` (PETR4 com pregão equity) |
+| TC-HOM-D21 | RequestQuoteTicks open | **DONE** | `run_xp_backlog_homologation.py` |
+| TC-HOM-D30/D31 | Trade ticks live/hist | **DONE** | WINQ26 (`run_xp_trade_ticks_homologation.py`) |
+| TC-HOM-E01–E10 | Exec full suite | **DONE** | WDON26, PETR4, DI1F27 — 21/21 each |
+| TC-HOM-E10/E10b | Wave3 reconcile | **DONE** | `last_xp_wave3_report.json` |
+
+**Símbolos contínuos (`WIN$`, `WDO$`):** excluídos dos runners live — data-only, não operáveis. Use nominais `WINQ26` / `WDON26`.
+
+**XP open-market CMD (feed):**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18813
+set MT5_VENUE_PROFILE=xp_b3
+set MT5_ACCOUNT_NUMBER=56822578
+set MT5_SYMBOL=WDON26
+set MT5_FEED_ENABLED=1
+set HOMOLOG_MULTI_SYMBOLS=WDON26,PETR4,DI1F27,WINQ26
+set HOMOLOG_REPORT_JSON=homologation/last_xp_open_market_feed_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_xp_open_market_feed.py
+```
+
+**XP exec CMD (per symbol):**
+```cmd
+set MT5_PORT=18813
+set MT5_ENABLE_LIVE_EXECUTION=1
+set MT5_SYMBOL=PETR4
+set HOMOLOG_REPORT_JSON=homologation/last_xp_petr4_exec_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_xp_exec_homologation.py
+```
 
 **XP closed-market CMD:**
 ```cmd
 set MT5_HOST=127.0.0.1
-set MT5_PORT=18812
+set MT5_PORT=18813
 set MT5_VENUE_PROFILE=xp_b3
 set MT5_ACCOUNT_NUMBER=56822578
 set MT5_SYMBOL=WDON26
-set HOMOLOG_MULTI_SYMBOLS=WDON26,PETR4,DI1F27,WIN$,WINQ26
+set HOMOLOG_MULTI_SYMBOLS=WDON26,PETR4,DI1F27,WINQ26
 set HOMOLOG_REPORT_JSON=homologation/last_xp_closed_market_report.json
 E:\miniconda\envs\trading\python.exe homologation\run_xp_closed_market.py
 ```
