@@ -117,12 +117,12 @@ Covers XP Investimentos / B3 on XPMT5-DEMO (probe 2026-06-26):
 
 | `trade_calc_mode` | Instrument type | quote_ticks | trade_ticks | bars |
 |-------------------|-----------------|-------------|-------------|------|
-| 32 — EXCH_STOCKS | `Equity` | OBSERVED | OBSERVED | ASSUMED |
-| 33 — EXCH_FUTURES | `FuturesContract` | OBSERVED | OBSERVED | ASSUMED |
+| 32 — EXCH_STOCKS | `Equity` | TESTED | TESTED | ASSUMED |
+| 33 — EXCH_FUTURES | `FuturesContract` | TESTED | TESTED | ASSUMED |
 
 Fine-grained quote vs trade routing uses `nautilus_mt5.tick_routing` (tick shape, `TRADE_MODE`, continuous `$` suffix) — not broker name checks.
 
-Homologation: `homologation/run_xp_closed_market.py` with `MT5_VENUE_PROFILE=xp_b3`.
+Homologation: `homologation/run_xp_closed_market.py` with `MT5_VENUE_PROFILE=xp_b3`. Open-market quote/trade ticks promoted to **TESTED** 2026-06-30 (PETR4, DI1F27, WINQ26, WDON26).
 
 ---
 

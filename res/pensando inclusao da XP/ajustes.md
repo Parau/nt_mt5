@@ -14,7 +14,7 @@
 | **Exec DI1F27** | **21/21** | `last_xp_di1f27_exec_report.json` |
 | **PETR4 E01 smoke** | **3/3** | `last_xp_petr4_e01_report.json` |
 
-**Conclusão:** baseline XP/B3 homologado — futuros (WDON26/WINQ26), equity (PETR4), DI (DI1F27), feed WS, exec core + hedging.
+**Conclusão:** baseline XP/B3 homologado — futuros (WDON26/WINQ26), equity (PETR4), DI (DI1F27), feed WS, exec core + hedging. `VenueProfile` quote/trade ticks promovidos **OBSERVED → TESTED** (2026-06-30).
 
 ### Decisões de escopo
 
@@ -54,3 +54,4 @@ set HOMOLOG_MULTI_SYMBOLS=WDON26,PETR4,DI1F27,WINQ26
 | `run_xp_trade_ticks_homologation.py` | D30/D31 |
 | `run_wave3_homologation.py` | D07 + E10/E10b |
 | `run_d01_e01_smoke.py` | Smoke E01 por símbolo |
+| `run_xp_symbol_quote_trade_confirm.py` | D02/D21/D30/D31 por símbolo (PETR4, DI1F27) |

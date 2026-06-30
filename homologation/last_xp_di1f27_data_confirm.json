@@ -1,0 +1,67 @@
+{
+  "started_at": "2026-06-30T15:43:57.678445+00:00",
+  "summary": {
+    "total": 6,
+    "passed": 5,
+    "failed": 1,
+    "skipped": 0,
+    "ok": false
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=56822578 server=XPMT5-DEMO DI1F27 bid=14.055 ask=14.06",
+      "metadata": {
+        "login": 56822578,
+        "server": "XPMT5-DEMO",
+        "bid": 14.055,
+        "ask": 14.06
+      }
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "FAIL",
+      "detail": "Node timeout after 90s \u2014 ticks=1",
+      "metadata": {
+        "ticks": 1
+      }
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
+      "status": "PASS",
+      "detail": "Received 50 QuoteTick(s) sample bid=14.185 ask=14.19",
+      "metadata": {
+        "ticks": 50,
+        "bid": 14.185,
+        "ask": 14.19
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30-DI1F27",
+      "name": "Live TradeTick stream (SubscribeTradeTicks) (DI1F27)",
+      "status": "PASS",
+      "detail": "Received 27 trade tick(s)",
+      "metadata": {
+        "symbol": "DI1F27"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30",
+      "name": "Live TradeTick stream (SubscribeTradeTicks)",
+      "status": "PASS",
+      "detail": "Live TradeTicks OK (symbols=DI1F27)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D31",
+      "name": "Historical TradeTicks (RequestTradeTicks)",
+      "status": "PASS",
+      "detail": "TradeTicks OK for DI1F27",
+      "metadata": {}
+    }
+  ]
+}

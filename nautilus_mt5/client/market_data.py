@@ -18,7 +18,6 @@ from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.data import TradeTick
-from nautilus_trader.model.enums import AggressorSide
 from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TradeId
@@ -35,6 +34,7 @@ from nautilus_mt5.parsing.rates import (
     mql_rate_row_to_bar_data,
     timestamp_to_utc_datetime,
 )
+from nautilus_mt5.tick_routing import resolve_trade_aggressor
 
 
 class MarketDataTypeEnum:
@@ -408,6 +408,7 @@ class MetaTrader5ClientMarketDataMixin:
         use_rth: bool = True,
         timeout: int = 60,
         number_of_ticks: int = 1000,
+        map_tick_flags_to_aggressor: bool = False,
     ) -> list[QuoteTick | TradeTick] | None:
         """
         Request and retrieve historical tick data for a specified symbol and tick
@@ -489,6 +490,7 @@ class MetaTrader5ClientMarketDataMixin:
             volume = 0.0
             time_sec = 0
             time_msc = None
+            tick_flags = 0
             try:
                 if hasattr(row, "dtype"):
                     bid = float(row["bid"])
@@ -497,6 +499,8 @@ class MetaTrader5ClientMarketDataMixin:
                     volume = float(row["volume"]) if "volume" in row.dtype.names else 0.0
                     time_sec = int(row["time"])
                     time_msc = row["time_msc"] if "time_msc" in row.dtype.names else None
+                    if "flags" in row.dtype.names:
+                        tick_flags = int(row["flags"])
                 elif isinstance(row, dict):
                     bid = float(row.get("bid", 0) or 0)
                     ask = float(row.get("ask", 0) or 0)
@@ -504,6 +508,7 @@ class MetaTrader5ClientMarketDataMixin:
                     volume = float(row.get("volume", 0) or 0)
                     time_sec = int(row.get("time", 0) or 0)
                     time_msc = row.get("time_msc")
+                    tick_flags = int(row.get("flags", 0) or 0)
                 elif isinstance(row, (tuple, list)) and len(row) >= 3:
                     time_sec = int(row[0])
                     bid = float(row[1])
@@ -511,6 +516,7 @@ class MetaTrader5ClientMarketDataMixin:
                     last = float(row[3]) if len(row) > 3 else 0.0
                     volume = float(row[4]) if len(row) > 4 else 0.0
                     time_msc = row[5] if len(row) > 5 else None
+                    tick_flags = int(row[6]) if len(row) > 6 else 0
                 else:
                     bid = float(getattr(row, "bid", 0) or 0)
                     ask = float(getattr(row, "ask", 0) or 0)
@@ -518,6 +524,7 @@ class MetaTrader5ClientMarketDataMixin:
                     volume = float(getattr(row, "volume", 0) or 0)
                     time_sec = int(getattr(row, "time", 0) or 0)
                     time_msc = getattr(row, "time_msc", None)
+                    tick_flags = int(getattr(row, "flags", 0) or 0)
             except (TypeError, KeyError, IndexError, ValueError):
                 continue
 
@@ -536,7 +543,10 @@ class MetaTrader5ClientMarketDataMixin:
                     instrument_id=instrument_id,
                     price=instrument.make_price(last),
                     size=instrument.make_qty(trade_size),
-                    aggressor_side=AggressorSide.NO_AGGRESSOR,
+                    aggressor_side=resolve_trade_aggressor(
+                        tick_flags,
+                        map_from_tick_flags=map_tick_flags_to_aggressor,
+                    ),
                     trade_id=TradeId(str(time_sec)),
                     ts_event=ts_event,
                     ts_init=max(self._clock.timestamp_ns(), ts_event),
@@ -861,7 +871,7 @@ class MetaTrader5ClientMarketDataMixin:
             instrument_id=instrument_id,
             price=instrument.make_price(last_price),
             size=instrument.make_qty(trade_qty),
-            aggressor_side=AggressorSide.NO_AGGRESSOR,
+            aggressor_side=resolve_trade_aggressor(0, map_from_tick_flags=False),
             trade_id=TradeId(str(time)),
             ts_event=ts_event,
             ts_init=max(self._clock.timestamp_ns(), ts_event),

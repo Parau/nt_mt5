@@ -637,7 +637,7 @@ async def test_tc_d30_xp_subscribe_trade_ticks_reaches_client(
     await data_client._subscribe_trade_ticks(cmd)
 
     assert len(subscribe_calls) == 1, (
-        "TC-D30 (XP): subscribe_ticks must be called for WDON26 trade_ticks=OBSERVED"
+        "TC-D30 (XP): subscribe_ticks must be called for WDON26 trade_ticks=TESTED"
     )
     assert subscribe_calls[0]["tick_type"] == "AllLast"
     assert subscribe_calls[0]["instrument_id"] == _WDON26_ID

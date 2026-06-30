@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from nautilus_trader.model.data import Bar, BarAggregation, BarSpecification, BarType, QuoteTick
+from nautilus_trader.model.enums import AggressorSide
 from nautilus_trader.model.enums import AggregationSource, PriceType
 from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
 from nautilus_trader.model.instruments import CurrencyPair
@@ -66,6 +67,33 @@ def test_wire_tick_to_trade_tick() -> None:
     trade = wire_tick_to_trade_tick(instrument, tick, ts_init=3_000_000_000)
     assert trade is not None
     assert float(trade.price) == 60470.0
+    assert trade.aggressor_side == AggressorSide.NO_AGGRESSOR
+
+
+def test_wire_tick_to_trade_tick_xp_aggressor_buy() -> None:
+    instrument = _btcusd_instrument()
+    tick = WireTick(time_msc=2_000, bid=0.0, ask=0.0, last=174115.0, volume=1, flags=1080)
+    trade = wire_tick_to_trade_tick(
+        instrument,
+        tick,
+        ts_init=1,
+        map_tick_flags_to_aggressor=True,
+    )
+    assert trade is not None
+    assert trade.aggressor_side == AggressorSide.BUYER
+
+
+def test_wire_tick_to_trade_tick_xp_aggressor_sell() -> None:
+    instrument = _btcusd_instrument()
+    tick = WireTick(time_msc=2_000, bid=0.0, ask=0.0, last=174110.0, volume=1, flags=1112)
+    trade = wire_tick_to_trade_tick(
+        instrument,
+        tick,
+        ts_init=1,
+        map_tick_flags_to_aggressor=True,
+    )
+    assert trade is not None
+    assert trade.aggressor_side == AggressorSide.SELLER
 
 
 def test_route_wire_tick_trade_only() -> None:

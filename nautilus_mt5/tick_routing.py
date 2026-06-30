@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
+from nautilus_trader.model.enums import AggressorSide
+
 if TYPE_CHECKING:
     from nautilus_trader.model.instruments.base import Instrument
 
@@ -19,6 +21,8 @@ TICK_FLAG_BID = 2
 TICK_FLAG_ASK = 4
 TICK_FLAG_LAST = 8
 TICK_FLAG_VOLUME = 16
+TICK_FLAG_BUY = 32
+TICK_FLAG_SELL = 64
 
 # MT5 SYMBOL_TRADE_MODE_DISABLED
 SYMBOL_TRADE_MODE_DISABLED = 0
@@ -111,3 +115,27 @@ def route_wire_tick(instrument: Instrument, tick: WireTick | TickLike) -> TickRo
         )
 
     return TickRoutingDecision(emit_quote=emit_quote, emit_trade=emit_trade)
+
+
+def mt5_flags_to_aggressor(flags: int) -> AggressorSide:
+    """
+    Map MT5 ``TICK_FLAG_*`` on a trade tick to Nautilus ``AggressorSide``.
+
+    Requires ``TICK_FLAG_LAST``. BUY and SELL are mutually exclusive hints
+    (XP/B3 export: UI 56/88, API 1080/1112). Ambiguous both → ``NO_AGGRESSOR``.
+    See ``res/export ticks xp/README.md``.
+    """
+    if not (flags & TICK_FLAG_LAST):
+        return AggressorSide.NO_AGGRESSOR
+    if (flags & TICK_FLAG_BUY) and not (flags & TICK_FLAG_SELL):
+        return AggressorSide.BUYER
+    if (flags & TICK_FLAG_SELL) and not (flags & TICK_FLAG_BUY):
+        return AggressorSide.SELLER
+    return AggressorSide.NO_AGGRESSOR
+
+
+def resolve_trade_aggressor(flags: int, *, map_from_tick_flags: bool) -> AggressorSide:
+    """Return trade aggressor; disabled unless the venue profile opts in."""
+    if not map_from_tick_flags:
+        return AggressorSide.NO_AGGRESSOR
+    return mt5_flags_to_aggressor(flags)

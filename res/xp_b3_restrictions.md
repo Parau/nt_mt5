@@ -225,8 +225,8 @@ This terminal reports **`32` = EXCH_STOCKS** and **`33` = EXCH_FUTURES**, not th
 **Conclusion:**
 
 - **Execution homologation:** use **WINQ26** (not `WIN$`).
-- **Quote ticks:** **`OBSERVED`** in regular B3 session — bid/ask valid, spread coherent.
-- **Trade ticks:** **`TradeTick` supported** (last+volume reliable in sample).
+- **Quote ticks:** **`TESTED`** in regular B3 session — bid/ask valid, spread coherent (homolog 2026-06-30).
+- **Trade ticks:** **`TESTED`** — last+volume reliable in sample and open-market homolog.
 
 ---
 
@@ -353,9 +353,9 @@ This terminal reports **`32` = EXCH_STOCKS** and **`33` = EXCH_FUTURES**, not th
 | Symbol class | `calc_mode` | Instrument type (planned) | quote_ticks | trade_ticks | exec |
 |--------------|-------------|---------------------------|-------------|-------------|------|
 | Continuous (`WIN$`, `WDO$`) | 33 | `FuturesContract` | **UNSUPPORTED** | **OBSERVED** | **No** |
-| Nominal WIN (`WINQ26`) | 33 | `FuturesContract` | **OBSERVED** | **OBSERVED** | **Yes** |
-| Nominal WDO / others (`WDON26`, `DI1F27`) | 33 | `FuturesContract` | **OBSERVED** | **OBSERVED** | **Yes** |
-| Equities (`PETR4`) | 32 | `Equity` | **OBSERVED** | **OBSERVED** | **Yes** |
+| Nominal WIN (`WINQ26`) | 33 | `FuturesContract` | **TESTED** | **TESTED** | **Yes** |
+| Nominal WDO / others (`WDON26`, `DI1F27`) | 33 | `FuturesContract` | **TESTED** | **TESTED** | **Yes** |
+| Equities (`PETR4`) | 32 | `Equity` | **TESTED** | **TESTED** | **Yes** |
 
 ### Adapter routing rules
 
