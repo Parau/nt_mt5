@@ -36,6 +36,13 @@ from nautilus_mt5.factories import MT5LiveDataClientFactory, MT5LiveExecClientFa
 from homologation.config import HomologationConfig
 from homologation.report import HomologationReport, ScenarioStatus
 from homologation.support.clients import reset_mt5_client_cache
+from homologation.support.order_specs import (
+    away_buy_stop,
+    away_sell_stop,
+    format_price,
+    homolog_order_qty,
+    homolog_price_tick,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -159,8 +166,10 @@ async def run_stop_orders(cfg: HomologationConfig, report: HomologationReport) -
 
     try:
         bid, ask = _get_prices(cfg.host, cfg.port, cfg.symbol)
-        buy_stop = round(ask * 1.02, 2)
-        sell_stop = round(bid * 0.98, 2)
+        px_tick = homolog_price_tick(cfg)
+        qty = homolog_order_qty(cfg)
+        buy_stop = away_buy_stop(ask, px_tick)
+        sell_stop = away_sell_stop(bid, px_tick)
 
         await data_client._connect()
         await exec_client._connect()
@@ -172,8 +181,8 @@ async def run_stop_orders(cfg: HomologationConfig, report: HomologationReport) -
                 instrument_id=inst_id,
                 client_order_id=ClientOrderId("HOM-E02a"),
                 order_side=OrderSide.BUY,
-                quantity=Quantity.from_str("0.01"),
-                trigger_price=Price.from_str(f"{buy_stop:.2f}"),
+                quantity=qty,
+                trigger_price=Price.from_str(format_price(buy_stop, px_tick)),
                 trigger_type=TriggerType.DEFAULT,
                 time_in_force=TimeInForce.GTC,
                 init_id=UUID4(),
@@ -185,8 +194,8 @@ async def run_stop_orders(cfg: HomologationConfig, report: HomologationReport) -
                 instrument_id=inst_id,
                 client_order_id=ClientOrderId("HOM-E02b"),
                 order_side=OrderSide.SELL,
-                quantity=Quantity.from_str("0.01"),
-                trigger_price=Price.from_str(f"{sell_stop:.2f}"),
+                quantity=qty,
+                trigger_price=Price.from_str(format_price(sell_stop, px_tick)),
                 trigger_type=TriggerType.DEFAULT,
                 time_in_force=TimeInForce.GTC,
                 init_id=UUID4(),

@@ -1,6 +1,6 @@
 # Terminal Access Capability Audit
 
-Last aligned with capability matrices and homologation: **2026-06-28**.
+Last aligned with capability matrices and homologation: **2026-06-30**.
 
 ## Purpose
 
@@ -37,13 +37,13 @@ Aligned with `docs/data_capability_matrix.md`.
 | Capability | Gateway RPC | Adapter (Nautilus) | Deterministic tests | Homologation / live | Status |
 |---|---|---|---|---|---|
 | **Instruments** | `symbols_get`, `symbol_info` | Provider load/request | TC-D01–D03 | Tickmill + XP closed (`run_closed_market.py`, `run_xp_closed_market.py`) | **Partial** |
-| **Live quotes** | WS feed (MQL5 Service); legacy `symbol_info_tick` poll | WS → `QuoteTick` when `feed.enabled=True` | TC-D20, `test_feed_*` | **TC-HOM-D02** (`run_open_market.py`, Tickmill) | **Partial** |
-| **Historical quotes** | `copy_ticks_from`, `copy_ticks_range` | `_request_quote_ticks` → `get_historical_ticks` → **`copy_ticks_from`** (IB `req_historical_ticks` removed, 2026-06-28) | TC-D21 matrix | **TC-HOM-D21** (Tickmill); XP closed | **Partial** — live Nautilus-level OK; promote to Supported when DataEngine path is required |
-| **Trade ticks** | `copy_ticks_*` (`last` field) | **Tickmill:** gated **Unsupported**. **XP/B3:** **Partial** (OBSERVED) | TC-D30/D31 + XP unit tests | XP **TC-HOM-D21-T** closed; live WS OPEN (pregão) | **Profile-dependent** |
-| **Bars** | `copy_rates_*`; WS `subscribe_bars` | Hist + live WS bars | TC-D40/D41 | D03/D04b homolog | **Partial** |
+| **Live quotes** | WS feed (MQL5 Service); legacy `symbol_info_tick` poll | WS → `QuoteTick` when `feed.enabled=True` | TC-D20, `test_feed_*` | **Tickmill:** TC-HOM-D02. **XP/B3:** TC-HOM-D02 (`run_xp_open_market_feed.py`) | **Partial** |
+| **Historical quotes** | `copy_ticks_from`, `copy_ticks_range` | `_request_quote_ticks` → `copy_ticks_from` | TC-D21 matrix | **Tickmill:** TC-HOM-D21. **XP/B3:** TC-HOM-D21 closed + **open** (`run_xp_backlog_homologation.py`, 2026-06-30) | **Partial** |
+| **Trade ticks** | `copy_ticks_*`; RPyC `subscribe_ticks` AllLast | **Tickmill:** Unsupported. **XP/B3:** subscribe + request | TC-D30/D31 | **XP:** D21-T closed; D30/D31 open (`run_xp_trade_ticks_homologation.py`) | **Profile-dependent** |
+| **Bars** | `copy_rates_*`; WS `subscribe_bars` | Hist + live WS bars | TC-D40/D41 | **Tickmill:** D03. **XP/B3:** D03 (`run_xp_open_market_feed.py`) | **Partial** |
 | **Order book** | `market_book_get` (wrapper) | Safe reject | TC-D10 | N/A | **Unsupported** |
 | **Instrument status** | N/A | N/A | N/A | N/A | **Unsupported** |
-| **Lifecycle / unsubscribe** | `shutdown`; WS unsubscribe | D70 wiring + homolog D05 | TC-D70 | **TC-HOM-D05** | **Partial** |
+| **Lifecycle / unsubscribe** | `shutdown`; WS unsubscribe | D70 wiring + homolog D05 | TC-D70 | **Tickmill:** D05. **XP/B3:** D05+D06 feed | **Partial** |
 
 **Operational note:** pass Unix `int` timestamps to `copy_ticks_from` on RPyC — `datetime` may fail with `(-2, Invalid arguments)`.
 
@@ -53,19 +53,18 @@ Aligned with `docs/data_capability_matrix.md`.
 
 Aligned with `docs/execution_capability_matrix.md`.
 
-| Capability | Gateway RPC | Adapter (Nautilus) | Deterministic tests | Homologation (Tickmill) | Status |
+| Capability | Gateway RPC | Adapter (Nautilus) | Deterministic tests | Homologation | Status |
 |---|---|---|---|---|---|
-| **Market orders** | `order_send` | Submit + fill lifecycle | TC-EL-02/03/07/20 | **E01** round-trip | **Supported** |
-| **Limit orders** | `order_send` pending | GTC/IOC/FOK/DAY mapping via `MAP_TIME_IN_FORCE` + `type_filling` | TC-EL-18/19 | **E03**, **E06**, **E06de** | **Partial** |
-| **Stop orders** | `order_send` pending | STOP_MARKET / STOP_LIMIT | TC-EL-21–24 | **E02**, **E07b** trigger amend | **Partial** |
-| **Modify orders** | `order_send` `action=7` | `_modify_order` → `modify_order` | TC-EL-11 | **E07**, **E07b** | **Partial** |
-| **Cancel orders** | `order_send` `action=8` | `_cancel_order` | TC-EL-10/12 | **E03**, **E43** (10013), **E04a** | **Partial** |
+| **Market orders** | `order_send` | Submit + fill lifecycle | TC-EL-02/03/07/20 | **Tickmill:** E01. **XP/B3:** E01 WDON26/PETR4/DI1F27 21/21 each (`run_xp_exec_homologation.py`, 2026-06-30) | **Supported** |
+| **Limit orders** | `order_send` pending | GTC/IOC/FOK/DAY mapping | TC-EL-18/19 | **Tickmill:** E03/E06. **XP/B3:** E03/E06/E06de/E07 | **Partial** |
+| **Stop orders** | `order_send` pending | STOP_MARKET / STOP_LIMIT | TC-EL-21–24 | **Tickmill:** E02/E07b. **XP/B3:** E02/E07b | **Partial** |
+| **Modify orders** | `order_send` `action=7` | `_modify_order` | TC-EL-11 | **Tickmill:** E07/E07b. **XP/B3:** E07/E07b | **Partial** |
+| **Cancel orders** | `order_send` `action=8` | `_cancel_order` | TC-EL-10/12 | **Tickmill:** E03/E43/E04a. **XP/B3:** E03/E43/E04a | **Partial** |
 | **Unsupported type/TIF** | N/A (pre-venue) | `validate_order_pre_venue` | TC-EL-13/14 | N/A | **Supported** |
-| **Position reconcile** | `positions_get` | `generate_position_status_reports` | TC-EL-06 | **E05**, **E81** | **Partial** |
-| **Order reports** | `orders_get` | `generate_order_status_reports` via `get_open_orders` (2026-06-28 fix) | TC-EL-08/09 | **E81** pending overlap | **Partial** |
-| **Fill reports** | `history_deals_get` | `generate_fill_reports` | TC-EL-04/05 | **E05b** | **Partial** |
-| **Stop lifecycle** | `order_send`, `positions_get` | `cancel_on_stop`, `close_on_stop` on `_disconnect` | TC-EL-15–17 | **E04**, **E04b**, **E10b** | **Supported** |
-| **XP/B3 execution** | Same RPC surface | Not homologated open-market yet | Tier 1 stubs only | OPEN (pregão) | **Planned** / profile TBD |
+| **Position reconcile** | `positions_get` | `generate_position_status_reports` | TC-EL-06 | **Tickmill:** E05/E81. **XP/B3:** E05/E10/E81 | **Partial** |
+| **Order reports** | `orders_get` | `generate_order_status_reports` | TC-EL-08/09 | **Tickmill:** E81. **XP/B3:** E81 | **Partial** |
+| **Fill reports** | `history_deals_get` | `generate_fill_reports` | TC-EL-04/05 | **Tickmill:** E05b. **XP/B3:** E05b | **Partial** |
+| **Stop lifecycle** | `order_send`, `positions_get` | `cancel_on_stop`, `close_on_stop` | TC-EL-15–17 | **Tickmill:** E04/E10b. **XP/B3:** E04/E08/E10b–E10d | **Supported** |
 
 ---
 
@@ -75,12 +74,17 @@ Aligned with `docs/execution_capability_matrix.md`.
 |-----|--------|
 | Order book Nautilus flow | **Unsupported** |
 | Tickmill TradeTick live/historical | **Unsupported** by design (`VenueProfile`) |
-| XP TradeTick live stream | **Partial** — closed-market hist OK; open pregão pending |
-| XP execution homologation | Not started (open market) |
+| XP TradeTick live/historical (D30/D31) | Homolog **DONE** — WINQ26 (`run_xp_trade_ticks_homologation.py`, 2026-06-30) |
+| XP exec open market (E01–E10) | Homolog **DONE** — WDON26, PETR4, DI1F27 21/21 each (2026-06-30) |
+| XP D21 historical quotes (open) | Homolog **DONE** — `run_xp_backlog_homologation.py` (2026-06-30) |
+| XP D06 gateway restart | Homolog **DONE** — `run_xp_backlog_homologation.py` (2026-06-30) |
+| XP D06-SVC Service restart | Homolog **DONE** — `run_d06_svc_homologation.py` (2026-06-30) |
 | Batch cancel / modify rejected explicit tests | Partial |
 | `history_orders_get` full historical order reconcile | Partial |
 | Instrument status streaming | **Unsupported** |
-| Multi-symbol WS (**D07** USTEC) | Tickmill homolog **DONE** (2026-06-29) |
+| Multi-symbol WS (**D07**) | Tickmill **DONE** (2026-06-29). XP/B3 **DONE** — feed suite + wave3 4/4 (PETR4=99 com pregão equity aberto, 2026-06-30) |
+
+**Resolved (2026-06-30 XP baseline):** open-market feed D02–D07; D06 gateway + D06-SVC; D21 open; exec full suite WDON26/PETR4/DI1F27; wave3 E10/E10b; trade ticks WINQ26. Continuous `WIN$`/`WDO$` excluded from live homolog (data-only).
 
 **Resolved (2026-06-28 Wave 4):** historical quotes via `copy_ticks_from`; `get_open_orders`; fill reports live path; cancel rejection 10013; FOK/DAY limit submit; stop trigger amend; open-on-start reconcile; `MAP_TIME_IN_FORCE` on submit.
 

@@ -427,9 +427,9 @@ async def run_xp_closed_market_suite(cfg: HomologationConfig, report: Homologati
     if quote_symbols:
         await run_request_quote_ticks_symbols(cfg, report, quote_symbols)
 
-    trade_symbols = tuple(s for s in ("WIN$", "WDO$", "WINQ26") if s in cfg.multi_symbols)
-    if not trade_symbols and "WIN$" not in cfg.multi_symbols:
-        trade_symbols = ("WIN$",)
+    trade_symbols = tuple(s for s in ("WINQ26", "WDON26") if s in cfg.multi_symbols)
+    if not trade_symbols:
+        trade_symbols = ("WINQ26",)
     if trade_symbols:
         await run_request_trade_ticks_symbols(cfg, report, trade_symbols)
 

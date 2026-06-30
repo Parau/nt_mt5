@@ -349,7 +349,12 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         inst_id = mt5_symbol_to_instrument_id_simplified_symbology(_MT5Sym(symbol=sym_name))
         instrument = self._cache.instrument(inst_id)
         if instrument is None:
-            instrument = await self.instrument_provider.find(inst_id)
+            instrument = self.instrument_provider.find(inst_id)
+        if instrument is None:
+            await self.instrument_provider.load_async(
+                _MT5Sym(symbol=sym_name),
+            )
+            instrument = self.instrument_provider.find(inst_id)
         if instrument is None:
             raise ValueError(f"Instrument not found for MT5 symbol {sym_name!r}")
 
@@ -812,9 +817,15 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         mt5_order.type_filling = resolve_type_filling(
             order.order_type, order.time_in_force, filling_mode,
         )
-        from nautilus_mt5.parsing.execution import MAP_TIME_IN_FORCE, ORDER_TIME_GTC
+        from nautilus_mt5.parsing.execution import MAP_TIME_IN_FORCE, ORDER_TIME_GTC, ORDER_TIME_DAY
 
-        mt5_order.type_time = MAP_TIME_IN_FORCE.get(order.time_in_force, ORDER_TIME_GTC)
+        type_time = MAP_TIME_IN_FORCE.get(order.time_in_force, ORDER_TIME_GTC)
+        if isinstance(instrument.info, dict):
+            gtc_mode = int(instrument.info.get("order_gtc_mode", 0) or 0)
+            # B3 futures (e.g. WDON26): order_gtc_mode=2 → day orders only.
+            if gtc_mode == 2 and type_time == ORDER_TIME_GTC:
+                type_time = ORDER_TIME_DAY
+        mt5_order.type_time = type_time
         mt5_order.magic = 0
         mt5_order.comment = "NautilusOrder"
 

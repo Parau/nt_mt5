@@ -1,0 +1,47 @@
+{
+  "started_at": "2026-06-30T13:01:40.950971+00:00",
+  "summary": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=56822578 server=XPMT5-DEMO WDON26 bid=5184.5 ask=5185.0",
+      "metadata": {
+        "login": 56822578,
+        "server": "XPMT5-DEMO",
+        "bid": 5184.5,
+        "ask": 5185.0
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30-WINQ26",
+      "name": "Live TradeTick stream (SubscribeTradeTicks) (WINQ26)",
+      "status": "PASS",
+      "detail": "Received 35 trade tick(s)",
+      "metadata": {
+        "symbol": "WINQ26"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30",
+      "name": "Live TradeTick stream (SubscribeTradeTicks)",
+      "status": "PASS",
+      "detail": "Live TradeTicks OK (symbols=WINQ26)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D31",
+      "name": "Historical TradeTicks (RequestTradeTicks)",
+      "status": "PASS",
+      "detail": "TradeTicks OK for WINQ26",
+      "metadata": {}
+    }
+  ]
+}

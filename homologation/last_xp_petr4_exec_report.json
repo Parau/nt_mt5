@@ -1,0 +1,289 @@
+{
+  "started_at": "2026-06-30T14:02:01.170280+00:00",
+  "summary": {
+    "total": 21,
+    "passed": 21,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=56822578 server=XPMT5-DEMO PETR4 bid=37.83 ask=37.84",
+      "metadata": {
+        "login": 56822578,
+        "server": "XPMT5-DEMO",
+        "bid": 37.83,
+        "ask": 37.84
+      }
+    },
+    {
+      "case_id": "TC-HOM-D01",
+      "name": "Quote ticks via TradingNode",
+      "status": "PASS",
+      "detail": "Received 3 ticks (last bid=37.96 ask=37.97)",
+      "metadata": {
+        "ticks": 3
+      }
+    },
+    {
+      "case_id": "TC-HOM-E01",
+      "name": "Market round-trip (BUY \u2192 SELL)",
+      "status": "PASS",
+      "detail": "BUY 100.0@37.81 \u2192 SELL @37.80",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-E02",
+      "name": "Stop / stop-limit pending orders",
+      "status": "PASS",
+      "detail": "TC-HOM-E02a=OK; TC-HOM-E02b=OK",
+      "metadata": {
+        "sub_results": [
+          [
+            "TC-HOM-E02a",
+            true,
+            "BUY STOP_MARKET venue=2466644958"
+          ],
+          [
+            "TC-HOM-E02b",
+            true,
+            "SELL STOP_MARKET venue=2466644966"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E03",
+      "name": "Limit GTC + cancel",
+      "status": "PASS",
+      "detail": "BUY LIMIT @35.91 venue=2466645249 cancelled (retry retcode=10013)",
+      "metadata": {
+        "venue_order_id": "2466645249",
+        "retry_retcode": 10013
+      }
+    },
+    {
+      "case_id": "TC-HOM-E04",
+      "name": "cancel_on_stop / close_on_stop on disconnect",
+      "status": "PASS",
+      "detail": "E04a=OK; E04b=OK",
+      "metadata": {
+        "sub_results": [
+          [
+            "E04a",
+            true,
+            "cancel_on_stop venue=2466645593 retry_retcode=10013"
+          ],
+          [
+            "E04b",
+            true,
+            "close_on_stop positions 0\u21920"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E05",
+      "name": "Reconcile orders/positions on reconnect",
+      "status": "PASS",
+      "detail": "mass_status positions=0 bridge.positions_get(PETR4)=0",
+      "metadata": {
+        "bridge_positions": 0,
+        "report_positions": 0,
+        "order_reports": 0,
+        "fill_reports": 0
+      }
+    },
+    {
+      "case_id": "TC-HOM-E05b",
+      "name": "Fill reports after market fill (history_deals_get)",
+      "status": "PASS",
+      "detail": "fill_reports=1 after poll=0s; venue_order_id=2466646228; sample trade_id=1796175154 side=1 qty=100.00 px=37.83",
+      "metadata": {
+        "fill_reports": 1,
+        "poll_secs": 0.0,
+        "lookback_mins": 1440
+      }
+    },
+    {
+      "case_id": "TC-HOM-E06",
+      "name": "Limit IOC fill vs passive cancel",
+      "status": "PASS",
+      "detail": "E06b=OK: passive IOC @35.93 pending=1 err=None; E06c=OK: LIMIT IOC mapping OK (Tickmill may keep pending @37.83); E06a=OK: MARKET IOC fill",
+      "metadata": {
+        "sub_results": [
+          [
+            "E06b",
+            true,
+            "passive IOC @35.93 pending=1 err=None"
+          ],
+          [
+            "E06c",
+            true,
+            "LIMIT IOC mapping OK (Tickmill may keep pending @37.83)"
+          ],
+          [
+            "E06a",
+            true,
+            "MARKET IOC fill"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E07",
+      "name": "Modify volume on pending limit",
+      "status": "PASS",
+      "detail": "venue=2466646572 price\u219235.93 (Tickmill BTCUSD ignores volume-only modify)",
+      "metadata": {
+        "venue_order_id": "2466646572",
+        "volume": 100.0,
+        "price_open": 35.93
+      }
+    },
+    {
+      "case_id": "TC-HOM-E06de",
+      "name": "Limit FOK + DAY passive submit",
+      "status": "PASS",
+      "detail": "E06d=OK: FOK venue=2466646708 type_filling=-1 pending=OK (bitmask=3); E06e=OK: DAY venue=2466646713 type_time=1 pending=OK",
+      "metadata": {
+        "sub_results": [
+          [
+            "E06d",
+            true,
+            "FOK venue=2466646708 type_filling=-1 pending=OK (bitmask=3)"
+          ],
+          [
+            "E06e",
+            true,
+            "DAY venue=2466646713 type_time=1 pending=OK"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E07b",
+      "name": "Modify stop trigger on pending BUY_STOP",
+      "status": "PASS",
+      "detail": "venue=2466646819 trigger 39.71\u219240.09 (expected 40.09)",
+      "metadata": {
+        "venue_order_id": "2466646819",
+        "trigger_before": 39.71,
+        "trigger_after": 40.09
+      }
+    },
+    {
+      "case_id": "TC-HOM-E08",
+      "name": "Hedging two same-side positions (BUY + BUY)",
+      "status": "PASS",
+      "detail": "positions_get(PETR4)=2 (two BUY legs on hedging account)",
+      "metadata": {
+        "positions": 2
+      }
+    },
+    {
+      "case_id": "TC-HOM-E08b",
+      "name": "Hedging two same-side positions (SELL + SELL)",
+      "status": "PASS",
+      "detail": "positions_get(PETR4)=2 (2 SHORT legs)",
+      "metadata": {
+        "positions": 2,
+        "short_legs": 2
+      }
+    },
+    {
+      "case_id": "TC-HOM-E09",
+      "name": "Real retcodes (invalid volume / stops)",
+      "status": "PASS",
+      "detail": "E09a=OK: invalid volume: Invalid volume; E09b=OK: invalid BUY STOP @34.06: Invalid price",
+      "metadata": {
+        "sub_results": [
+          [
+            "E09a",
+            true,
+            "invalid volume: Invalid volume"
+          ],
+          [
+            "E09b",
+            true,
+            "invalid BUY STOP @34.06: Invalid price"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10",
+      "name": "Multi-leg position reconcile (mass_status vs bridge)",
+      "status": "PASS",
+      "detail": "bridge=3 L=200.0 S=100.0 reports=3 L=200.0 S=100.0",
+      "metadata": {
+        "bridge_count": 3,
+        "report_count": 3
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10b",
+      "name": "close_on_stop clears multi-leg book",
+      "status": "PASS",
+      "detail": "positions 2\u21920 via close_on_stop",
+      "metadata": {
+        "before": 2,
+        "after": 0
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10c",
+      "name": "Minimal mixed hedging book (1\u00d7 SELL + 1\u00d7 BUY)",
+      "status": "PASS",
+      "detail": "bridge=2 L=100.0 S=100.0",
+      "metadata": {
+        "bridge_count": 2
+      }
+    },
+    {
+      "case_id": "TC-HOM-E10d",
+      "name": "close_on_stop clears mixed L+S book",
+      "status": "PASS",
+      "detail": "positions 2\u21920 via close_on_stop (was L=100.0 S=100.0)",
+      "metadata": {
+        "before": 2,
+        "after": 0
+      }
+    },
+    {
+      "case_id": "TC-HOM-E81",
+      "name": "Open-on-start reconcile (positions + pending orders)",
+      "status": "PASS",
+      "detail": "E81a=OK: position_reports=1 bridge_positions=1; E81b=OK: pending_reports=1 bridge_pending=1 overlap=1",
+      "metadata": {
+        "sub_results": [
+          [
+            "E81a",
+            true,
+            "position_reports=1 bridge_positions=1"
+          ],
+          [
+            "E81b",
+            true,
+            "pending_reports=1 bridge_pending=1 overlap=1"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E43",
+      "name": "Cancel rejection (double-cancel \u2192 10013)",
+      "status": "PASS",
+      "detail": "venue=2466650188 first_cancel=OK retry_retcode=10013 still_pending=False",
+      "metadata": {
+        "venue_order_id": "2466650188",
+        "retry_retcode": 10013,
+        "still_pending": false
+      }
+    }
+  ]
+}

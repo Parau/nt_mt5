@@ -46,6 +46,13 @@ from homologation.support.bridge_probe import (
     rpyc_positions_count,
 )
 from homologation.support.clients import reset_mt5_client_cache
+from homologation.support.order_specs import (
+    homolog_invalid_volume_str,
+    homolog_order_qty,
+    homolog_price_tick,
+    passive_limit_price,
+    format_price,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +258,9 @@ async def run_cancel_close_on_stop(cfg: HomologationConfig, report: Homologation
     venue_pending: str | None = None
     try:
         bid, _ = _get_prices(cfg.host, cfg.port, cfg.symbol)
-        limit_px = round(bid * 0.94, 2)
+        qty = homolog_order_qty(cfg)
+        px_tick = homolog_price_tick(cfg)
+        limit_px = passive_limit_price(bid, px_tick, factor=0.94)
         await data_a._connect()
         await exec_a._connect()
 
@@ -261,8 +270,8 @@ async def run_cancel_close_on_stop(cfg: HomologationConfig, report: Homologation
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E04a"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
-            price=Price.from_str(f"{limit_px:.2f}"),
+            quantity=qty,
+            price=Price.from_str(format_price(limit_px, px_tick)),
             time_in_force=TimeInForce.GTC,
             init_id=UUID4(),
             ts_init=clock_a.timestamp_ns(),
@@ -304,6 +313,7 @@ async def run_cancel_close_on_stop(cfg: HomologationConfig, report: Homologation
         pos_before = rpyc_positions_count(cfg.host, cfg.port, cfg.symbol)
         await data_b._connect()
         await exec_b._connect()
+        qty = homolog_order_qty(cfg)
 
         market = MarketOrder(
             trader_id=msgbus_b.trader_id,
@@ -311,7 +321,7 @@ async def run_cancel_close_on_stop(cfg: HomologationConfig, report: Homologation
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E04b"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
+            quantity=qty,
             time_in_force=TimeInForce.IOC,
             init_id=UUID4(),
             ts_init=clock_b.timestamp_ns(),
@@ -436,6 +446,7 @@ async def run_fill_reports_after_fill(cfg: HomologationConfig, report: Homologat
     try:
         await data_client._connect()
         await exec_client._connect()
+        qty = homolog_order_qty(cfg)
 
         market = MarketOrder(
             trader_id=msgbus.trader_id,
@@ -443,7 +454,7 @@ async def run_fill_reports_after_fill(cfg: HomologationConfig, report: Homologat
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E05b-BUY"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
+            quantity=qty,
             time_in_force=TimeInForce.IOC,
             init_id=UUID4(),
             ts_init=clock.timestamp_ns(),
@@ -575,6 +586,8 @@ async def run_open_on_start_reconcile(cfg: HomologationConfig, report: Homologat
     try:
         await data_a._connect()
         await exec_a._connect()
+        qty = homolog_order_qty(cfg)
+        px_tick = homolog_price_tick(cfg)
 
         market = MarketOrder(
             trader_id=msgbus_a.trader_id,
@@ -582,7 +595,7 @@ async def run_open_on_start_reconcile(cfg: HomologationConfig, report: Homologat
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E81-BUY"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
+            quantity=qty,
             time_in_force=TimeInForce.IOC,
             init_id=UUID4(),
             ts_init=clock_a.timestamp_ns(),
@@ -592,15 +605,15 @@ async def run_open_on_start_reconcile(cfg: HomologationConfig, report: Homologat
             sub_results.append(("E81a-seed", False, f"market buy seed: {err or _vid}"))
         else:
             bid, _ = _get_prices(cfg.host, cfg.port, cfg.symbol)
-            limit_px = round(bid * 0.94, 2)
+            limit_px = passive_limit_price(bid, px_tick, factor=0.94)
             pending = LimitOrder(
                 trader_id=msgbus_a.trader_id,
                 strategy_id=StrategyId("HOMOLOG-E81b"),
                 instrument_id=inst_id,
                 client_order_id=ClientOrderId("HOM-E81-LIM"),
                 order_side=OrderSide.BUY,
-                quantity=Quantity.from_str("0.01"),
-                price=Price.from_str(f"{limit_px:.2f}"),
+                quantity=qty,
+                price=Price.from_str(format_price(limit_px, px_tick)),
                 time_in_force=TimeInForce.GTC,
                 init_id=UUID4(),
                 ts_init=clock_a.timestamp_ns(),
@@ -723,6 +736,8 @@ async def run_real_retcodes(cfg: HomologationConfig, report: HomologationReport)
         await data_client._connect()
         await exec_client._connect()
         bid, _ask = _get_prices(cfg.host, cfg.port, cfg.symbol)
+        qty = homolog_order_qty(cfg)
+        px_tick = homolog_price_tick(cfg)
 
         bad_vol = MarketOrder(
             trader_id=msgbus.trader_id,
@@ -730,7 +745,7 @@ async def run_real_retcodes(cfg: HomologationConfig, report: HomologationReport)
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E09-VOL"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.001"),
+            quantity=Quantity.from_str(homolog_invalid_volume_str(cfg)),
             time_in_force=TimeInForce.IOC,
             init_id=UUID4(),
             ts_init=clock.timestamp_ns(),
@@ -743,15 +758,15 @@ async def run_real_retcodes(cfg: HomologationConfig, report: HomologationReport)
             vol_ok = False
         sub_results.append(("E09a", vol_ok, f"invalid volume: {vol_err or vol_vid or 'rejected'}"))
 
-        invalid_stop_px = round(bid * 0.90, 2)
+        invalid_stop_px = passive_limit_price(bid, px_tick, factor=0.90)
         bad_stop = StopMarketOrder(
             trader_id=msgbus.trader_id,
             strategy_id=StrategyId("HOMOLOG-E09b"),
             instrument_id=inst_id,
             client_order_id=ClientOrderId("HOM-E09-STP"),
             order_side=OrderSide.BUY,
-            quantity=Quantity.from_str("0.01"),
-            trigger_price=Price.from_str(f"{invalid_stop_px:.2f}"),
+            quantity=qty,
+            trigger_price=Price.from_str(format_price(invalid_stop_px, px_tick)),
             trigger_type=TriggerType.DEFAULT,
             time_in_force=TimeInForce.GTC,
             init_id=UUID4(),
