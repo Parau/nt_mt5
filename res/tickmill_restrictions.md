@@ -211,6 +211,8 @@ MarketBookAdd(BTCUSD) => FALSE  err=4901  ticks_bookdepth=0
 | [`docs/data_capability_matrix.md`](../docs/data_capability_matrix.md) | Data capabilities |
 | [`docs/execution_capability_matrix.md`](../docs/execution_capability_matrix.md) | Exec + hedging |
 | [`res/proximos testes adaptador.md`](proximos%20testes%20adaptador.md) | Homologation tracker |
+| [`res/xp_b3_restrictions.md`](xp_b3_restrictions.md) | B3 exchange reference |
+| [`res/amp_restrictions.md`](amp_restrictions.md) | US CME futures (AMP) |
 | [`MQL5/refactoring/scripts/probe/`](../MQL5/refactoring/scripts/probe/) | Ad-hoc broker probes (off_hours + live OrderCheck) |
 | [`homologation/tools/probe_tick_semantics_fast.py`](../homologation/tools/probe_tick_semantics_fast.py) | Python tick probe |
 

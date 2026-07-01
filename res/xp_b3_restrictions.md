@@ -410,6 +410,7 @@ Additional rules:
 |----------|-----------|
 | [`docs/venue_profile.md`](../docs/venue_profile.md) | `XP_B3_PROFILE` (planned; legacy calc_mode 6/7) |
 | [`res/tickmill_restrictions.md`](tickmill_restrictions.md) | OTC reference profile |
+| [`res/amp_restrictions.md`](amp_restrictions.md) | US CME futures (AMPGlobalUSA-Demo) |
 | [`res/pensando inclusao da XP/primeira analise.md`](pensando%20inclusao%20da%20XP/primeira%20analise.md) | Multi-broker roadmap |
 | [`docs/data_capability_matrix.md`](../docs/data_capability_matrix.md) | Update when XP profile is implemented |
 | [`docs/execution_capability_matrix.md`](../docs/execution_capability_matrix.md) | Exec homologation on nominal B3 symbols |

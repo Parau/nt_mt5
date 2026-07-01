@@ -53,4 +53,4 @@ Reports are written to `MQL5/Files/probe_*_<server>_<login>.txt` when `InpWriteF
 
 - Tickmill → `res/tickmill_restrictions.md` (Declared vs Observed)
 - XP → `res/xp_b3_restrictions.md`
-- AMP → `res/amp_restrictions.md` (when created)
+- AMP → [`res/amp_restrictions.md`](../../../res/amp_restrictions.md)
