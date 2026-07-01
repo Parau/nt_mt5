@@ -34,15 +34,23 @@ Reports are written to `MQL5/Files/probe_*_<server>_<login>.txt` when `InpWriteF
 - Run `*_market_live` during B3 session for meaningful ticks and `OrderCheck`.
 - Update contract names on rollover (e.g. `WDON26` → next month).
 
+### AMP Global USA (AMPGlobalUSA-Demo)
+
+- **EPU26, MESU26, ENQU26, MNQU26** — CME-style futures; server time in probe output.
+- Run `*_market_live` during CME trade session (RTH or extended per symbol).
+- Update contract suffix on rollover (e.g. `U26` → next expiry).
+- Confirm exact symbol names in Market Watch before probing.
+
 ## Layout
 
 | Path | Role |
 |------|------|
 | `ProbeBroker.mqh` | Shared probe logic |
 | `probe_{broker}_market_*.mq5` | Multi-symbol runners |
-| `tickmill/`, `xp/` | Thin per-instrument wrappers |
+| `tickmill/`, `xp/`, `amp/` | Thin per-instrument wrappers |
 
 ## Document results
 
 - Tickmill → `res/tickmill_restrictions.md` (Declared vs Observed)
-- XP → `res/xp_b3_restrictions.md` (when created)
+- XP → `res/xp_b3_restrictions.md`
+- AMP → `res/amp_restrictions.md` (when created)
