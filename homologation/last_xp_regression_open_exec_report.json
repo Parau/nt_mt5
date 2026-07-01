@@ -1,0 +1,176 @@
+{
+  "started_at": "2026-07-01T16:37:51.020556+00:00",
+  "summary": {
+    "total": 13,
+    "passed": 12,
+    "failed": 0,
+    "skipped": 1,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=56822578 server=XPMT5-DEMO PETR4 bid=37.8 ask=37.81",
+      "metadata": {
+        "login": 56822578,
+        "server": "XPMT5-DEMO",
+        "bid": 37.8,
+        "ask": 37.81
+      }
+    },
+    {
+      "case_id": "TC-HOM-D01",
+      "name": "Quote ticks via TradingNode",
+      "status": "PASS",
+      "detail": "Received 3 ticks (last bid=37.8 ask=37.81)",
+      "metadata": {
+        "ticks": 3
+      }
+    },
+    {
+      "case_id": "TC-HOM-E01",
+      "name": "Market round-trip (BUY \u2192 SELL)",
+      "status": "PASS",
+      "detail": "BUY 100.0@37.80 \u2192 SELL @37.78",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "PASS",
+      "detail": "75 ticks in 60s (max inter-tick gap 9.8s, transport=ws_feed)",
+      "metadata": {
+        "ticks": 75,
+        "max_gap_secs": 9.761693199994625,
+        "duration_secs": 60.0,
+        "transport": "ws_feed",
+        "feed_uri": "ws://0.0.0.0:8766/mt5-feed"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D07",
+      "name": "Multi-symbol WS quote stream",
+      "status": "SKIP",
+      "detail": "No live quote for symbol(s): WDON26 (session closed?)",
+      "metadata": {
+        "symbols": [
+          "PETR4",
+          "WDON26",
+          "DI1F27",
+          "WINQ26"
+        ],
+        "inactive": [
+          "WDON26"
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-D06",
+      "name": "WS feed stop/start + cursor dedup",
+      "status": "PASS",
+      "detail": "baseline=6 after_gateway=2 post=17 unique_ts=24 dup=0",
+      "metadata": {
+        "baseline_ticks": 6,
+        "post_phase_ticks": 17,
+        "unique_ts": 24,
+        "gateway_restart": true,
+        "service_restart": false
+      }
+    },
+    {
+      "case_id": "TC-HOM-D03",
+      "name": "Live bar subscribe M1",
+      "status": "PASS",
+      "detail": "Received 1 M1 bar(s) (transport=ws_feed)",
+      "metadata": {
+        "bars": 1
+      }
+    },
+    {
+      "case_id": "TC-HOM-D05",
+      "name": "Unsubscribe on stop (quotes/bars)",
+      "status": "PASS",
+      "detail": "quotes unsubscribed on stop (3 ticks); bars=OK",
+      "metadata": {
+        "ticks": 3,
+        "bar_stream_ready": true
+      }
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
+      "status": "PASS",
+      "detail": "Received 50 QuoteTick(s) sample bid=38.23 ask=38.25",
+      "metadata": {
+        "ticks": 50,
+        "bid": 38.23,
+        "ask": 38.25
+      }
+    },
+    {
+      "case_id": "TC-HOM-E05",
+      "name": "Reconcile orders/positions on reconnect",
+      "status": "PASS",
+      "detail": "mass_status positions=0 bridge.positions_get(PETR4)=0",
+      "metadata": {
+        "bridge_positions": 0,
+        "report_positions": 0,
+        "order_reports": 0,
+        "fill_reports": 0
+      }
+    },
+    {
+      "case_id": "TC-HOM-E02",
+      "name": "Stop / stop-limit pending orders",
+      "status": "PASS",
+      "detail": "TC-HOM-E02a=OK; TC-HOM-E02b=OK",
+      "metadata": {
+        "sub_results": [
+          [
+            "TC-HOM-E02a",
+            true,
+            "BUY STOP_MARKET venue=2468012075"
+          ],
+          [
+            "TC-HOM-E02b",
+            true,
+            "SELL STOP_MARKET venue=2468012183"
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-E05b",
+      "name": "Fill reports after market fill (history_deals_get)",
+      "status": "PASS",
+      "detail": "fill_reports=1 after poll=0s; venue_order_id=2468012520; sample trade_id=1797072912 side=1 qty=100.00 px=37.80",
+      "metadata": {
+        "fill_reports": 1,
+        "poll_secs": 0.0,
+        "lookback_mins": 1440
+      }
+    },
+    {
+      "case_id": "TC-HOM-E81",
+      "name": "Open-on-start reconcile (positions + pending orders)",
+      "status": "PASS",
+      "detail": "E81a=OK: position_reports=1 bridge_positions=1; E81b=OK: pending_reports=3 bridge_pending=1 overlap=1",
+      "metadata": {
+        "sub_results": [
+          [
+            "E81a",
+            true,
+            "position_reports=1 bridge_positions=1"
+          ],
+          [
+            "E81b",
+            true,
+            "pending_reports=3 bridge_pending=1 overlap=1"
+          ]
+        ]
+      }
+    }
+  ]
+}

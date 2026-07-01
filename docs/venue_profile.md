@@ -136,7 +136,7 @@ Covers AMP Global / CME futures on AMPGlobalUSA-Demo (probe 2026-07-01):
 
 | `trade_calc_mode` | Instrument type | quote_ticks | trade_ticks | bars |
 |-------------------|-----------------|-------------|-------------|------|
-| 33 — EXCH_FUTURES | `FuturesContract` | CERTIFIED | CERTIFIED | ASSUMED |
+| 33 — EXCH_FUTURES | `FuturesContract` | CERTIFIED | CERTIFIED | CERTIFIED |
 
 - **Netting account** (`ACCOUNT_MARGIN_MODE=0`) — execution client omits `position_ticket` on SELL unless hedging.
 - No continuous `$`/nominal split; same symbol for data and execution (MESU26, EPU26, ENQU26, MNQU26).

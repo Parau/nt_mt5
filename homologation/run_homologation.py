@@ -55,7 +55,7 @@ if _ROOT not in sys.path:
 from homologation.config import HomologationConfig
 from homologation.report import HomologationReport
 from homologation.scenarios.preflight import run_preflight
-from homologation.scenarios.tick_stream import run_tick_stream
+from homologation.scenarios.tick_stream import run_tick_stream_for_suite
 from homologation.scenarios.trading_node_suite import run_trading_node_suite
 from homologation.scenarios.stop_orders import run_stop_orders
 from homologation.scenarios.data_tester_suite import run_bar_subscribe, run_unsubscribe_on_stop
@@ -106,7 +106,7 @@ async def main() -> int:
         f"ws://{cfg.feed_host}:{cfg.feed_port}{cfg.feed_path}"
     )
     if cfg.feed_enabled and not cfg.skip_stream:
-        print("  Note    : start NT5TickFeedService in MT5 before D02")
+        print("  Note    : run run_feed_smoke.py first (D02 gate); suites skip D02 unless HOMOLOG_RUN_D02_IN_SUITE=1")
     print("=" * 64)
 
     reset_mt5_client_cache()
@@ -118,7 +118,7 @@ async def main() -> int:
 
     await run_trading_node_suite(cfg, report)
     reset_mt5_client_cache()
-    await run_tick_stream(cfg, report)
+    await run_tick_stream_for_suite(cfg, report)
     reset_mt5_client_cache()
     await run_feed_service_restart_dedup(cfg, report)
     reset_mt5_client_cache()

@@ -22,10 +22,10 @@ Usage (Windows CMD)
     set MT5_PORT=18813
     set MT5_VENUE_PROFILE=xp_b3
     set MT5_ACCOUNT_NUMBER=56822578
-    set MT5_SYMBOL=WDON26
+    set MT5_SYMBOL=WDOQ26
     set MT5_FEED_ENABLED=1
     set MT5_ENABLE_LIVE_EXECUTION=1
-    set HOMOLOG_MULTI_SYMBOLS=WDON26,PETR4,DI1F27,WINQ26
+    set HOMOLOG_MULTI_SYMBOLS=WDOQ26,PETR4,DI1F27,WINQ26
     set HOMOLOG_STREAM_SECS=60
     set HOMOLOG_REPORT_JSON=homologation/last_xp_open_market_report.json
     E:\\miniconda\\envs\\trading\\python.exe homologation\\run_xp_open_market.py

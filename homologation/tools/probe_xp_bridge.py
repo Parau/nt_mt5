@@ -14,7 +14,7 @@ import rpyc
 def main() -> None:
     host = os.environ.get("MT5_HOST", "127.0.0.1")
     port = int(os.environ.get("MT5_PORT", "18813"))
-    symbol = os.environ.get("MT5_SYMBOL", "WDON26")
+    symbol = os.environ.get("MT5_SYMBOL", "WDOQ26")
 
     conn = rpyc.connect(host, port)
     try:

@@ -302,6 +302,7 @@ def test_amp_profile_futures_mode_33():
     assert cap.nautilus_instrument_type is FuturesContract
     assert cap.quote_ticks == CapabilityStatus.CERTIFIED
     assert cap.trade_ticks == CapabilityStatus.CERTIFIED
+    assert cap.bars == CapabilityStatus.CERTIFIED
 
 
 def test_amp_profile_legacy_futures_alias():

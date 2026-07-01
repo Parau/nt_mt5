@@ -8,7 +8,8 @@ Covers:
   TC-HOM-PF   Bridge pre-flight
   TC-HOM-D01  Quote ticks via TradingNode
   TC-HOM-E01  Market round-trip (requires MT5_ENABLE_LIVE_EXECUTION=1)
-  TC-HOM-D02  Sustained quote tick stream (requires MT5_FEED_ENABLED=1)
+  TC-HOM-D02  Sustained quote tick stream — isolated gate: run_feed_smoke.py
+              (set HOMOLOG_RUN_D02_IN_SUITE=1 to include here)
   TC-HOM-D03  Live M1 bar subscribe
   TC-HOM-D05  Unsubscribe on stop
   TC-HOM-D21  RequestQuoteTicks Nautilus-level (D21 limit fix)
@@ -51,7 +52,7 @@ from homologation.scenarios.mt5_edges import (
     run_reconcile_mass_status,
 )
 from homologation.scenarios.preflight import run_preflight
-from homologation.scenarios.tick_stream import run_tick_stream
+from homologation.scenarios.tick_stream import run_tick_stream_for_suite
 from homologation.scenarios.trading_node_suite import run_trading_node_suite
 from homologation.support.clients import reset_mt5_client_cache
 
@@ -90,7 +91,7 @@ async def main() -> int:
     await run_trading_node_suite(cfg, report)
 
     reset_mt5_client_cache()
-    await run_tick_stream(cfg, report)
+    await run_tick_stream_for_suite(cfg, report)
 
     reset_mt5_client_cache()
     await run_bar_subscribe(cfg, report)

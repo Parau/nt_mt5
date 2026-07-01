@@ -32,7 +32,7 @@ Reports are written to `MQL5/Files/probe_*_<server>_<login>.txt` when `InpWriteF
 ### XP / B3
 
 - Run `*_market_live` during B3 session for meaningful ticks and `OrderCheck`.
-- Update contract names on rollover (e.g. `WDON26` → next month).
+- Update contract names on rollover (e.g. `WDOQ26` → next month).
 
 ### AMP Global USA (AMPGlobalUSA-Demo)
 

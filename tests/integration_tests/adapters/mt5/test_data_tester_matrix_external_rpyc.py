@@ -65,7 +65,7 @@ from nautilus_mt5.venue_profile import AMP_US_PROFILE, TICKMILL_DEMO_PROFILE, XP
 _VENUE = Venue("METATRADER_5")
 _USTEC_ID = InstrumentId(Symbol("USTEC"), _VENUE)
 _EURUSD_ID = InstrumentId(Symbol("EURUSD"), _VENUE)
-_WDON26_ID = InstrumentId(Symbol("WDON26"), _VENUE)
+_WDOQ26_ID = InstrumentId(Symbol("WDOQ26"), _VENUE)
 _MESU26_ID = InstrumentId(Symbol("MESU26"), _VENUE)
 _WIN_DOLLAR_ID = InstrumentId(Symbol("WIN$"), _VENUE)
 
@@ -603,7 +603,7 @@ async def test_tc_d30_xp_subscribe_trade_ticks_reaches_client(
     clean_factory_cache, nautilus_components, nautilus_mt5_harness
 ):
     """
-    TC-D30 (XP_B3_PROFILE): _subscribe_trade_ticks() for WDON26 (EXCH_FUTURES)
+    TC-D30 (XP_B3_PROFILE): _subscribe_trade_ticks() for WDOQ26 (EXCH_FUTURES)
     passes the profile gate and calls subscribe_ticks with tick_type='AllLast'.
     """
     msgbus, cache, clock = nautilus_components
@@ -612,7 +612,7 @@ async def test_tc_d30_xp_subscribe_trade_ticks_reaches_client(
     data_client = MT5LiveDataClientFactory.create(
         loop=loop,
         name="MT5",
-        config=_data_config("WDON26", venue_profile=XP_B3_PROFILE),
+        config=_data_config("WDOQ26", venue_profile=XP_B3_PROFILE),
         msgbus=msgbus,
         cache=cache,
         clock=clock,
@@ -629,7 +629,7 @@ async def test_tc_d30_xp_subscribe_trade_ticks_reaches_client(
     data_client._client.subscribe_ticks = _spy_subscribe_ticks
 
     cmd = SubscribeTradeTicks(
-        instrument_id=_WDON26_ID,
+        instrument_id=_WDOQ26_ID,
         client_id=data_client.id,
         venue=None,
         command_id=UUID4(),
@@ -638,10 +638,10 @@ async def test_tc_d30_xp_subscribe_trade_ticks_reaches_client(
     await data_client._subscribe_trade_ticks(cmd)
 
     assert len(subscribe_calls) == 1, (
-        "TC-D30 (XP): subscribe_ticks must be called for WDON26 trade_ticks=TESTED"
+        "TC-D30 (XP): subscribe_ticks must be called for WDOQ26 trade_ticks=TESTED"
     )
     assert subscribe_calls[0]["tick_type"] == "AllLast"
-    assert subscribe_calls[0]["instrument_id"] == _WDON26_ID
+    assert subscribe_calls[0]["instrument_id"] == _WDOQ26_ID
 
 
 @pytest.mark.asyncio

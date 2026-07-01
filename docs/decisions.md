@@ -121,7 +121,7 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - Live quote ticks for `EXTERNAL_RPYC` deployments use an **MQL5 Service** (`CopyTicks` + cursor) pushing batches over **WebSocket** to an **InboundFeedGateway** in the Python adapter (`feed.enabled=True`).
 - RPyC **`symbol_info_tick` polling** is the legacy live path when `feed.enabled=False`; it returns snapshots (~1 Hz) and must not be used for homologation of tick-a-tick streaming (TC-HOM-D02).
 - Historical quote requests (`_request_quote_ticks`, `copy_ticks_*`) remain on-demand via RPyC regardless of feed mode.
-- Homologation **TC-HOM-D02** validates the WS feed path only; it requires `MT5_FEED_ENABLED=1` and a running `NT5TickFeedService`.
+- Homologation **TC-HOM-D02** validates the WS feed path only; it requires `MT5_FEED_ENABLED=1` and a running `NT5TickFeedService`. **Operational gate:** `homologation/run_feed_smoke.py` (run before open-market suites). Multi-scenario runners skip D02 unless `HOMOLOG_RUN_D02_IN_SUITE=1`.
 
 ### 18. Live bar transport (WS feed)
 - Live bar subscriptions (`SubscribeBars`) for supported timeframes (M1, M5, M15, M30, H1, H4, D1) use the same **MQL5 Service WebSocket** as quote ticks: adapter sends `subscribe_bars` / `unsubscribe_bars`; Service polls `CopyRates(shift=1)` and pushes closed bars as `op:bar`.
@@ -141,7 +141,7 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - One adapter (`METATRADER_5`); broker differences are expressed only through **`VenueProfile` + config** (`MT5_VENUE_PROFILE`, symbols, `account_id`). No `if broker == "XP"` branches in core adapter code.
 - Live terminals on build 5833 report **`trade_calc_mode` 32/33** for B3 stocks/futures (not legacy 6/7). `XP_B3_PROFILE` declares both v2 and legacy aliases; `normalize_trade_calc_mode()` resolves lookups.
 - Quote vs `TradeTick` routing for B3 uses **`tick_routing`** (tick shape, `TRADE_MODE`, `$` continuous suffix) — not broker name.
-- Continuous B3 series (`WIN$`, `WDO$`) are **data-only** (`TRADE_MODE=DISABLED`); execution targets nominal contracts (`WINQ26`, `WDON26`).
+- Continuous B3 series (`WIN$`, `WDO$`) are **data-only** (`TRADE_MODE=DISABLED`); execution targets nominal contracts (`WINQ26`, `WDOQ26`).
 - Homologation runners: `run_closed_market.py` (Tickmill) and `run_xp_closed_market.py` (XP). **MT5 login must be switched manually** between brokers — the RPyC bridge binds to whichever terminal session is open.
 
 ### 21. Historical quote ticks — MT5-native path (D21, 2026-06-28)

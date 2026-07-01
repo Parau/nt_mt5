@@ -95,7 +95,7 @@ class FakeMT5RPyCRoot:
 
     def exposed_symbols_get(self, *args, **kwargs) -> List[str]:
         self._record_call("symbols_get", args, kwargs)
-        return ["EURUSD", "USTEC", "BTCUSD", "WDON26", "WIN$", "WINQ26", "PETR4", "DI1F27", "MESU26", "EPU26", "ENQU26", "MNQU26"]
+        return ["EURUSD", "USTEC", "BTCUSD", "WDON26", "WDOQ26", "WIN$", "WINQ26", "PETR4", "DI1F27", "MESU26", "EPU26", "ENQU26", "MNQU26"]
 
     def exposed_symbol_info(self, symbol: str, *args, **kwargs) -> Optional[Dict[str, Any]]:
         self._record_call("symbol_info", (symbol, *args), kwargs)
@@ -173,6 +173,36 @@ class FakeMT5RPyCRoot:
                 "bid": 78000.00,
                 "ask": 78001.00,
                 "trade_calc_mode": 2,  # SYMBOL_CALC_MODE_CFD
+            }
+        if symbol == "WDOQ26":
+            return {
+                "name": "WDOQ26",
+                "path": r"BMF\WDOQ26",
+                "visible": True,
+                "select": True,
+                "digits": 1,
+                "point": 0.5,
+                "spread": 1,
+                "spread_float": True,
+                "volume_step": 1,
+                "volume_min": 1,
+                "volume_max": 50000,
+                "trade_tick_size": 0.5,
+                "trade_contract_size": 1.0,
+                "currency_base": "BRL",
+                "currency_profit": "BRL",
+                "currency_margin": "BRL",
+                "under_sec_type": "FUTURES",
+                "description": "DOLAR MINI",
+                "time": 0,
+                "bid": 5178.5,
+                "ask": 5179.0,
+                "last": 5178.5,
+                "trade_calc_mode": 33,
+                "trade_mode": 4,
+                "filling_mode": 3,
+                "start_time": 1700000000,
+                "expiration_time": 1790644500,
             }
         if symbol == "WDON26":
             return {
@@ -366,6 +396,16 @@ class FakeMT5RPyCRoot:
                 "flags": 1336,
                 "time_msc": 1700000000000,
             }
+        if symbol == "WDOQ26":
+            return {
+                "symbol": "WDOQ26",
+                "bid": 5178.5,
+                "ask": 5179.0,
+                "last": 5178.5,
+                "volume": 2,
+                "flags": 1368,
+                "time_msc": 1700000000000,
+            }
         if symbol == "WDON26":
             return {
                 "symbol": "WDON26",
@@ -511,6 +551,18 @@ class FakeMT5RPyCRoot:
                     "last": 176290.0,
                     "volume": 10,
                     "flags": 1336,
+                }
+            ] * count
+        if symbol == "WDOQ26":
+            return [
+                {
+                    "time": 1700000000,
+                    "time_msc": 1700000000000,
+                    "bid": 5178.5,
+                    "ask": 5179.0,
+                    "last": 5178.5,
+                    "volume": 3,
+                    "flags": 1368,
                 }
             ] * count
         if symbol == "WDON26":

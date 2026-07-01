@@ -7,7 +7,7 @@ Usage (Windows CMD):
 
 XP/B3 (pregão aberto):
     set MT5_HOST=127.0.0.1 && set MT5_PORT=18813 && ^
-    set HOMOLOG_PROBE_SYMBOLS=WINQ26,WDON26,PETR4,DI1F27 && ^
+    set HOMOLOG_PROBE_SYMBOLS=WINQ26,WDOQ26,PETR4,DI1F27 && ^
     E:\\miniconda\\envs\\trading\\python.exe homologation\\tools\\probe_tick_semantics.py
 """
 from __future__ import annotations
@@ -183,7 +183,7 @@ def _probe_symbols_from_env(port: int) -> tuple[str, ...] | None:
     if raw:
         return tuple(s.strip() for s in raw.split(",") if s.strip())
     if port == 18813:
-        return ("WINQ26", "WDON26", "PETR4", "DI1F27")
+        return ("WINQ26", "WDOQ26", "PETR4", "DI1F27")
     return None
 
 

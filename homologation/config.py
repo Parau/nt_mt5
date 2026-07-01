@@ -21,9 +21,9 @@ def _profile_defaults(profile_name: str) -> dict[str, str]:
     if key in ("xp", "xp_b3", "xp_b3_profile", "b3", "xpmt5"):
         return {
             "broker": "XPMT5-DEMO",
-            "symbol": "WDON26",
+            "symbol": "WDOQ26",
             "account": "56822578",
-            "multi_symbols": "WDON26,PETR4,DI1F27,WINQ26",
+            "multi_symbols": "WDOQ26,PETR4,DI1F27,WINQ26",
         }
     return {
         "broker": "Tickmill-Demo",

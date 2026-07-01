@@ -1,6 +1,6 @@
 [project]
 name = "nautilus-mt5"
-version = "0.1.2"
+version = "0.1.3"
 description = "Nautilus Trader MetaTrader5 Adapter"
 readme = "README.md"
 authors = [{name = "Quants Pub", email = "quantspub@gmail.com"}]

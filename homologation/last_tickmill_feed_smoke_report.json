@@ -1,0 +1,37 @@
+{
+  "started_at": "2026-07-01T15:23:27.705500+00:00",
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=60112.5 ask=60122.5",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 60112.5,
+        "ask": 60122.5
+      }
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "PASS",
+      "detail": "27480 ticks in 60s (max inter-tick gap 0.7s, transport=ws_feed)",
+      "metadata": {
+        "ticks": 27480,
+        "max_gap_secs": 0.6979681000084383,
+        "duration_secs": 60.0,
+        "transport": "ws_feed",
+        "feed_uri": "ws://0.0.0.0:8765/mt5-feed"
+      }
+    }
+  ]
+}

@@ -40,7 +40,7 @@ Aligned with `docs/data_capability_matrix.md`.
 | **Live quotes** | WS feed (MQL5 Service); legacy `symbol_info_tick` poll | WS → `QuoteTick` when `feed.enabled=True` | TC-D20, `test_feed_*` | **Tickmill:** TC-HOM-D02. **XP/B3:** TC-HOM-D02 (`run_xp_open_market_feed.py`) | **Partial** |
 | **Historical quotes** | `copy_ticks_from`, `copy_ticks_range` | `_request_quote_ticks` → `copy_ticks_from` | TC-D21 matrix | **Tickmill:** TC-HOM-D21. **XP/B3:** TC-HOM-D21 closed + **open** (`run_xp_backlog_homologation.py`, 2026-06-30) | **Partial** |
 | **Trade ticks** | `copy_ticks_*`; RPyC `subscribe_ticks` AllLast | **Tickmill:** Unsupported. **XP/B3:** subscribe + request | TC-D30/D31 | **XP:** D30/D31 WINQ26, PETR4, DI1F27 (`run_xp_trade_ticks_homologation.py`, `run_xp_symbol_quote_trade_confirm.py`, 2026-06-30); `VenueProfile` **TESTED** | **Partial** (Tickmill unsupported) |
-| **Bars** | `copy_rates_*`; WS `subscribe_bars` | Hist + live WS bars | TC-D40/D41 | **Tickmill:** D03. **XP/B3:** D03 (`run_xp_open_market_feed.py`) | **Partial** |
+| **Bars** | `copy_rates_*`; WS `subscribe_bars` | Hist + live WS bars | TC-D40/D41 | **Tickmill:** D03. **XP/B3:** D03 (`run_xp_open_market_feed.py`). **AMP:** D03+D04 (`run_amp_open_market_feed.py`, `run_amp_closed_market.py`, 2026-07-01) | **Partial** |
 | **Order book** | `market_book_get` (wrapper) | Safe reject | TC-D10 | N/A | **Unsupported** |
 | **Instrument status** | N/A | N/A | N/A | N/A | **Unsupported** |
 | **Lifecycle / unsubscribe** | `shutdown`; WS unsubscribe | D70 wiring + homolog D05 | TC-D70 | **Tickmill:** D05. **XP/B3:** D05+D06 feed | **Partial** |

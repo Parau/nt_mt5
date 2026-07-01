@@ -206,7 +206,7 @@ def main() -> int:
     root = conn.root
 
     if port == 18813:
-        symbols = os.environ.get("HOMOLOG_PROBE_SYMBOLS", "WINQ26,WDON26,PETR4,DI1F27").split(",")
+        symbols = os.environ.get("HOMOLOG_PROBE_SYMBOLS", "WINQ26,WDOQ26,PETR4,DI1F27").split(",")
         symbols = [s.strip() for s in symbols if s.strip()]
         print(f"XP/B3 aggressor probe — {symbols}")
     else:

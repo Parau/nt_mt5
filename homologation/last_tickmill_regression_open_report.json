@@ -1,0 +1,84 @@
+{
+  "started_at": "2026-07-01T15:26:24.287617+00:00",
+  "summary": {
+    "total": 8,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 3,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=25339175 server=Tickmill-Demo BTCUSD bid=60317.5 ask=60327.5",
+      "metadata": {
+        "login": 25339175,
+        "server": "Tickmill-Demo",
+        "bid": 60317.5,
+        "ask": 60327.5
+      }
+    },
+    {
+      "case_id": "TC-HOM-D01",
+      "name": "Quote ticks via TradingNode",
+      "status": "PASS",
+      "detail": "Received 3 ticks (last bid=60319.5 ask=60329.5)",
+      "metadata": {
+        "ticks": 3
+      }
+    },
+    {
+      "case_id": "TC-HOM-E01",
+      "name": "Market round-trip (BUY \u2192 SELL)",
+      "status": "SKIP",
+      "detail": "Set MT5_ENABLE_LIVE_EXECUTION=1 to run execution scenarios",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "SKIP",
+      "detail": "Isolated operational gate \u2014 run homologation/run_feed_smoke.py before open-market suites (or set HOMOLOG_RUN_D02_IN_SUITE=1 to include D02 here)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D03",
+      "name": "Live bar subscribe M1",
+      "status": "PASS",
+      "detail": "Received 1 M1 bar(s) (transport=ws_feed)",
+      "metadata": {
+        "bars": 1
+      }
+    },
+    {
+      "case_id": "TC-HOM-D05",
+      "name": "Unsubscribe on stop (quotes/bars)",
+      "status": "PASS",
+      "detail": "quotes unsubscribed on stop (3 ticks); bars=OK",
+      "metadata": {
+        "ticks": 3,
+        "bar_stream_ready": true
+      }
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
+      "status": "PASS",
+      "detail": "Received 50 QuoteTick(s) sample bid=58748.5 ask=58758.5",
+      "metadata": {
+        "ticks": 50,
+        "bid": 58748.5,
+        "ask": 58758.5
+      }
+    },
+    {
+      "case_id": "TC-HOM-E05",
+      "name": "Reconcile orders/positions on reconnect",
+      "status": "SKIP",
+      "detail": "Set MT5_ENABLE_LIVE_EXECUTION=1 to run execution scenarios",
+      "metadata": {}
+    }
+  ]
+}

@@ -830,7 +830,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         type_time = MAP_TIME_IN_FORCE.get(order.time_in_force, ORDER_TIME_GTC)
         if isinstance(instrument.info, dict):
             gtc_mode = int(instrument.info.get("order_gtc_mode", 0) or 0)
-            # B3 futures (e.g. WDON26): order_gtc_mode=2 → day orders only.
+            # B3 futures (e.g. WDOQ26): order_gtc_mode=2 → day orders only.
             if gtc_mode == 2 and type_time == ORDER_TIME_GTC:
                 type_time = ORDER_TIME_DAY
         mt5_order.type_time = type_time

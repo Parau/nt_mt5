@@ -49,7 +49,7 @@ def _trade_symbols(cfg: HomologationConfig) -> tuple[str, ...]:
     if raw:
         return tuple(s.strip() for s in raw.split(",") if s.strip())
     # Nominal tradable contracts only — continuous WIN$/WDO$ are data-only (no bid/ask).
-    for sym in ("WINQ26", "WDON26"):
+    for sym in ("WINQ26", "WDOQ26"):
         if sym in cfg.multi_symbols:
             return (sym,)
     return (cfg.symbol,)

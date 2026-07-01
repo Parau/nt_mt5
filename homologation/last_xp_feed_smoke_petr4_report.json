@@ -1,0 +1,37 @@
+{
+  "started_at": "2026-07-01T16:20:32.897338+00:00",
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=56822578 server=XPMT5-DEMO PETR4 bid=37.79 ask=37.81",
+      "metadata": {
+        "login": 56822578,
+        "server": "XPMT5-DEMO",
+        "bid": 37.79,
+        "ask": 37.81
+      }
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "PASS",
+      "detail": "32 ticks in 60s (max inter-tick gap 16.3s, transport=ws_feed)",
+      "metadata": {
+        "ticks": 32,
+        "max_gap_secs": 16.330754300011904,
+        "duration_secs": 60.0,
+        "transport": "ws_feed",
+        "feed_uri": "ws://0.0.0.0:8766/mt5-feed"
+      }
+    }
+  ]
+}

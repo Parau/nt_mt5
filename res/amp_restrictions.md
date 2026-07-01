@@ -81,7 +81,8 @@ Map to US/Eastern or Chicago exchange calendar externally for homologation sched
 | Trade ticks (`last` / volume) | Yes | Yes | Yes | Yes | **CERTIFIED** — homolog `run_amp_trade_ticks_homologation.py` |
 | Depth of market | Empty book | Empty | Empty | Empty | **Unsupported** (`bookdepth=32`, 0 levels) |
 | Execution | Yes (in session) | Yes | Yes | Yes | **CERTIFIED** — `run_amp_exec_homologation.py` 18/18 (2026-07-01, netting) |
-| Historical bars / ticks | Assumed | Assumed | Assumed | Assumed | RPyC path homologated open-market |
+| Historical bars (M1/M5) | Yes | Yes | Yes | Yes | **CERTIFIED** — `run_amp_closed_market.py` D04a/b (2026-07-01) |
+| Live bars M1 (WS) | Yes (in session) | Yes | Yes | Yes | **CERTIFIED** — `run_amp_open_market_feed.py` D03 (2026-07-01) |
 | Filling (market) | FOK+IOC | FOK+IOC | FOK+IOC | FOK+IOC | `SYMBOL_FILLING_MODE=3`; FOK/IOC/RETURN **OrderCheck OK** |
 
 All four symbols share the **same** account-level filling behaviour at `OrderCheck` time in this probe.
@@ -219,21 +220,21 @@ Same session table and DOM verdict.
 
 3. **Market filling RETURN** — passes `OrderCheck` on all symbols despite bitmask=3 (FOK+IOC only). Confirm with **`OrderSend`** before adapter claims RETURN for market path.
 
-4. **`AMP_US_PROFILE` in code** — `nautilus_mt5.venue_profile.AMP_US_PROFILE`; homolog runners `homologation/run_amp_*.py`.
+4. **`AMP_US_PROFILE` in code** — `nautilus_mt5.venue_profile.AMP_US_PROFILE`; homolog runners `homologation/run_amp_*.py` (data, exec, closed-market bars).
 
 5. **Contract rollover** — symbols use **Sep 2026** suffix (`U26`); update probes and compose defaults on roll.
 
-6. **`SYMBOL_ORDER_GTC_MODE=0`** on all probed futures — GTC/limit behaviour may differ from XP B3 (`order_gtc_mode=2`); validate limit TIF mapping on first exec homolog.
+6. **`SYMBOL_ORDER_GTC_MODE=0`** on all probed futures — GTC/limit behaviour validated on exec homolog (2026-07-01).
 
 7. **Integer contract volume** — `volume_min=1`, `step=1` (whole contracts); adapter quantity mapping must respect futures lot semantics.
 
 ---
 
-## Design decisions suggested for `AMP_US_PROFILE` (planned)
+## `AMP_US_PROFILE` (implemented)
 
-| Symbol class | `calc_mode` | Instrument type (planned) | quote_ticks | trade_ticks | exec |
-|--------------|-------------|---------------------------|-------------|-------------|------|
-| CME nominal (`EPU26`, `MESU26`, `ENQU26`, `MNQU26`) | 33 | `FuturesContract` | **OBSERVED** | **OBSERVED** | **Yes** (in session) |
+| Symbol class | `calc_mode` | Instrument type | quote_ticks | trade_ticks | bars |
+|--------------|-------------|-----------------|-------------|-------------|------|
+| CME nominal (`EPU26`, `MESU26`, `ENQU26`, `MNQU26`) | 33 | `FuturesContract` | **CERTIFIED** | **CERTIFIED** | **CERTIFIED** |
 
 ### Adapter routing rules (initial)
 
@@ -255,10 +256,10 @@ Additional rules:
 
 | Priority | Symbol | Why | Status (2026-07-01) |
 |----------|--------|-----|---------------------|
-| 1 | **MESU26** | Micro S&P — lower tick value; same filling/tick shape as EPU26 | **PASS** data + exec |
+| 1 | **MESU26** | Micro S&P — lower tick value; same filling/tick shape as EPU26 | **PASS** data + exec + bars |
 | 2 | **MNQU26** | Micro NQ — pairs with MES for index diversity | **PASS** D02/D21/D30/D31 |
 | 3 | **ENQU26** | Full-size NQ; default Docker WS symbol | **PASS** D02/D21/D30/D31 |
-| 4 | **EPU26** | Full-size ES; highest tick value | **PASS** multi-symbol D07 |
+| 4 | **EPU26** | Full-size ES; highest tick value | **PASS** multi-symbol D07 + hist bars |
 
 Run probes and homolog **only during CME trade session** (`InpSkipClosed=true` on live scripts).
 
@@ -285,10 +286,10 @@ Run probes and homolog **only during CME trade session** (`InpSkipClosed=true` o
 
 | Document | Relevance |
 |----------|-----------|
-| [`docs/venue_profile.md`](../docs/venue_profile.md) | `AMP_US_PROFILE` (planned) |
+| [`docs/venue_profile.md`](../docs/venue_profile.md) | `AMP_US_PROFILE` |
 | [`res/tickmill_restrictions.md`](tickmill_restrictions.md) | OTC / IOC-only reference |
 | [`res/xp_b3_restrictions.md`](xp_b3_restrictions.md) | Exchange / FOK+IOC reference |
-| [`docs/data_capability_matrix.md`](../docs/data_capability_matrix.md) | Update when AMP profile is implemented |
+| [`docs/data_capability_matrix.md`](../docs/data_capability_matrix.md) | AMP live coverage (bars, ticks, quotes) |
 | [`docs/execution_capability_matrix.md`](../docs/execution_capability_matrix.md) | Exec homologation on AMP symbols |
 | [`MQL5/refactoring/scripts/probe/`](../MQL5/refactoring/scripts/probe/) | Ad-hoc broker probes |
 | [`MT5-Docker`](../MT5-Docker/docker-compose.yml) | `mt5-amp` service (VNC 5903, RPyC 18814, WS 8767) |

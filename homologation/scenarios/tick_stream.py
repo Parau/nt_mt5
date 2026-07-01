@@ -9,6 +9,7 @@ Legacy RPyC ``symbol_info_tick`` polling is not validated by this scenario.
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -21,6 +22,26 @@ from homologation.config import HomologationConfig
 from homologation.node_factory import build_trading_node, instrument_id
 from homologation.report import HomologationReport, ScenarioStatus
 from homologation.scenarios.node_runner import NodeStopGate, run_node_until
+
+_D02_ISOLATED_GATE_MSG = (
+    "Isolated operational gate — run homologation/run_feed_smoke.py before open-market suites "
+    "(or set HOMOLOG_RUN_D02_IN_SUITE=1 to include D02 here)"
+)
+
+# TradingNode startup: exec reconcile (~30s) + portfolio/post-stop (~20s) + margin.
+_STARTUP_SHUTDOWN_BUDGET_SECS = 75.0
+
+
+def d02_runs_in_suite() -> bool:
+    """True when D02 should run inside a multi-scenario suite (not the isolated gate)."""
+    return os.environ.get("HOMOLOG_RUN_D02_IN_SUITE", "").strip() == "1"
+
+
+def stream_node_timeout_secs(cfg: HomologationConfig) -> float:
+    """Wall-clock budget for one D02 TradingNode session (startup + stream + stop)."""
+    buffer = float(os.environ.get("HOMOLOG_STREAM_NODE_BUFFER_SECS", "30"))
+    computed = cfg.stream_duration_secs + _STARTUP_SHUTDOWN_BUDGET_SECS + buffer
+    return max(computed, cfg.scenario_timeout_secs)
 
 
 class _StreamConfig(StrategyConfig, frozen=True):
@@ -161,7 +182,7 @@ async def run_tick_stream(cfg: HomologationConfig, report: HomologationReport) -
         node.trader.add_strategy(strategy)
         return node
 
-    node_timeout = cfg.stream_duration_secs + 60.0
+    node_timeout = stream_node_timeout_secs(cfg)
 
     try:
         await run_node_until(_build_node, done, node_timeout, stop_gate_holder)
@@ -221,3 +242,19 @@ async def run_tick_stream(cfg: HomologationConfig, report: HomologationReport) -
         transport="ws_feed",
         feed_uri=feed_uri,
     )
+
+
+async def run_tick_stream_for_suite(cfg: HomologationConfig, report: HomologationReport) -> None:
+    """Run D02 in a suite, or SKIP when the isolated feed gate is preferred."""
+    case_id = "TC-HOM-D02"
+    name = "Sustained quote tick stream"
+
+    if cfg.skip_stream:
+        await run_tick_stream(cfg, report)
+        return
+
+    if not d02_runs_in_suite():
+        report.add(case_id, name, ScenarioStatus.SKIP, _D02_ISOLATED_GATE_MSG)
+        return
+
+    await run_tick_stream(cfg, report)

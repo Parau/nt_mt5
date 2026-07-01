@@ -295,7 +295,7 @@ _B3_FUTURES_CAP = CalcModeCapability(
     bars=CapabilityStatus.ASSUMED,
     notes=(
         "B3 exchange futures. Continuous series (WIN$, WDO$) are trade-tick-only (no bid/ask); "
-        "nominals (WINQ26, WDON26, DI1F27) carry quote + trade. Routing uses tick shape + trade_mode. "
+        "nominals (WINQ26, WDOQ26, DI1F27) carry quote + trade. Routing uses tick shape + trade_mode. "
         "Homolog 2026-06-30: WINQ26/PETR4/DI1F27 D21/D30/D31."
     ),
 )
@@ -316,17 +316,17 @@ Pre-built VenueProfile for XP Investimentos / B3 (XPMT5-DEMO probe 2026-06-26).
 
 - EXCH_STOCKS (32) → Equity — quote + trade ticks **TESTED** (PETR4 homolog 2026-06-30)
 - EXCH_FUTURES (33) → FuturesContract — quote + trade ticks **TESTED** on nominals
-  (WINQ26, WDON26, DI1F27); continuous WIN$/WDO$ trade-only via tick_routing (see xp_b3_restrictions.md)
+  (WINQ26, WDOQ26, DI1F27); continuous WIN$/WDO$ trade-only via tick_routing (see xp_b3_restrictions.md)
 """
 
 _CME_FUTURES_CAP = CalcModeCapability(
     nautilus_instrument_type=FuturesContract,
     quote_ticks=CapabilityStatus.CERTIFIED,
     trade_ticks=CapabilityStatus.CERTIFIED,
-    bars=CapabilityStatus.ASSUMED,
+    bars=CapabilityStatus.CERTIFIED,
     notes=(
         "CME US futures (EPU26, MESU26, ENQU26, MNQU26). Netting account. "
-        "Homolog 2026-07-01: D02/D21/D30/D31 + exec netting (run_amp_* on port 18814)."
+        "Homolog 2026-07-01: D03/D04/D21/D30/D31 + exec netting (run_amp_* on port 18814)."
     ),
 )
 
@@ -341,7 +341,7 @@ AMP_US_PROFILE = VenueProfile(
 """
 Pre-built VenueProfile for AMP Global / CME futures (AMPGlobalUSA-Demo probe 2026-07-01).
 
-- EXCH_FUTURES (33) → FuturesContract — quote + trade ticks **CERTIFIED** (homolog 2026-07-01)
+- EXCH_FUTURES (33) → FuturesContract — quote + trade ticks + bars **CERTIFIED** (homolog 2026-07-01)
 - Netting account; no continuous $/nominal split (same symbol for data and execution)
 """
 
