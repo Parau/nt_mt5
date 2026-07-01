@@ -11,6 +11,13 @@ from nautilus_mt5.venue_profile import VenueProfile, resolve_venue_profile
 
 def _profile_defaults(profile_name: str) -> dict[str, str]:
     key = (profile_name or "tickmill").strip().lower().replace("-", "_")
+    if key in ("amp", "amp_us", "amp_us_profile", "amp_global", "ampglobalusa"):
+        return {
+            "broker": "AMPGlobalUSA-Demo",
+            "symbol": "MESU26",
+            "account": "1588658",
+            "multi_symbols": "EPU26,MESU26,ENQU26,MNQU26",
+        }
     if key in ("xp", "xp_b3", "xp_b3_profile", "b3", "xpmt5"):
         return {
             "broker": "XPMT5-DEMO",
@@ -81,6 +88,8 @@ class HomologationConfig:
             feed_port = int(feed_port_raw)
         elif port == 18813:
             feed_port = 8766  # MT5-Docker xp profile
+        elif port == 18814:
+            feed_port = 8767  # MT5-Docker amp profile
         else:
             feed_port = 8765  # MT5-Docker tickmill / default
         feed_path = os.environ.get("MT5_FEED_PATH", "/mt5-feed")

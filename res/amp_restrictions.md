@@ -77,11 +77,11 @@ Map to US/Eastern or Chicago exchange calendar externally for homologation sched
 
 | Capability | EPU26 | MESU26 | ENQU26 | MNQU26 | Adapter status |
 |------------|-------|--------|--------|--------|----------------|
-| Quote ticks (bid/ask) | Yes (in session) | Yes | Yes | Yes | Ground truth only — **no `AMP_US_PROFILE` yet** |
-| Trade ticks (`last` / volume) | Yes | Yes | Yes | Yes | Same |
+| Quote ticks (bid/ask) | Yes (in session) | Yes | Yes | Yes | **CERTIFIED** — homolog `run_amp_open_market_feed.py` (2026-07-01) |
+| Trade ticks (`last` / volume) | Yes | Yes | Yes | Yes | **CERTIFIED** — homolog `run_amp_trade_ticks_homologation.py` |
 | Depth of market | Empty book | Empty | Empty | Empty | **Unsupported** (`bookdepth=32`, 0 levels) |
-| Execution | Yes (in session) | Yes | Yes | Yes | Not homologated |
-| Historical bars / ticks | Assumed | Assumed | Assumed | Assumed | RPyC path not AMP-validated |
+| Execution | Yes (in session) | Yes | Yes | Yes | **CERTIFIED** — `run_amp_exec_homologation.py` 18/18 (2026-07-01, netting) |
+| Historical bars / ticks | Assumed | Assumed | Assumed | Assumed | RPyC path homologated open-market |
 | Filling (market) | FOK+IOC | FOK+IOC | FOK+IOC | FOK+IOC | `SYMBOL_FILLING_MODE=3`; FOK/IOC/RETURN **OrderCheck OK** |
 
 All four symbols share the **same** account-level filling behaviour at `OrderCheck` time in this probe.
@@ -219,7 +219,7 @@ Same session table and DOM verdict.
 
 3. **Market filling RETURN** — passes `OrderCheck` on all symbols despite bitmask=3 (FOK+IOC only). Confirm with **`OrderSend`** before adapter claims RETURN for market path.
 
-4. **`AMP_US_PROFILE` not yet in code** — ground truth only; no `VenueProfile` or homolog suite wired for AMP.
+4. **`AMP_US_PROFILE` in code** — `nautilus_mt5.venue_profile.AMP_US_PROFILE`; homolog runners `homologation/run_amp_*.py`.
 
 5. **Contract rollover** — symbols use **Sep 2026** suffix (`U26`); update probes and compose defaults on roll.
 
@@ -253,12 +253,12 @@ Additional rules:
 
 ## Homologation priority (AMP)
 
-| Priority | Symbol | Why |
-|----------|--------|-----|
-| 1 | **MESU26** | Micro S&P — lower tick value; same filling/tick shape as EPU26 |
-| 2 | **MNQU26** | Micro NQ — pairs with MES for index diversity |
-| 3 | **ENQU26** | Full-size NQ; default Docker WS symbol |
-| 4 | **EPU26** | Full-size ES; highest tick value |
+| Priority | Symbol | Why | Status (2026-07-01) |
+|----------|--------|-----|---------------------|
+| 1 | **MESU26** | Micro S&P — lower tick value; same filling/tick shape as EPU26 | **PASS** data + exec |
+| 2 | **MNQU26** | Micro NQ — pairs with MES for index diversity | **PASS** D02/D21/D30/D31 |
+| 3 | **ENQU26** | Full-size NQ; default Docker WS symbol | **PASS** D02/D21/D30/D31 |
+| 4 | **EPU26** | Full-size ES; highest tick value | **PASS** multi-symbol D07 |
 
 Run probes and homolog **only during CME trade session** (`InpSkipClosed=true` on live scripts).
 

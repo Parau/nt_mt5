@@ -1,0 +1,189 @@
+{
+  "started_at": "2026-07-01T13:38:16.339689+00:00",
+  "summary": {
+    "total": 18,
+    "passed": 18,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=1588658 server=AMPGlobalUSA-Demo MESU26 bid=7511.25 ask=7511.75",
+      "metadata": {
+        "login": 1588658,
+        "server": "AMPGlobalUSA-Demo",
+        "bid": 7511.25,
+        "ask": 7511.75
+      }
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "PASS",
+      "detail": "7490 ticks in 30s (max inter-tick gap 0.3s, transport=ws_feed)",
+      "metadata": {
+        "ticks": 7490,
+        "max_gap_secs": 0.3192408000031719,
+        "duration_secs": 30.0,
+        "transport": "ws_feed",
+        "feed_uri": "ws://0.0.0.0:8767/mt5-feed"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
+      "status": "PASS",
+      "detail": "Received 50 QuoteTick(s) sample bid=7504.0 ask=7504.25",
+      "metadata": {
+        "ticks": 50,
+        "bid": 7504.0,
+        "ask": 7504.25
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30-MESU26",
+      "name": "Live TradeTick stream (SubscribeTradeTicks) (MESU26)",
+      "status": "PASS",
+      "detail": "Received 6847 trade tick(s)",
+      "metadata": {
+        "symbol": "MESU26"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30",
+      "name": "Live TradeTick stream (SubscribeTradeTicks)",
+      "status": "PASS",
+      "detail": "Live TradeTicks OK (symbols=MESU26)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D31",
+      "name": "Historical TradeTicks (RequestTradeTicks)",
+      "status": "PASS",
+      "detail": "TradeTicks OK for MESU26",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=1588658 server=AMPGlobalUSA-Demo MNQU26 bid=30142.0 ask=30142.75",
+      "metadata": {
+        "login": 1588658,
+        "server": "AMPGlobalUSA-Demo",
+        "bid": 30142.0,
+        "ask": 30142.75
+      }
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "PASS",
+      "detail": "14890 ticks in 30s (max inter-tick gap 0.5s, transport=ws_feed)",
+      "metadata": {
+        "ticks": 14890,
+        "max_gap_secs": 0.49892060000274796,
+        "duration_secs": 30.0,
+        "transport": "ws_feed",
+        "feed_uri": "ws://0.0.0.0:8767/mt5-feed"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
+      "status": "PASS",
+      "detail": "Received 50 QuoteTick(s) sample bid=30214.5 ask=30215.25",
+      "metadata": {
+        "ticks": 50,
+        "bid": 30214.5,
+        "ask": 30215.25
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30-MNQU26",
+      "name": "Live TradeTick stream (SubscribeTradeTicks) (MNQU26)",
+      "status": "PASS",
+      "detail": "Received 17500 trade tick(s)",
+      "metadata": {
+        "symbol": "MNQU26"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30",
+      "name": "Live TradeTick stream (SubscribeTradeTicks)",
+      "status": "PASS",
+      "detail": "Live TradeTicks OK (symbols=MNQU26)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D31",
+      "name": "Historical TradeTicks (RequestTradeTicks)",
+      "status": "PASS",
+      "detail": "TradeTicks OK for MNQU26",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=1588658 server=AMPGlobalUSA-Demo ENQU26 bid=30165.0 ask=30166.5",
+      "metadata": {
+        "login": 1588658,
+        "server": "AMPGlobalUSA-Demo",
+        "bid": 30165.0,
+        "ask": 30166.5
+      }
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "PASS",
+      "detail": "11842 ticks in 30s (max inter-tick gap 0.3s, transport=ws_feed)",
+      "metadata": {
+        "ticks": 11842,
+        "max_gap_secs": 0.30353429999377113,
+        "duration_secs": 30.0,
+        "transport": "ws_feed",
+        "feed_uri": "ws://0.0.0.0:8767/mt5-feed"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D21",
+      "name": "RequestQuoteTicks via DataClient._request_quote_ticks (Nautilus-level)",
+      "status": "PASS",
+      "detail": "Received 50 QuoteTick(s) sample bid=30164.0 ask=30165.5",
+      "metadata": {
+        "ticks": 50,
+        "bid": 30164.0,
+        "ask": 30165.5
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30-ENQU26",
+      "name": "Live TradeTick stream (SubscribeTradeTicks) (ENQU26)",
+      "status": "PASS",
+      "detail": "Received 11500 trade tick(s)",
+      "metadata": {
+        "symbol": "ENQU26"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30",
+      "name": "Live TradeTick stream (SubscribeTradeTicks)",
+      "status": "PASS",
+      "detail": "Live TradeTicks OK (symbols=ENQU26)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D31",
+      "name": "Historical TradeTicks (RequestTradeTicks)",
+      "status": "PASS",
+      "detail": "TradeTicks OK for ENQU26",
+      "metadata": {}
+    }
+  ]
+}

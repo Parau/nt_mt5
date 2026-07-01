@@ -1171,3 +1171,118 @@ async def test_lifecycle_submit_gtc_stop_limit_order(
     assert str(kwargs.get("venue_order_id", "")) == "2001", (
         f"Expected venue_order_id='2001', got {kwargs.get('venue_order_id')}"
     )
+
+
+# ---------------------------------------------------------------------------
+# TC-EL-25  Hedge-close position ticket gated on margin_mode
+# ---------------------------------------------------------------------------
+
+
+async def _submit_ustec_market_sell(
+    msgbus,
+    cache,
+    clock,
+    exec_client,
+    harness,
+    *,
+    client_order_id: str = "O-EL-25-SELL",
+) -> None:
+    order = MarketOrder(
+        trader_id=msgbus.trader_id,
+        strategy_id=StrategyId("S-EL-25"),
+        instrument_id=_USTEC_ID,
+        client_order_id=ClientOrderId(client_order_id),
+        order_side=OrderSide.SELL,
+        quantity=Quantity.from_str("0.1"),
+        time_in_force=TimeInForce.GTC,
+        init_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+    )
+    cache.add_order(order)
+    command = SubmitOrder(
+        trader_id=msgbus.trader_id,
+        strategy_id=order.strategy_id,
+        order=order,
+        position_id=None,
+        client_id=exec_client.id,
+        command_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+    )
+    harness.root.reset_calls()
+    await exec_client._submit_order(command)
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_hedge_close_sets_position_ticket_when_hedging(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness,
+):
+    """TC-EL-25a: retail hedging (margin_mode=2) attaches position ticket on SELL close."""
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+    nautilus_mt5_harness.root._margin_mode = 2
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop, name="MT5", config=_data_config("USTEC"),
+        msgbus=msgbus, cache=cache, clock=clock,
+    )
+    await data_client._connect()
+
+    exec_client = MT5LiveExecClientFactory.create(
+        loop=loop, name="MT5", config=_exec_config("USTEC"),
+        msgbus=msgbus, cache=cache, clock=clock,
+    )
+    await exec_client._connect()
+    assert exec_client._account_margin_mode == 2
+
+    await _submit_ustec_market_sell(msgbus, cache, clock, exec_client, nautilus_mt5_harness)
+
+    order_send_calls = [
+        c for c in nautilus_mt5_harness.root.calls if c.method == "order_send"
+    ]
+    assert len(order_send_calls) == 1
+    req = order_send_calls[0].args[0]
+    assert req.get("position") == 1001, (
+        f"Hedging SELL close must set position=1001, got {req.get('position')}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_lifecycle_hedge_close_omits_position_ticket_when_netting(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness,
+):
+    """TC-EL-25b: netting (margin_mode=0) must not attach position ticket on SELL."""
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+    nautilus_mt5_harness.root._margin_mode = 0
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop, name="MT5", config=_data_config("USTEC"),
+        msgbus=msgbus, cache=cache, clock=clock,
+    )
+    await data_client._connect()
+
+    exec_client = MT5LiveExecClientFactory.create(
+        loop=loop, name="MT5", config=_exec_config("USTEC"),
+        msgbus=msgbus, cache=cache, clock=clock,
+    )
+    await exec_client._connect()
+    assert exec_client._account_margin_mode == 0
+
+    await _submit_ustec_market_sell(
+        msgbus, cache, clock, exec_client, nautilus_mt5_harness,
+        client_order_id="O-EL-25b-SELL",
+    )
+
+    positions_calls = [
+        c for c in nautilus_mt5_harness.root.calls if c.method == "positions_get"
+    ]
+    assert len(positions_calls) == 0, "Netting must skip positions_get hedge-close probe"
+
+    order_send_calls = [
+        c for c in nautilus_mt5_harness.root.calls if c.method == "order_send"
+    ]
+    assert len(order_send_calls) == 1
+    req = order_send_calls[0].args[0]
+    assert req.get("position", 0) == 0, (
+        f"Netting SELL must not set position ticket, got {req.get('position')}"
+    )

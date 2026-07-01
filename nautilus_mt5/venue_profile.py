@@ -319,6 +319,32 @@ Pre-built VenueProfile for XP Investimentos / B3 (XPMT5-DEMO probe 2026-06-26).
   (WINQ26, WDON26, DI1F27); continuous WIN$/WDO$ trade-only via tick_routing (see xp_b3_restrictions.md)
 """
 
+_CME_FUTURES_CAP = CalcModeCapability(
+    nautilus_instrument_type=FuturesContract,
+    quote_ticks=CapabilityStatus.CERTIFIED,
+    trade_ticks=CapabilityStatus.CERTIFIED,
+    bars=CapabilityStatus.ASSUMED,
+    notes=(
+        "CME US futures (EPU26, MESU26, ENQU26, MNQU26). Netting account. "
+        "Homolog 2026-07-01: D02/D21/D30/D31 + exec netting (run_amp_* on port 18814)."
+    ),
+)
+
+AMP_US_PROFILE = VenueProfile(
+    name="amp-us",
+    capabilities={
+        SYMBOL_CALC_MODE_EXCH_FUTURES_V2: _CME_FUTURES_CAP,
+        SYMBOL_CALC_MODE_EXCH_FUTURES: _CME_FUTURES_CAP,
+    },
+    map_tick_flags_to_aggressor=True,
+)
+"""
+Pre-built VenueProfile for AMP Global / CME futures (AMPGlobalUSA-Demo probe 2026-07-01).
+
+- EXCH_FUTURES (33) → FuturesContract — quote + trade ticks **CERTIFIED** (homolog 2026-07-01)
+- Netting account; no continuous $/nominal split (same symbol for data and execution)
+"""
+
 
 def resolve_venue_profile(name: str) -> VenueProfile:
     """Resolve a profile name from config / homologation env."""
@@ -327,8 +353,10 @@ def resolve_venue_profile(name: str) -> VenueProfile:
         return TICKMILL_DEMO_PROFILE
     if key in ("xp", "xp_b3", "xp_b3_profile", "b3", "xpmt5"):
         return XP_B3_PROFILE
+    if key in ("amp", "amp_us", "amp_us_profile", "amp_global", "ampglobalusa"):
+        return AMP_US_PROFILE
     raise ValueError(
-        f"Unknown venue profile {name!r}. Expected 'tickmill' or 'xp_b3'."
+        f"Unknown venue profile {name!r}. Expected 'tickmill', 'xp_b3', or 'amp_us'."
     )
 
 
@@ -338,6 +366,7 @@ __all__ = [
     "VenueProfile",
     "TICKMILL_DEMO_PROFILE",
     "XP_B3_PROFILE",
+    "AMP_US_PROFILE",
     "resolve_venue_profile",
     "normalize_trade_calc_mode",
     # calc_mode constants

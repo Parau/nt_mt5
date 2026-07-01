@@ -26,9 +26,22 @@ from homologation.report import HomologationReport, ScenarioStatus
 from homologation.scenarios.closed_market_suite import _make_data_client, _instrument_id
 from homologation.scenarios.node_runner import NodeStopGate, run_node_until
 from homologation.support.clients import reset_mt5_client_cache
+from nautilus_mt5.venue_profile import SYMBOL_CALC_MODE_EXCH_FUTURES_V2, CapabilityStatus
 from nautilus_trader.model.identifiers import Venue
 
 _VENUE = Venue("METATRADER_5")
+
+
+def _profile_supports_trade_ticks(cfg: HomologationConfig) -> bool:
+    """True when the active VenueProfile allows trade tick subscribe/request."""
+    try:
+        status = cfg.venue_profile.check_capability(
+            SYMBOL_CALC_MODE_EXCH_FUTURES_V2,
+            "trade_ticks",
+        )
+    except ValueError:
+        return False
+    return status != CapabilityStatus.UNSUPPORTED
 
 
 def _trade_symbols(cfg: HomologationConfig) -> tuple[str, ...]:
@@ -107,8 +120,13 @@ async def run_trade_tick_stream(cfg: HomologationConfig, report: HomologationRep
     case_id = "TC-HOM-D30"
     name = "Live TradeTick stream (SubscribeTradeTicks)"
 
-    if cfg.venue_profile.name != "xp-b3":
-        report.add(case_id, name, ScenarioStatus.SKIP, "XP/B3 profile required for trade ticks")
+    if not _profile_supports_trade_ticks(cfg):
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.SKIP,
+            f"VenueProfile '{cfg.venue_profile.name}' does not support trade ticks",
+        )
         return
 
     symbols = _trade_symbols(cfg)
@@ -205,8 +223,13 @@ async def run_request_trade_ticks_open(cfg: HomologationConfig, report: Homologa
     case_id = "TC-HOM-D31"
     name = "Historical TradeTicks (RequestTradeTicks)"
 
-    if cfg.venue_profile.name != "xp-b3":
-        report.add(case_id, name, ScenarioStatus.SKIP, "XP/B3 profile required")
+    if not _profile_supports_trade_ticks(cfg):
+        report.add(
+            case_id,
+            name,
+            ScenarioStatus.SKIP,
+            f"VenueProfile '{cfg.venue_profile.name}' does not support trade ticks",
+        )
         return
 
     lookback_days = int(os.environ.get("HOMOLOG_TRADE_LOOKBACK_DAYS", "7"))

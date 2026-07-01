@@ -124,6 +124,26 @@ Fine-grained quote vs trade routing uses `nautilus_mt5.tick_routing` (tick shape
 
 Homologation: `homologation/run_xp_closed_market.py` with `MT5_VENUE_PROFILE=xp_b3`. Open-market quote/trade ticks promoted to **TESTED** 2026-06-30 (PETR4, DI1F27, WINQ26, WDON26).
 
+### `AMP_US_PROFILE`
+
+```python
+from nautilus_mt5 import AMP_US_PROFILE, resolve_venue_profile
+
+profile = resolve_venue_profile("amp_us")  # homologation env: MT5_VENUE_PROFILE=amp_us
+```
+
+Covers AMP Global / CME futures on AMPGlobalUSA-Demo (probe 2026-07-01):
+
+| `trade_calc_mode` | Instrument type | quote_ticks | trade_ticks | bars |
+|-------------------|-----------------|-------------|-------------|------|
+| 33 — EXCH_FUTURES | `FuturesContract` | CERTIFIED | CERTIFIED | ASSUMED |
+
+- **Netting account** (`ACCOUNT_MARGIN_MODE=0`) — execution client omits `position_ticket` on SELL unless hedging.
+- No continuous `$`/nominal split; same symbol for data and execution (MESU26, EPU26, ENQU26, MNQU26).
+- `map_tick_flags_to_aggressor=True` (CME futures carry meaningful last+flags).
+
+Homologation: `homologation/run_amp_*` with `MT5_PORT=18814`, `MT5_FEED_PORT=8767`.
+
 ---
 
 ## Usage

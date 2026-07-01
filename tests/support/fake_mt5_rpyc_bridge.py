@@ -26,6 +26,8 @@ class FakeMT5RPyCRoot:
             "COPY_TICKS_ALL": 0,
         }
         self._calls: List[FakeMT5RPyCCall] = []
+        # MT5 ACCOUNT_MARGIN_MODE: 0=netting, 2=retail hedging (default hedging for XP/Tickmill fakes).
+        self._margin_mode: int = 2
 
     @property
     def calls(self) -> List[FakeMT5RPyCCall]:
@@ -88,11 +90,12 @@ class FakeMT5RPyCRoot:
             "balance": 100000.0,
             "equity": 100000.0,
             "currency": "USD",
+            "margin_mode": self._margin_mode,
         }
 
     def exposed_symbols_get(self, *args, **kwargs) -> List[str]:
         self._record_call("symbols_get", args, kwargs)
-        return ["EURUSD", "USTEC", "BTCUSD", "WDON26", "WIN$", "WINQ26", "PETR4", "DI1F27"]
+        return ["EURUSD", "USTEC", "BTCUSD", "WDON26", "WIN$", "WINQ26", "PETR4", "DI1F27", "MESU26", "EPU26", "ENQU26", "MNQU26"]
 
     def exposed_symbol_info(self, symbol: str, *args, **kwargs) -> Optional[Dict[str, Any]]:
         self._record_call("symbol_info", (symbol, *args), kwargs)
@@ -195,6 +198,36 @@ class FakeMT5RPyCRoot:
                 "bid": 5178.5,
                 "ask": 5179.0,
                 "last": 5178.5,
+                "trade_calc_mode": 33,
+                "trade_mode": 4,
+                "filling_mode": 3,
+                "start_time": 1700000000,
+                "expiration_time": 1782868500,
+            }
+        if symbol == "MESU26":
+            return {
+                "name": "MESU26",
+                "path": r"Exchange-Futures\CME\MESU26",
+                "visible": True,
+                "select": True,
+                "digits": 2,
+                "point": 0.25,
+                "spread": 25,
+                "spread_float": True,
+                "volume_step": 1,
+                "volume_min": 1,
+                "volume_max": 50000,
+                "trade_tick_size": 0.25,
+                "trade_contract_size": 1.0,
+                "currency_base": "USD",
+                "currency_profit": "USD",
+                "currency_margin": "USD",
+                "under_sec_type": "FUTURES",
+                "description": "Micro E-mini S&P Sep 2026",
+                "time": 0,
+                "bid": 7529.50,
+                "ask": 7529.75,
+                "last": 7529.50,
                 "trade_calc_mode": 33,
                 "trade_mode": 4,
                 "filling_mode": 3,
@@ -343,6 +376,16 @@ class FakeMT5RPyCRoot:
                 "flags": 1368,
                 "time_msc": 1700000000000,
             }
+        if symbol == "MESU26":
+            return {
+                "symbol": "MESU26",
+                "bid": 7529.50,
+                "ask": 7529.75,
+                "last": 7529.50,
+                "volume": 3,
+                "flags": 1368,
+                "time_msc": 1700000000000,
+            }
         return None
 
     def exposed_symbol_select(self, symbol: str, enable: bool = True) -> bool:
@@ -479,6 +522,18 @@ class FakeMT5RPyCRoot:
                     "ask": 5179.0,
                     "last": 5178.5,
                     "volume": 3,
+                    "flags": 1368,
+                }
+            ] * count
+        if symbol == "MESU26":
+            return [
+                {
+                    "time": 1700000000,
+                    "time_msc": 1700000000000,
+                    "bid": 7529.50,
+                    "ask": 7529.75,
+                    "last": 7529.50,
+                    "volume": 4,
                     "flags": 1368,
                 }
             ] * count

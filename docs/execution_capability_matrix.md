@@ -109,4 +109,4 @@ For each partial capability, confirm:
 |--------|----------|---------------------------|
 | Tickmill-Demo | [`res/tickmill_restrictions.md`](../res/tickmill_restrictions.md) | IOC-only filling; hedging |
 | XPMT5-DEMO | [`res/xp_b3_restrictions.md`](../res/xp_b3_restrictions.md) | FOK+IOC; hedging; B3 split `$`/nominal |
-| AMPGlobalUSA-Demo | [`res/amp_restrictions.md`](../res/amp_restrictions.md) | FOK+IOC; **netting**; CME futures — **no exec homolog yet** |
+| AMPGlobalUSA-Demo | [`res/amp_restrictions.md`](../res/amp_restrictions.md) | FOK+IOC; **netting**; CME futures — exec homolog **18/18 PASS** (`run_amp_exec_homologation.py`, 2026-07-01, MESU26) |
