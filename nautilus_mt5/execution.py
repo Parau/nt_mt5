@@ -148,6 +148,8 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
         # Hot caches
         self._account_summary: dict[str, dict[str, Any]] = {}
+        # MT5 ACCOUNT_MARGIN_MODE: 0=netting, 2=retail hedging (set on connect).
+        self._account_margin_mode: int | None = None
 
     @property
     def instrument_provider(self) -> MetaTrader5InstrumentProvider:
@@ -185,6 +187,12 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
                 f"external_rpyc execution account mismatch: "
                 f"expected account {expected_login}, actual account {actual_login}"
             )
+
+        self._account_margin_mode = int(getattr(account_info, "margin_mode", 0))
+        self._log.info(
+            f"Account margin_mode={self._account_margin_mode} "
+            f"({'hedging' if self._account_margin_mode == 2 else 'netting'})",
+        )
 
         # Load initial balances from the retrieved account_info
         if hasattr(account_info, 'balance'):
@@ -822,7 +830,7 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
         type_time = MAP_TIME_IN_FORCE.get(order.time_in_force, ORDER_TIME_GTC)
         if isinstance(instrument.info, dict):
             gtc_mode = int(instrument.info.get("order_gtc_mode", 0) or 0)
-            # B3 futures (e.g. WDON26): order_gtc_mode=2 → day orders only.
+            # B3 futures (e.g. WDOQ26): order_gtc_mode=2 → day orders only.
             if gtc_mode == 2 and type_time == ORDER_TIME_GTC:
                 type_time = ORDER_TIME_DAY
         mt5_order.type_time = type_time
@@ -857,7 +865,8 @@ class MetaTrader5ExecutionClient(LiveExecutionClient):
 
             # Hedge account: when exactly one open long leg exists, SELL closes it
             # (round-trip / flatten). With multiple same-side legs, SELL opens a new short.
-            if command.order.side == OrderSide.SELL:
+            # Netting accounts (margin_mode=0): omit position_ticket — MT5 nets automatically.
+            if command.order.side == OrderSide.SELL and self._account_margin_mode == 2:
                 mt5_symbol = instrument.info["symbol"]["symbol"]
                 try:
                     open_positions = await asyncio.to_thread(

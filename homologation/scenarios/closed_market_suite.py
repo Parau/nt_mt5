@@ -411,13 +411,27 @@ async def run_exec_wrong_account(cfg: HomologationConfig, report: HomologationRe
         reset_mt5_client_cache()
 
 
+def _profile_supports_historical_trade_ticks(cfg: HomologationConfig) -> bool:
+    """True when VenueProfile allows RequestTradeTicks (XP, AMP CME futures)."""
+    from nautilus_mt5.venue_profile import CapabilityStatus
+
+    for cap in cfg.venue_profile.capabilities.values():
+        if cap.trade_ticks not in (
+            CapabilityStatus.UNSUPPORTED,
+            CapabilityStatus.ASSUMED,
+            CapabilityStatus.OBSERVED,
+        ):
+            return True
+    return False
+
+
 async def run_trade_tick_request_rejected(cfg: HomologationConfig, report: HomologationReport) -> None:
-    """TC-HOM-D08b: _request_trade_ticks — gated for Tickmill, fetched for XP."""
+    """TC-HOM-D08b: _request_trade_ticks — gated for Tickmill, fetched for XP/AMP."""
     case_id = "TC-HOM-D08b"
-    is_xp = cfg.venue_profile.name == "xp-b3"
+    supports_trades = _profile_supports_historical_trade_ticks(cfg)
     name = (
-        "RequestTradeTicks E2E (XP profile)"
-        if is_xp
+        f"RequestTradeTicks E2E ({cfg.venue_profile.name} profile)"
+        if supports_trades
         else "RequestTradeTicks rejected by VenueProfile"
     )
 
@@ -436,15 +450,15 @@ async def run_trade_tick_request_rejected(cfg: HomologationConfig, report: Homol
             report.add(case_id, name, ScenarioStatus.FAIL, "instrument not loaded")
             return
 
-        if is_xp:
+        if supports_trades:
             data_client._handle_trade_ticks = _capture_trades
 
-        lookback = timedelta(days=7) if is_xp else None
+        lookback = timedelta(days=7) if supports_trades else None
         trade_req = RequestTradeTicks(
             instrument_id=iid,
             start=pd.Timestamp.utcnow() - lookback if lookback else None,
             end=None,
-            limit=50 if is_xp else 5,
+            limit=50 if supports_trades else 5,
             client_id=data_client.id,
             venue=_VENUE,
             callback=None,
@@ -454,7 +468,7 @@ async def run_trade_tick_request_rejected(cfg: HomologationConfig, report: Homol
         )
         await data_client._request_trade_ticks(trade_req)
 
-        if is_xp:
+        if supports_trades:
             if len(delivered) == 0:
                 report.add(case_id, name, ScenarioStatus.FAIL, "No TradeTick objects from _request_trade_ticks")
                 return

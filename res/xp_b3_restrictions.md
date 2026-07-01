@@ -46,12 +46,12 @@ XP session metadata (`Q[00:00-00:00]` / `T[00:00-00:00]` on weekdays) is **not r
 
 This terminal reports **`32` = EXCH_STOCKS** and **`33` = EXCH_FUTURES**, not the legacy `6` / `7` still listed in `docs/venue_profile.md` and `nautilus_mt5/venue_profile.py`. Any `XP_B3_PROFILE` must use the values observed on the live terminal (aligned with `MetaTrader5.py` constants 32/33).
 
-### Current front-month contracts (confirmed 2026-06-29)
+### Current front-month contracts (update on rollover)
 
 | Continuous (data) | Nominal (execution) | Underlying in description |
 |-------------------|---------------------|---------------------------|
 | `WIN$` | **WINQ26** | Ibovespa mini, Aug 2026 expiry |
-| `WDO$` | **WDON26** | Dollar mini, **Jun 2026 expiry (rolls 2026-06-30)** |
+| `WDO$` | **WDOQ26** | Dollar mini, série Q 2026 (**WDON26** série N venceu 2026-06-30) |
 
 ---
 
@@ -89,7 +89,7 @@ This terminal reports **`32` = EXCH_STOCKS** and **`33` = EXCH_FUTURES**, not th
 
 1. **Continuous futures** (`WIN$`, `WDO$`) — trade tape only; **no execution**; **no bid/ask**.
 2. **Nominal WIN** (`WINQ26`) — tradable; **quote + trade ticks** in regular session.
-3. **Nominal WDO / DI** (`WDON26`, `DI1F27`) — tradable; quote + trade ticks in `CopyTicks`.
+3. **Nominal WDO / DI** (`WDOQ26`, `DI1F27`) — tradable; quote + trade ticks in `CopyTicks`. (`WDON26` expired.)
 4. **Equities** (`PETR4`) — tradable; quote-dominated stream with occasional last.
 
 **Do not reuse** continuous-series metadata (`tick_size`, `tick_value`, paths) for nominal contracts — values differ (see comparison table below).
@@ -380,11 +380,13 @@ Additional rules:
 
 | Priority | Symbol | Why |
 |----------|--------|-----|
-| 1 | **WDON26** | Clean bid/ask + last; FULL; best exec+data smoke (**roll after 2026-06-30**) |
+| 1 | **WDOQ26** | Current WDO mini front month (replaces expired **WDON26**) |
 | 2 | **WINQ26** | Exec + quotes validated in-session |
 | 3 | **DI1F27** | Nominal futures with expiry; yield semantics test |
 | 4 | **PETR4** | Equity parser + lot=100 |
 | 5 | **WIN$** / **WDO$** | WS trade-tick stream only (no orders) |
+
+**Homolog defaults (`homologation/config.py`):** `MT5_SYMBOL=WDOQ26`, `HOMOLOG_MULTI_SYMBOLS=WDOQ26,PETR4,DI1F27,WINQ26`.
 
 ---
 
@@ -410,6 +412,7 @@ Additional rules:
 |----------|-----------|
 | [`docs/venue_profile.md`](../docs/venue_profile.md) | `XP_B3_PROFILE` (planned; legacy calc_mode 6/7) |
 | [`res/tickmill_restrictions.md`](tickmill_restrictions.md) | OTC reference profile |
+| [`res/amp_restrictions.md`](amp_restrictions.md) | US CME futures (AMPGlobalUSA-Demo) |
 | [`res/pensando inclusao da XP/primeira analise.md`](pensando%20inclusao%20da%20XP/primeira%20analise.md) | Multi-broker roadmap |
 | [`docs/data_capability_matrix.md`](../docs/data_capability_matrix.md) | Update when XP profile is implemented |
 | [`docs/execution_capability_matrix.md`](../docs/execution_capability_matrix.md) | Exec homologation on nominal B3 symbols |
@@ -428,4 +431,4 @@ Re-run `probe_xp_market_off_hours.mq5` and (in session) `probe_xp_market_live.mq
 - `MarketBookGet` levels during market hours
 - **`SYMBOL_FILLING_MODE` or `OrderCheck` / `OrderSend` acceptance** (FOK/IOC/RETURN)
 - Terminal build with known MT5 API changes
-- Before XP exec homologation: confirm **WDON26** / **WINQ26** still front month in Market Watch
+- Before XP exec homologation: confirm **WDOQ26** / **WINQ26** still front month in Market Watch

@@ -60,12 +60,13 @@ from nautilus_mt5.config import (
 from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.factories import MT5LiveDataClientFactory
-from nautilus_mt5.venue_profile import TICKMILL_DEMO_PROFILE, XP_B3_PROFILE
+from nautilus_mt5.venue_profile import AMP_US_PROFILE, TICKMILL_DEMO_PROFILE, XP_B3_PROFILE
 
 _VENUE = Venue("METATRADER_5")
 _USTEC_ID = InstrumentId(Symbol("USTEC"), _VENUE)
 _EURUSD_ID = InstrumentId(Symbol("EURUSD"), _VENUE)
-_WDON26_ID = InstrumentId(Symbol("WDON26"), _VENUE)
+_WDOQ26_ID = InstrumentId(Symbol("WDOQ26"), _VENUE)
+_MESU26_ID = InstrumentId(Symbol("MESU26"), _VENUE)
 _WIN_DOLLAR_ID = InstrumentId(Symbol("WIN$"), _VENUE)
 
 _BAR_TYPE = BarType(
@@ -602,7 +603,7 @@ async def test_tc_d30_xp_subscribe_trade_ticks_reaches_client(
     clean_factory_cache, nautilus_components, nautilus_mt5_harness
 ):
     """
-    TC-D30 (XP_B3_PROFILE): _subscribe_trade_ticks() for WDON26 (EXCH_FUTURES)
+    TC-D30 (XP_B3_PROFILE): _subscribe_trade_ticks() for WDOQ26 (EXCH_FUTURES)
     passes the profile gate and calls subscribe_ticks with tick_type='AllLast'.
     """
     msgbus, cache, clock = nautilus_components
@@ -611,7 +612,7 @@ async def test_tc_d30_xp_subscribe_trade_ticks_reaches_client(
     data_client = MT5LiveDataClientFactory.create(
         loop=loop,
         name="MT5",
-        config=_data_config("WDON26", venue_profile=XP_B3_PROFILE),
+        config=_data_config("WDOQ26", venue_profile=XP_B3_PROFILE),
         msgbus=msgbus,
         cache=cache,
         clock=clock,
@@ -628,7 +629,7 @@ async def test_tc_d30_xp_subscribe_trade_ticks_reaches_client(
     data_client._client.subscribe_ticks = _spy_subscribe_ticks
 
     cmd = SubscribeTradeTicks(
-        instrument_id=_WDON26_ID,
+        instrument_id=_WDOQ26_ID,
         client_id=data_client.id,
         venue=None,
         command_id=UUID4(),
@@ -637,10 +638,10 @@ async def test_tc_d30_xp_subscribe_trade_ticks_reaches_client(
     await data_client._subscribe_trade_ticks(cmd)
 
     assert len(subscribe_calls) == 1, (
-        "TC-D30 (XP): subscribe_ticks must be called for WDON26 trade_ticks=TESTED"
+        "TC-D30 (XP): subscribe_ticks must be called for WDOQ26 trade_ticks=TESTED"
     )
     assert subscribe_calls[0]["tick_type"] == "AllLast"
-    assert subscribe_calls[0]["instrument_id"] == _WDON26_ID
+    assert subscribe_calls[0]["instrument_id"] == _WDOQ26_ID
 
 
 @pytest.mark.asyncio
@@ -696,6 +697,106 @@ async def test_tc_d31_xp_request_trade_ticks_delivers_trade_tick_objects(
     assert len(delivered) >= 1, "TC-D31 (XP): expected at least 1 TradeTick"
     assert isinstance(delivered[0], TradeTick), "TC-D31 (XP): delivered item must be TradeTick"
     assert delivered[0].instrument_id == _WIN_DOLLAR_ID
+    assert float(delivered[0].price) > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.data_tester
+async def test_tc_d30_amp_subscribe_trade_ticks_reaches_client(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+):
+    """
+    TC-D30 (AMP_US_PROFILE): _subscribe_trade_ticks() for MESU26 passes profile gate.
+    """
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_data_config("MESU26", venue_profile=AMP_US_PROFILE),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+    await data_client._connect()
+
+    subscribe_calls: list = []
+
+    async def _spy_subscribe_ticks(instrument_id, symbol, tick_type, ignore_size=False):
+        subscribe_calls.append(
+            {"instrument_id": instrument_id, "tick_type": tick_type, "symbol": symbol},
+        )
+
+    data_client._client.subscribe_ticks = _spy_subscribe_ticks
+
+    cmd = SubscribeTradeTicks(
+        instrument_id=_MESU26_ID,
+        client_id=data_client.id,
+        venue=None,
+        command_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+    )
+    await data_client._subscribe_trade_ticks(cmd)
+
+    assert len(subscribe_calls) == 1, (
+        "TC-D30 (AMP): subscribe_ticks must be called for MESU26 trade_ticks=OBSERVED"
+    )
+    assert subscribe_calls[0]["tick_type"] == "AllLast"
+    assert subscribe_calls[0]["instrument_id"] == _MESU26_ID
+
+
+@pytest.mark.asyncio
+@pytest.mark.data_tester
+async def test_tc_d31_amp_request_trade_ticks_delivers_trade_tick_objects(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+):
+    """
+    TC-D31 (AMP_US_PROFILE): _request_trade_ticks() for MESU26 delivers TradeTick objects.
+    """
+    from nautilus_trader.model.data import TradeTick
+
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_data_config("MESU26", venue_profile=AMP_US_PROFILE),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+    await data_client._connect()
+
+    handle_calls: list = []
+
+    def _spy_handle(instrument_id, ticks, correlation_id):
+        handle_calls.append({"instrument_id": instrument_id, "ticks": ticks})
+
+    data_client._handle_trade_ticks = _spy_handle
+
+    req = RequestTradeTicks(
+        instrument_id=_MESU26_ID,
+        start=None,
+        end=None,
+        limit=1,
+        client_id=data_client.id,
+        venue=_VENUE,
+        callback=None,
+        request_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+        params=None,
+    )
+    await data_client._request_trade_ticks(req)
+
+    assert len(handle_calls) == 1, (
+        "TC-D31 (AMP): _handle_trade_ticks not called for MESU26 historical trade request"
+    )
+    delivered = handle_calls[0]["ticks"]
+    assert len(delivered) >= 1, "TC-D31 (AMP): expected at least 1 TradeTick"
+    assert isinstance(delivered[0], TradeTick), "TC-D31 (AMP): delivered item must be TradeTick"
+    assert delivered[0].instrument_id == _MESU26_ID
     assert float(delivered[0].price) > 0
 
 

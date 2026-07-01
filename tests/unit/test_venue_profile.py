@@ -7,6 +7,7 @@ import pytest
 from nautilus_trader.model.instruments import Cfd, CurrencyPair, Equity, FuturesContract
 
 from nautilus_mt5.venue_profile import (
+    AMP_US_PROFILE,
     SYMBOL_CALC_MODE_CFD,
     SYMBOL_CALC_MODE_CFDINDEX,
     SYMBOL_CALC_MODE_CFDLEVERAGE,
@@ -280,5 +281,30 @@ def test_normalize_trade_calc_mode_aliases_legacy():
 def test_resolve_venue_profile():
     assert resolve_venue_profile("tickmill") is TICKMILL_DEMO_PROFILE
     assert resolve_venue_profile("xp_b3") is XP_B3_PROFILE
+    assert resolve_venue_profile("amp_us") is AMP_US_PROFILE
+    assert resolve_venue_profile("amp") is AMP_US_PROFILE
     with pytest.raises(ValueError):
         resolve_venue_profile("unknown")
+
+
+# ---------------------------------------------------------------------------
+# AMP_US_PROFILE
+# ---------------------------------------------------------------------------
+
+
+def test_amp_profile_name():
+    assert AMP_US_PROFILE.name == "amp-us"
+    assert AMP_US_PROFILE.map_tick_flags_to_aggressor is True
+
+
+def test_amp_profile_futures_mode_33():
+    cap = AMP_US_PROFILE.get_capability(SYMBOL_CALC_MODE_EXCH_FUTURES_V2)
+    assert cap.nautilus_instrument_type is FuturesContract
+    assert cap.quote_ticks == CapabilityStatus.CERTIFIED
+    assert cap.trade_ticks == CapabilityStatus.CERTIFIED
+    assert cap.bars == CapabilityStatus.CERTIFIED
+
+
+def test_amp_profile_legacy_futures_alias():
+    cap = AMP_US_PROFILE.get_capability(SYMBOL_CALC_MODE_EXCH_FUTURES)
+    assert cap.nautilus_instrument_type is FuturesContract

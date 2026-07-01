@@ -18,7 +18,7 @@ def test_validate_symbol_tradable_rejects_disabled():
 
 
 def test_validate_symbol_tradable_allows_full():
-    validate_symbol_tradable({"trade_mode": 4, "symbol": {"symbol": "WDON26"}})
+    validate_symbol_tradable({"trade_mode": 4, "symbol": {"symbol": "WDOQ26"}})
 
 
 def test_validate_filling_mode_fok_requires_bit():

@@ -17,6 +17,7 @@ from nautilus_mt5.execution import MetaTrader5ExecutionClient
 from nautilus_mt5.factories import MT5LiveDataClientFactory, MT5LiveExecClientFactory
 from nautilus_mt5.providers import MetaTrader5InstrumentProvider
 from nautilus_mt5.venue_profile import (
+    AMP_US_PROFILE,
     CapabilityStatus,
     CalcModeCapability,
     VenueProfile,
@@ -41,6 +42,7 @@ __all__ = [
     "MetaTrader5InstrumentProviderConfig",
     "MT5LiveDataClientFactory",
     "MT5LiveExecClientFactory",
+    "AMP_US_PROFILE",
     "TICKMILL_DEMO_PROFILE",
     "XP_B3_PROFILE",
     "VenueProfile",

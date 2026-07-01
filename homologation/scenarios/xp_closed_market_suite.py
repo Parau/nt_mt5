@@ -289,7 +289,7 @@ async def run_exec_submit_off_hours(cfg: HomologationConfig, report: Homologatio
     case_id = "TC-HOM-E-SUBMIT"
     name = "Off-hours limit/stop submit (order shape validation)"
 
-    symbols = tuple(s for s in ("WDON26", "PETR4", "DI1F27") if s in cfg.multi_symbols or s == cfg.symbol)
+    symbols = tuple(s for s in ("WDOQ26", "PETR4", "DI1F27") if s in cfg.multi_symbols or s == cfg.symbol)
     if not symbols:
         symbols = (cfg.symbol,)
 
@@ -423,11 +423,11 @@ async def run_xp_closed_market_suite(cfg: HomologationConfig, report: Homologati
     await run_multi_symbol_instrument_load(cfg, report)
     await run_historical_ticks_multi(cfg, report)
 
-    quote_symbols = tuple(s for s in ("WDON26", "PETR4", "DI1F27") if s in cfg.multi_symbols)
+    quote_symbols = tuple(s for s in ("WDOQ26", "PETR4", "DI1F27") if s in cfg.multi_symbols)
     if quote_symbols:
         await run_request_quote_ticks_symbols(cfg, report, quote_symbols)
 
-    trade_symbols = tuple(s for s in ("WINQ26", "WDON26") if s in cfg.multi_symbols)
+    trade_symbols = tuple(s for s in ("WINQ26", "WDOQ26") if s in cfg.multi_symbols)
     if not trade_symbols:
         trade_symbols = ("WINQ26",)
     if trade_symbols:

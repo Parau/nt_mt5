@@ -1,20 +1,21 @@
 """
-WS feed smoke test — TC-HOM-D02 (MQL5 Service → InboundFeedGateway → QuoteTick).
+run_feed_smoke.py — **operational gate** for TC-HOM-D02 (WS sustained quote ticks).
 
-Prerequisites (manual):
-  1. RPyC bridge running (port 18812)
-  2. NT5TickFeedService started in MT5 with:
-       InpWsUrl=ws://127.0.0.1:8765/mt5-feed
-       InpSymbols=<MT5_SYMBOL>
-  3. Start this script BEFORE or AFTER the Service (hello timeout 30s by default)
+Validates that ``NT5TickFeedService`` sustains ``CopyTicks`` → WebSocket → ``QuoteTick``
+before running broader open-market / exec homologation suites.
 
-Usage (Windows CMD):
+Prerequisites:
+  1. RPyC bridge up (profile port: Tickmill 18812, XP 18813, AMP 18814)
+  2. ``NT5TickFeedService`` started in MT5 (Navigator → Services → Start)
+  3. ``MT5_FEED_ENABLED=1``
+
+Usage — Tickmill (Windows CMD):
     set MT5_HOST=127.0.0.1
     set MT5_PORT=18812
-    set MT5_FEED_ENABLED=1
     set MT5_SYMBOL=BTCUSD
-    set HOMOLOG_STREAM_SECS=30
-    set HOMOLOG_STREAM_MIN_TICKS=3
+    set MT5_FEED_ENABLED=1
+    set HOMOLOG_STREAM_SECS=60
+    set HOMOLOG_REPORT_JSON=homologation/last_tickmill_feed_smoke_report.json
     E:\\miniconda\\envs\\trading\\python.exe homologation\\run_feed_smoke.py
 """
 from __future__ import annotations
@@ -62,6 +63,12 @@ async def main() -> int:
 
     await run_tick_stream(cfg, report)
     report.print_summary()
+
+    json_path = os.environ.get("HOMOLOG_REPORT_JSON", "").strip()
+    if json_path:
+        report.write_json(json_path)
+        print(f"  JSON report written to {json_path}")
+
     return 0 if not report.has_failures else 1
 
 

@@ -1,0 +1,102 @@
+{
+  "started_at": "2026-07-01T16:23:06.766903+00:00",
+  "summary": {
+    "total": 8,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 1,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=56822578 server=XPMT5-DEMO PETR4 bid=37.82 ask=37.83",
+      "metadata": {
+        "login": 56822578,
+        "server": "XPMT5-DEMO",
+        "bid": 37.82,
+        "ask": 37.83
+      }
+    },
+    {
+      "case_id": "TC-HOM-D01",
+      "name": "Quote ticks via TradingNode",
+      "status": "PASS",
+      "detail": "Received 3 ticks (last bid=37.82 ask=37.83)",
+      "metadata": {
+        "ticks": 3
+      }
+    },
+    {
+      "case_id": "TC-HOM-E01",
+      "name": "Market round-trip (BUY \u2192 SELL)",
+      "status": "PASS",
+      "detail": "BUY 100.0@37.79 \u2192 SELL @37.78",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D02",
+      "name": "Sustained quote tick stream",
+      "status": "PASS",
+      "detail": "79 ticks in 60s (max inter-tick gap 14.3s, transport=ws_feed)",
+      "metadata": {
+        "ticks": 79,
+        "max_gap_secs": 14.25124009999854,
+        "duration_secs": 60.0,
+        "transport": "ws_feed",
+        "feed_uri": "ws://0.0.0.0:8766/mt5-feed"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D07",
+      "name": "Multi-symbol WS quote stream",
+      "status": "SKIP",
+      "detail": "No live quote for symbol(s): WDON26 (session closed?)",
+      "metadata": {
+        "symbols": [
+          "PETR4",
+          "WDON26",
+          "DI1F27",
+          "WINQ26"
+        ],
+        "inactive": [
+          "WDON26"
+        ]
+      }
+    },
+    {
+      "case_id": "TC-HOM-D06",
+      "name": "WS feed stop/start + cursor dedup",
+      "status": "PASS",
+      "detail": "baseline=20 after_gateway=1 post=9 unique_ts=29 dup=0",
+      "metadata": {
+        "baseline_ticks": 20,
+        "post_phase_ticks": 9,
+        "unique_ts": 29,
+        "gateway_restart": true,
+        "service_restart": false
+      }
+    },
+    {
+      "case_id": "TC-HOM-D03",
+      "name": "Live bar subscribe M1",
+      "status": "PASS",
+      "detail": "Received 1 M1 bar(s) (transport=ws_feed)",
+      "metadata": {
+        "bars": 1
+      }
+    },
+    {
+      "case_id": "TC-HOM-D05",
+      "name": "Unsubscribe on stop (quotes/bars)",
+      "status": "PASS",
+      "detail": "quotes unsubscribed on stop (3 ticks); bars=OK",
+      "metadata": {
+        "ticks": 3,
+        "bar_stream_ready": true
+      }
+    }
+  ]
+}

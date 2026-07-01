@@ -1,0 +1,47 @@
+{
+  "started_at": "2026-07-01T13:35:59.929222+00:00",
+  "summary": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "ok": true
+  },
+  "results": [
+    {
+      "case_id": "TC-HOM-PF",
+      "name": "Bridge pre-flight (account + symbol tick)",
+      "status": "PASS",
+      "detail": "login=1588658 server=AMPGlobalUSA-Demo MESU26 bid=7510.25 ask=7510.5",
+      "metadata": {
+        "login": 1588658,
+        "server": "AMPGlobalUSA-Demo",
+        "bid": 7510.25,
+        "ask": 7510.5
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30-MESU26",
+      "name": "Live TradeTick stream (SubscribeTradeTicks) (MESU26)",
+      "status": "PASS",
+      "detail": "Received 47085 trade tick(s)",
+      "metadata": {
+        "symbol": "MESU26"
+      }
+    },
+    {
+      "case_id": "TC-HOM-D30",
+      "name": "Live TradeTick stream (SubscribeTradeTicks)",
+      "status": "PASS",
+      "detail": "Live TradeTicks OK (symbols=MESU26)",
+      "metadata": {}
+    },
+    {
+      "case_id": "TC-HOM-D31",
+      "name": "Historical TradeTicks (RequestTradeTicks)",
+      "status": "PASS",
+      "detail": "TradeTicks OK for MESU26",
+      "metadata": {}
+    }
+  ]
+}

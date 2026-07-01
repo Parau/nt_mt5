@@ -9,7 +9,7 @@ XP/B3 closed-market homologation — real MT5 bridge on XPMT5-DEMO.
 Environment variables
 ---------------------
 MT5_HOST, MT5_PORT, MT5_VENUE_PROFILE=xp_b3, MT5_ACCOUNT_NUMBER=56822578,
-MT5_SYMBOL (default WDON26), MT5_BROKER (default XPMT5-DEMO),
+MT5_SYMBOL (default WDOQ26), MT5_BROKER (default XPMT5-DEMO),
 HOMOLOG_MULTI_SYMBOLS, HOMOLOG_REPORT_JSON
 
 Usage (Windows CMD)
@@ -18,7 +18,7 @@ Usage (Windows CMD)
     set MT5_PORT=18812
     set MT5_VENUE_PROFILE=xp_b3
     set MT5_ACCOUNT_NUMBER=56822578
-    set MT5_SYMBOL=WDON26
+    set MT5_SYMBOL=WDOQ26
     set HOMOLOG_REPORT_JSON=homologation/last_xp_closed_market_report.json
     E:\\miniconda\\envs\\trading\\python.exe homologation\\run_xp_closed_market.py
 """

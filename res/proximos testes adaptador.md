@@ -10,6 +10,10 @@ Run full suite (needs open market + WS for D02): `homologation/run_homologation.
 | Closed market (post-XP) | 2026-06-28 13:14 | `homologation/last_closed_market_report.json` | **12/12 PASS** (BTCUSD, D21 tick_capacity pagination) |
 | Open market (full) | 2026-06-28 01:29–01:32 | `homologation/last_open_market_report.json` | **10/10 PASS** (BTCUSD, WS feed + live exec) |
 | **D02 stream 120s** | 2026-06-28 | `homologation/run_feed_smoke.py` (console) | **PASS** — 488 ticks, max gap 5.1s, `transport=ws_feed` |
+| **Post-AMP Tickmill regression (closed)** | 2026-07-01 | `homologation/last_tickmill_regression_closed_report.json` | **12/12 PASS** (BTCUSD, post netting-fix / AMP work) |
+| **D02 gate (isolated, 60s)** | 2026-07-01 | `homologation/last_tickmill_feed_smoke_report.json` | **2/2 PASS** — 27480 ticks, max gap 0.7s, `transport=ws_feed` |
+| **Post-AMP Tickmill regression (open)** | 2026-07-01 | `homologation/last_tickmill_regression_open_report.json` | **5/5 PASS** + D02 SKIP (isolated gate) + E01/E05 SKIP (no exec env) |
+| **Post-AMP Tickmill regression (open + exec)** | 2026-07-01 | `homologation/last_tickmill_regression_open_exec_report.json` | **9/9 PASS** + D02 SKIP — E01 round-trip, E05/E05b/E81 OK (`margin_mode=2`) |
 | **Wave 2** | 2026-06-28 01:51 | `homologation/last_wave2_report.json` | **7/7 PASS** — D06, D07, E06–E09 |
 | **Wave 3 (E10)** | 2026-06-28 02:0x | `homologation/run_e10_smoke.py` (console) | **2/2 PASS** — E10, E10b (after production fixes) |
 | **Wave 3 (full)** | 2026-06-28 02:13 | `homologation/last_wave3_report.json` | **3/4 PASS** — E10, E10b OK · **D07 FAIL** (USTEC WS=0) |
@@ -309,6 +313,19 @@ set HOMOLOG_REPORT_JSON=homologation/last_e43_report.json
 E:\miniconda\envs\trading\python.exe homologation\run_e43_homologation.py
 ```
 
+**D02 operational gate (run before open-market suites):**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18812
+set MT5_SYMBOL=BTCUSD
+set MT5_FEED_ENABLED=1
+set HOMOLOG_STREAM_SECS=60
+set HOMOLOG_REPORT_JSON=homologation/last_tickmill_feed_smoke_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_feed_smoke.py
+```
+
+Open-market suites (`run_open_market.py`, `run_homologation.py`) **SKIP** TC-HOM-D02 by default; set `HOMOLOG_RUN_D02_IN_SUITE=1` to embed D02 in the same run.
+
 **D02 stream only (120s):**
 ```cmd
 set MT5_HOST=127.0.0.1
@@ -334,6 +351,8 @@ Harness: `homologation/run_xp_closed_market.py` (`MT5_VENUE_PROFILE=xp_b3`, logi
 
 **Before running:** MT5 must be logged into **XP** (not Tickmill). Switch login manually and restart bridge if needed.
 
+**Default nominals (2026-07+):** `WDOQ26` (dólar mini, série Q) + `WINQ26` (índice mini). `WDON26` (série N) **venceu** — não usar em novos runs.
+
 | Run | Date (UTC) | Report | Result |
 |-----|------------|--------|--------|
 | Closed market | 2026-06-28 12:54+ | `homologation/last_xp_closed_market_report.json` | **15/17 PASS** (D08b/D21-T TradeTick size=0) |
@@ -347,20 +366,25 @@ Harness: `homologation/run_xp_closed_market.py` (`MT5_VENUE_PROFILE=xp_b3`, logi
 | Trade ticks D30/D31 | 2026-06-30 | `homologation/last_xp_trade_ticks_report.json` | WINQ26 PASS |
 | PETR4/DI1F27 data confirm | 2026-06-30 | `homologation/last_xp_petr4_di1f27_data_confirm.json`, `last_xp_di1f27_data_confirm.json` | D21/D30/D31 PASS; D02 harness timeout |
 | Wave3 | 2026-06-30 | `homologation/last_xp_wave3_report.json` | **4/4 PASS** |
+| **Post-AMP XP regression (closed)** | 2026-07-01 | `homologation/last_xp_regression_closed_report.json` | **17/17 PASS** (WDON26 + multi-symbol hist/trade ticks) |
+| **D02 gate (PETR4, after-hours)** | 2026-07-01 | `homologation/last_xp_feed_smoke_petr4_report.json` | **2/2 PASS** — 32 ticks/60s (`WDON26` preflight FAIL: pregão fechado) |
+| **Post-AMP XP regression (open feed)** | 2026-07-01 | `homologation/last_xp_regression_open_feed_report.json` | **7/7 PASS** + D07 SKIP (`WDON26` session closed) |
+| **Post-AMP XP regression (exec PETR4)** | 2026-07-01 | `homologation/last_xp_regression_exec_report.json` | **21/21 PASS** — E08/E10 hedging OK (`margin_mode=2`) |
+| **Post-AMP XP regression (open + exec)** | 2026-07-01 | `homologation/last_xp_regression_open_exec_report.json` | **12/12 PASS** + D07 SKIP (`WDON26` session closed) — E01/E02/E05/E05b/E81 |
 
 ### Closed market — runnable off-hours
 
 | ID | Scenario | Status | Notes |
 |----|----------|--------|-------|
 | TC-HOM-PF | Bridge + account + symbol_info | **DONE** | login 56822578, BRL |
-| TC-HOM-D01-CM | Instrument load | **DONE** | WDON26 default |
-| TC-HOM-D01-CM-XP | Multi-symbol load | **DONE** | WDON26,PETR4,DI1F27,WINQ26 |
+| TC-HOM-D01-CM | Instrument load | **DONE** | WDOQ26 default (was WDON26) |
+| TC-HOM-D01-CM-XP | Multi-symbol load | **DONE** | WDOQ26,PETR4,DI1F27,WINQ26 |
 | TC-HOM-D04a/b/c | Historical bars + ticks | **DONE** | 7-day lookback for ticks off-hours |
-| TC-HOM-D21 | RequestQuoteTicks | **DONE** | WDON26,PETR4,DI1F27 (closed + open 2026-06-30) |
-| TC-HOM-D21-T | RequestTradeTicks | **DONE** | WINQ26,WDON26 nominals (WIN$/WDO$ data-only, excluded) |
+| TC-HOM-D21 | RequestQuoteTicks | **DONE** | WDOQ26,PETR4,DI1F27 (closed + open 2026-06-30) |
+| TC-HOM-D21-T | RequestTradeTicks | **DONE** | WINQ26,WDOQ26 nominals (WIN$/WDO$ data-only, excluded) |
 | TC-HOM-D08/D08b | Trade tick subscribe/request | **DONE** | Profile allows (inverse of Tickmill) |
 | TC-HOM-E-CONN / E-EDGE1 | Exec connect | **DONE** | |
-| TC-HOM-E-SUBMIT | Off-hours limit/stop shape | **DONE** | WDON26,PETR4,DI1F27 submitted |
+| TC-HOM-E-SUBMIT | Off-hours limit/stop shape | **DONE** | WDOQ26,PETR4,DI1F27 submitted |
 
 ### Open market — DONE (pregão B3, 2026-06-30)
 
@@ -373,10 +397,10 @@ Harness: `homologation/run_xp_closed_market.py` (`MT5_VENUE_PROFILE=xp_b3`, logi
 | TC-HOM-D07 | Multi-symbol WS | **DONE** | `run_wave3_homologation.py` (PETR4 com pregão equity) |
 | TC-HOM-D21 | RequestQuoteTicks open | **DONE** | `run_xp_backlog_homologation.py` |
 | TC-HOM-D30/D31 | Trade ticks live/hist | **DONE** | WINQ26 (`run_xp_trade_ticks_homologation.py`) |
-| TC-HOM-E01–E10 | Exec full suite | **DONE** | WDON26, PETR4, DI1F27 — 21/21 each |
+| TC-HOM-E01–E10 | Exec full suite | **DONE** | WDOQ26, PETR4, DI1F27 — 21/21 each (histórico: WDON26) |
 | TC-HOM-E10/E10b | Wave3 reconcile | **DONE** | `last_xp_wave3_report.json` |
 
-**Símbolos contínuos (`WIN$`, `WDO$`):** excluídos dos runners live — data-only, não operáveis. Use nominais `WINQ26` / `WDON26`.
+**Símbolos contínuos (`WIN$`, `WDO$`):** excluídos dos runners live — data-only, não operáveis. Use nominais **`WINQ26`** / **`WDOQ26`** (atualizar no rollover).
 
 **XP open-market CMD (feed):**
 ```cmd
@@ -384,9 +408,9 @@ set MT5_HOST=127.0.0.1
 set MT5_PORT=18813
 set MT5_VENUE_PROFILE=xp_b3
 set MT5_ACCOUNT_NUMBER=56822578
-set MT5_SYMBOL=WDON26
+set MT5_SYMBOL=WDOQ26
 set MT5_FEED_ENABLED=1
-set HOMOLOG_MULTI_SYMBOLS=WDON26,PETR4,DI1F27,WINQ26
+set HOMOLOG_MULTI_SYMBOLS=WDOQ26,PETR4,DI1F27,WINQ26
 set HOMOLOG_REPORT_JSON=homologation/last_xp_open_market_feed_report.json
 E:\miniconda\envs\trading\python.exe homologation\run_xp_open_market_feed.py
 ```
@@ -395,8 +419,8 @@ E:\miniconda\envs\trading\python.exe homologation\run_xp_open_market_feed.py
 ```cmd
 set MT5_PORT=18813
 set MT5_ENABLE_LIVE_EXECUTION=1
-set MT5_SYMBOL=PETR4
-set HOMOLOG_REPORT_JSON=homologation/last_xp_petr4_exec_report.json
+set MT5_SYMBOL=WDOQ26
+set HOMOLOG_REPORT_JSON=homologation/last_xp_wdoq26_exec_report.json
 E:\miniconda\envs\trading\python.exe homologation\run_xp_exec_homologation.py
 ```
 
@@ -416,8 +440,79 @@ set MT5_HOST=127.0.0.1
 set MT5_PORT=18813
 set MT5_VENUE_PROFILE=xp_b3
 set MT5_ACCOUNT_NUMBER=56822578
-set MT5_SYMBOL=WDON26
-set HOMOLOG_MULTI_SYMBOLS=WDON26,PETR4,DI1F27,WINQ26
+set MT5_SYMBOL=WDOQ26
+set HOMOLOG_MULTI_SYMBOLS=WDOQ26,PETR4,DI1F27,WINQ26
 set HOMOLOG_REPORT_JSON=homologation/last_xp_closed_market_report.json
 E:\miniconda\envs\trading\python.exe homologation\run_xp_closed_market.py
+```
+
+---
+
+## AMP / CME (AMPGlobalUSA-Demo) — homologation tracker
+
+Ground truth: [`res/amp_restrictions.md`](amp_restrictions.md)  
+Harness: `homologation/run_amp_*.py` (`MT5_VENUE_PROFILE=amp_us`, login **1588658**, RPyC **18814**, WS **8767**)
+
+| Run | Date (UTC) | Report | Result |
+|-----|------------|--------|--------|
+| Open feed | 2026-07-01 | `homologation/last_amp_open_market_feed_report.json` | **6/7** — D01 timeout (D02–D07 OK incl. **D03 bars**) |
+| Trade ticks D30/D31 | 2026-07-01 | `homologation/last_amp_trade_ticks_report.json` | **4/4 PASS** |
+| Multi-symbol data | 2026-07-01 | `homologation/last_amp_symbol_quote_trade_confirm.json` | **18/18 PASS** (MESU26, MNQU26, ENQU26) |
+| Exec netting | 2026-07-01 | `homologation/last_amp_exec_report.json` | **18/18 PASS** (MESU26) |
+| Closed market (bars) | 2026-07-01 | `homologation/last_amp_closed_market_report.json` | **12/12 PASS** (D04a/b hist bars + D08b trade ticks) |
+
+### Closed market — DONE (off-hours OK for hist bars)
+
+| ID | Scenario | Status | Notes |
+|----|----------|--------|-------|
+| TC-HOM-D04a | Hist bars M1+M5 `copy_rates_from_pos` | **DONE** | MESU26 M1×5 M5×10 |
+| TC-HOM-D04b | `RequestBars` E2E | **DONE** | 5 M1 bars via `_request_bars` |
+| TC-HOM-D04c | Hist quote ticks `copy_ticks_from` | **DONE** | 500 ticks |
+| TC-HOM-D21 | RequestQuoteTicks | **DONE** | 50 QuoteTicks |
+| TC-HOM-D08b | RequestTradeTicks | **DONE** | 50 TradeTicks (CERTIFIED profile) |
+
+### Open market — DONE (CME session, 2026-07-01)
+
+| ID | Scenario | Status | Notes |
+|----|----------|--------|-------|
+| TC-HOM-D02 | WS sustained stream | **DONE** | `run_amp_open_market_feed.py` |
+| TC-HOM-D03 | Live bars M1 WS | **DONE** | 1 M1 bar via `subscribe_bars` |
+| TC-HOM-D05 | Unsubscribe quotes/bars | **DONE** | |
+| TC-HOM-D06/D07 | Feed resilience + multi-symbol | **DONE** | EPU26,MESU26,ENQU26,MNQU26 |
+| TC-HOM-D30/D31 | Trade ticks live/hist | **DONE** | `run_amp_trade_ticks_homologation.py` |
+| TC-HOM-E01–E11 | Exec netting suite | **DONE** | E10n/E11a/E11b (not hedging E10) |
+
+**AMP closed-market CMD:**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18814
+set MT5_VENUE_PROFILE=amp_us
+set MT5_ACCOUNT_NUMBER=1588658
+set MT5_SYMBOL=MESU26
+set MT5_BROKER=AMPGlobalUSA-Demo
+set HOMOLOG_REPORT_JSON=homologation/last_amp_closed_market_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_amp_closed_market.py
+```
+
+**AMP feed CMD:**
+```cmd
+set MT5_HOST=127.0.0.1
+set MT5_PORT=18814
+set MT5_VENUE_PROFILE=amp_us
+set MT5_ACCOUNT_NUMBER=1588658
+set MT5_SYMBOL=MESU26
+set MT5_FEED_ENABLED=1
+set HOMOLOG_MULTI_SYMBOLS=EPU26,MESU26,ENQU26,MNQU26
+set HOMOLOG_REPORT_JSON=homologation/last_amp_open_market_feed_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_amp_open_market_feed.py
+```
+
+**AMP exec CMD:**
+```cmd
+set MT5_PORT=18814
+set MT5_VENUE_PROFILE=amp_us
+set MT5_ENABLE_LIVE_EXECUTION=1
+set MT5_SYMBOL=MESU26
+set HOMOLOG_REPORT_JSON=homologation/last_amp_exec_report.json
+E:\miniconda\envs\trading\python.exe homologation\run_amp_exec_homologation.py
 ```
