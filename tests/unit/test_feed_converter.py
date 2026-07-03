@@ -16,6 +16,7 @@ from nautilus_mt5.feed.converter import (
     wire_tick_to_trade_tick,
 )
 from nautilus_mt5.feed.messages import WireBar, WireTick
+from nautilus_mt5.parsing.tick_volume import resolve_trade_tick_size
 
 
 def _btcusd_instrument() -> CurrencyPair:
@@ -127,3 +128,29 @@ def test_wire_bar_to_nautilus_bar() -> None:
     assert bar.bar_type == bar_type
     assert float(bar.close) == 60050.0
     assert float(bar.volume) == 42.0
+
+
+def test_resolve_trade_tick_size_prefers_volume() -> None:
+    assert resolve_trade_tick_size(3, 5.0) == Decimal(3)
+
+
+def test_resolve_trade_tick_size_uses_volume_real() -> None:
+    assert resolve_trade_tick_size(0, 5.0) == Decimal(5)
+
+
+def test_resolve_trade_tick_size_absent_returns_none() -> None:
+    assert resolve_trade_tick_size(0, 0.0) is None
+
+
+def test_wire_tick_to_trade_tick_discards_without_volume() -> None:
+    instrument = _btcusd_instrument()
+    tick = WireTick(time_msc=2_000, bid=0.0, ask=0.0, last=60470.0, volume=0, volume_real=0.0, flags=8)
+    assert wire_tick_to_trade_tick(instrument, tick, ts_init=3_000_000_000) is None
+
+
+def test_wire_tick_to_trade_tick_uses_volume_real() -> None:
+    instrument = _btcusd_instrument()
+    tick = WireTick(time_msc=2_000, bid=0.0, ask=0.0, last=60470.0, volume=0, volume_real=7.0, flags=8)
+    trade = wire_tick_to_trade_tick(instrument, tick, ts_init=3_000_000_000)
+    assert trade is not None
+    assert float(trade.size) == 7.0
