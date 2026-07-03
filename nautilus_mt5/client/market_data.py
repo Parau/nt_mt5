@@ -28,6 +28,7 @@ from nautilus_mt5.client.tick_poll import is_quote_tick_subscription
 from nautilus_mt5.common import Subscription
 from nautilus_mt5.parsing.data import what_to_show
 from nautilus_mt5.parsing.instruments import mt5_symbol_to_instrument_id
+from nautilus_mt5.parsing.tick_volume import resolve_trade_tick_size
 from nautilus_mt5.parsing.rates import (
     bar_spec_to_mt5_timeframe,
     ib_duration_to_timedelta,
@@ -488,6 +489,7 @@ class MetaTrader5ClientMarketDataMixin:
         for row in rows:
             bid = ask = last = 0.0
             volume = 0.0
+            volume_real = 0.0
             time_sec = 0
             time_msc = None
             tick_flags = 0
@@ -497,6 +499,9 @@ class MetaTrader5ClientMarketDataMixin:
                     ask = float(row["ask"])
                     last = float(row["last"])
                     volume = float(row["volume"]) if "volume" in row.dtype.names else 0.0
+                    volume_real = (
+                        float(row["volume_real"]) if "volume_real" in row.dtype.names else 0.0
+                    )
                     time_sec = int(row["time"])
                     time_msc = row["time_msc"] if "time_msc" in row.dtype.names else None
                     if "flags" in row.dtype.names:
@@ -506,6 +511,7 @@ class MetaTrader5ClientMarketDataMixin:
                     ask = float(row.get("ask", 0) or 0)
                     last = float(row.get("last", 0) or 0)
                     volume = float(row.get("volume", 0) or 0)
+                    volume_real = float(row.get("volume_real", 0) or 0)
                     time_sec = int(row.get("time", 0) or 0)
                     time_msc = row.get("time_msc")
                     tick_flags = int(row.get("flags", 0) or 0)
@@ -517,11 +523,13 @@ class MetaTrader5ClientMarketDataMixin:
                     volume = float(row[4]) if len(row) > 4 else 0.0
                     time_msc = row[5] if len(row) > 5 else None
                     tick_flags = int(row[6]) if len(row) > 6 else 0
+                    volume_real = float(row[7]) if len(row) > 7 else 0.0
                 else:
                     bid = float(getattr(row, "bid", 0) or 0)
                     ask = float(getattr(row, "ask", 0) or 0)
                     last = float(getattr(row, "last", 0) or 0)
                     volume = float(getattr(row, "volume", 0) or 0)
+                    volume_real = float(getattr(row, "volume_real", 0) or 0)
                     time_sec = int(getattr(row, "time", 0) or 0)
                     time_msc = getattr(row, "time_msc", None)
                     tick_flags = int(getattr(row, "flags", 0) or 0)
@@ -538,7 +546,9 @@ class MetaTrader5ClientMarketDataMixin:
             if tick_type in ("TRADES", "AllLast"):
                 if last <= 0:
                     continue
-                trade_size = volume if volume > 0 else 1.0
+                trade_size = resolve_trade_tick_size(volume, volume_real)
+                if trade_size is None:
+                    continue
                 ticks_out.append(TradeTick(
                     instrument_id=instrument_id,
                     price=instrument.make_price(last),
@@ -846,6 +856,7 @@ class MetaTrader5ClientMarketDataMixin:
         time: int,
         last_price: float,
         volume: Decimal,
+        volume_real: Decimal | float = 0,
     ) -> None:
         """Return AllLast / trade tick data from symbol_info_tick polling."""
         if not (subscription := self._subscriptions.get(req_id=req_id)):
@@ -866,7 +877,12 @@ class MetaTrader5ClientMarketDataMixin:
             return
 
         ts_event = await self._convert_mt5_timestamp_to_pandas_timestamp(time)
-        trade_qty = volume if volume > 0 else Decimal(1)
+        trade_qty = resolve_trade_tick_size(volume, volume_real)
+        if trade_qty is None:
+            self._log.debug(
+                f"Discarding TradeTick without volume for req_id={req_id}.",
+            )
+            return
         trade_tick = TradeTick(
             instrument_id=instrument_id,
             price=instrument.make_price(last_price),

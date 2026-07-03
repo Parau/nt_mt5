@@ -254,6 +254,37 @@ def _futures_asset_class(details: MT5SymbolDetails) -> AssetClass:
     return AssetClass.INDEX
 
 
+def _futures_multiplier_from_details(
+    details: MT5SymbolDetails,
+    info: dict,
+) -> Quantity:
+    """
+    Derive contract economic multiplier for ``notional_value(quantity, price)``.
+
+    Linear exchange futures use ``trade_tick_value / trade_tick_size`` (value per
+    one price unit per contract). DI1 yield contracts are excluded from notional.
+    """
+    sym = details.symbol.symbol if details.symbol else ""
+    if sym.startswith("DI1"):
+        info["price_semantics"] = "yield_rate_percent"
+        info["notional_mode"] = "unsupported"
+        info["multiplier_source"] = "di1_yield_not_supported"
+        return Quantity.from_int(1)
+
+    tick_value = Decimal(str(getattr(details, "trade_tick_value", 0) or 0))
+    tick_size = Decimal(str(getattr(details, "trade_tick_size", 0) or 0))
+    if tick_value > 0 and tick_size > 0:
+        multiplier_value = tick_value / tick_size
+        multiplier_precision = _tick_size_to_precision(multiplier_value)
+        info["notional_mode"] = "linear_price_multiplier"
+        info["multiplier_source"] = "trade_tick_value / trade_tick_size"
+        return Quantity(multiplier_value, multiplier_precision)
+
+    info["notional_mode"] = "unsupported"
+    info["multiplier_source"] = "fallback_1_missing_tick_value_or_tick_size"
+    return Quantity.from_int(1)
+
+
 def parse_futures_contract(
     details: MT5SymbolDetails,
     instrument_id: InstrumentId,
@@ -263,10 +294,7 @@ def parse_futures_contract(
     size_precision: int = _tick_size_to_precision(details.volume_step)
     timestamp = details.time
     info = symbol_details_to_dict(details)
-
-    # DI1* prices are yield rates (%), not BRL notionals — preserve MT5 convention.
-    if details.symbol and details.symbol.symbol.startswith("DI1"):
-        info["price_semantics"] = "yield_rate_percent"
+    multiplier = _futures_multiplier_from_details(details, info)
 
     start_time = getattr(details, "start_time", 0) or 0
     expiration_time = getattr(details, "expiration_time", 0) or 0
@@ -280,7 +308,7 @@ def parse_futures_contract(
         currency=Currency.from_str(details.currency_profit),
         price_precision=price_precision,
         price_increment=Price(details.trade_tick_size, price_precision),
-        multiplier=Quantity(details.trade_contract_size, size_precision),
+        multiplier=multiplier,
         lot_size=Quantity(details.volume_min, size_precision),
         underlying=_futures_underlying(details),
         activation_ns=activation_ns,
@@ -299,6 +327,10 @@ def parse_equity_contract(
     price_precision: int = details.digits
     size_precision: int = _tick_size_to_precision(details.volume_step)
     timestamp = details.time
+    info = symbol_details_to_dict(details)
+    # Nautilus Equity uses implicit multiplier=1; TradeTick.size is share count.
+    info["notional_mode"] = "linear_price_multiplier"
+    info["multiplier_source"] = "equity_shares_multiplier_1"
 
     return Equity(
         instrument_id=instrument_id,
@@ -309,7 +341,7 @@ def parse_equity_contract(
         lot_size=Quantity(details.volume_min, size_precision),
         ts_event=timestamp,
         ts_init=timestamp,
-        info=symbol_details_to_dict(details),
+        info=info,
     )
 
 

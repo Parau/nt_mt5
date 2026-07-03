@@ -8,6 +8,7 @@ from nautilus_trader.model.identifiers import TradeId
 from nautilus_trader.model.instruments.base import Instrument
 
 from nautilus_mt5.feed.messages import WireBar, WireTick
+from nautilus_mt5.parsing.tick_volume import resolve_trade_tick_size
 from nautilus_mt5.tick_routing import quote_passes_sanity_gate, resolve_trade_aggressor, route_wire_tick
 
 
@@ -53,8 +54,11 @@ def wire_tick_to_trade_tick(
     if tick.last <= 0.0:
         return None
 
+    size = resolve_trade_tick_size(tick.volume, tick.volume_real)
+    if size is None:
+        return None
+
     ts_event = int(tick.time_msc * 1_000_000)
-    size = Decimal(tick.volume) if tick.volume > 0 else Decimal(1)
     return TradeTick(
         instrument_id=instrument.id,
         price=instrument.make_price(tick.last),

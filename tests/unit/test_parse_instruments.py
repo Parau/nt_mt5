@@ -86,6 +86,11 @@ def win_dollar_details() -> MT5SymbolDetails:
 
 
 @pytest.fixture()
+def winq26_details() -> MT5SymbolDetails:
+    return _load_symbol_details("symbol_info_winq26.json")
+
+
+@pytest.fixture()
 def di1f27_details() -> MT5SymbolDetails:
     return _load_symbol_details("symbol_info_di1f27.json")
 
@@ -130,6 +135,14 @@ def test_parse_petr4_with_xp_profile_yields_equity(petr4_details):
     result = parse_instrument(petr4_details, venue_profile=XP_B3_PROFILE)
     assert isinstance(result, Equity)
     assert int(result.lot_size) == 100
+    assert result.info.get("notional_mode") == "linear_price_multiplier"
+    assert float(result.multiplier) == 1.0
+
+
+def test_parse_petr4_notional_value_smoke(petr4_details):
+    result = parse_instrument(petr4_details, venue_profile=XP_B3_PROFILE)
+    notional = result.notional_value(Quantity.from_int(100), Price.from_str("38.07"))
+    assert float(notional.as_double()) == pytest.approx(3807.0)
 
 
 def test_parse_win_dollar_with_xp_profile_yields_futures(win_dollar_details):
@@ -142,6 +155,31 @@ def test_parse_di1f27_price_semantics(di1f27_details):
     result = parse_instrument(di1f27_details, venue_profile=XP_B3_PROFILE)
     assert isinstance(result, FuturesContract)
     assert result.info.get("price_semantics") == "yield_rate_percent"
+    assert result.info.get("notional_mode") == "unsupported"
+
+
+def test_futures_winq26_multiplier_is_0_2(winq26_details):
+    result = parse_instrument(winq26_details, venue_profile=XP_B3_PROFILE)
+    assert isinstance(result, FuturesContract)
+    assert float(result.multiplier) == pytest.approx(0.2)
+    assert result.info.get("notional_mode") == "linear_price_multiplier"
+    assert result.info.get("multiplier_source") == "trade_tick_value / trade_tick_size"
+
+
+def test_futures_wdon26_multiplier_is_10(wdon26_details):
+    result = parse_instrument(wdon26_details, venue_profile=XP_B3_PROFILE)
+    assert isinstance(result, FuturesContract)
+    assert float(result.multiplier) == pytest.approx(10.0)
+    assert result.info.get("notional_mode") == "linear_price_multiplier"
+
+
+def test_futures_winq26_notional_value_smoke(winq26_details):
+    result = parse_instrument(winq26_details, venue_profile=XP_B3_PROFILE)
+    notional = result.notional_value(
+        Quantity.from_int(2),
+        Price.from_str("130000"),
+    )
+    assert float(notional.as_double()) == pytest.approx(52000.0)
 
 
 # ---------------------------------------------------------------------------

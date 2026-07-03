@@ -612,6 +612,7 @@ class MetaTrader5Client(Component,
                                         ask = tick.get("ask", 0.0)
                                         last = tick.get("last", 0.0)
                                         volume = tick.get("volume", 0)
+                                        volume_real = tick.get("volume_real", 0)
                                         flags = tick.get("flags", 0)
                                     else:
                                         time_msc = getattr(tick, "time_msc", 0)
@@ -619,6 +620,7 @@ class MetaTrader5Client(Component,
                                         ask = getattr(tick, "ask", 0.0)
                                         last = getattr(tick, "last", 0.0)
                                         volume = getattr(tick, "volume", 0)
+                                        volume_real = getattr(tick, "volume_real", 0)
                                         flags = getattr(tick, "flags", 0)
                                     tick_dict = {
                                         "time_msc": time_msc,
@@ -626,6 +628,7 @@ class MetaTrader5Client(Component,
                                         "ask": ask,
                                         "last": last,
                                         "volume": volume,
+                                        "volume_real": volume_real,
                                         "flags": flags,
                                         "tick_type": tick_type,
                                     }
@@ -721,6 +724,7 @@ class MetaTrader5Client(Component,
                                     time=tick["time_msc"],
                                     last_price=tick.get("last", 0.0),
                                     volume=Decimal(tick.get("volume", 0)),
+                                    volume_real=Decimal(str(tick.get("volume_real", 0))),
                                 )
                         else:
                             await self.process_tick_by_tick_bid_ask(

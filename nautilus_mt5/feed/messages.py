@@ -12,6 +12,7 @@ class WireTick:
     ask: float
     last: float = 0.0
     volume: int = 0
+    volume_real: float = 0.0
     flags: int = 0
 
 
@@ -134,6 +135,7 @@ def _parse_tick(raw: dict[str, Any]) -> WireTick:
         ask=float(raw.get("ask", 0.0)),
         last=float(raw.get("last", 0.0)),
         volume=int(raw.get("volume", 0)),
+        volume_real=float(raw.get("volume_real", 0.0)),
         flags=int(raw.get("flags", 0)),
     )
 
