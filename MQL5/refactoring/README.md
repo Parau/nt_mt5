@@ -17,7 +17,13 @@ Spec: `res/especificacao_novo_adaptador_nautilus_mt5.md`
 
 ---
 
-## Revisão MQL5 (v1.05)
+## Revisão MQL5 (v1.06)
+
+| Alteração | Detalhe |
+|-----------|---------|
+| Backoff reconnect WS | Após falha em `NT5EnsureWebSocketOpen()`, espera **4 s** antes de nova tentativa (era 1 s) — reduz churn quando o WS server no host ainda não está pronto |
+
+### v1.05
 
 | Alteração | Detalhe |
 |-----------|---------|
