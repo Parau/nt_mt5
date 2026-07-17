@@ -1,12 +1,12 @@
 # AGENTS.md
 
-## 1) Project context
+## Project context
 - `nt_mt5` is a NautilusTrader adapter for MetaTrader 5.
 - The adapter must translate MT5-native APIs into NautilusTrader's unified interface and normalized domain model.
 - The project should follow NautilusTrader's adapter guidance: a clear adapter boundary, a layered design, explicit capability handling, runnable examples, and meaningful automated tests.
 - The canonical venue is always `METATRADER_5`.
 
-## 2) Architecture and stable project decisions
+## Architecture and stable project decisions
 - Follow NautilusTrader's layered adapter model:
   - low-level transport, networking, parsing, and bridge concerns in the client layer;
   - Python adapter layer for `DataClient`, `ExecutionClient`, provider, configs, and factories.
@@ -21,7 +21,7 @@
 - Unsupported operations must fail safely: log a warning or return a controlled empty/unsupported result. Do not raise raw `NotImplementedError` on operational paths.
 - Do not reopen these decisions unless a real bug proves they are wrong.
 
-## 3) Production-code rules
+## Production-code rules
 - Do not add production logic only to make tests pass.
 - Do not add fake-success paths, mock fallbacks, or placeholder terminal/account states that hide real failures.
 - Do not reintroduce legacy or hybrid interfaces once a modern typed interface exists.
@@ -29,7 +29,7 @@
 - Keep production behavior aligned with actual MT5 capabilities and actual NautilusTrader contracts.
 - If a test reveals a real production bug, fix the bug instead of weakening the test.
 
-## 4) Testing rules
+## Testing rules
 - Follow NautilusTrader testing intent and Phase 7 expectations: maintain meaningful unit, integration, acceptance/smoke, performance, and memory-stability coverage.
 - Before changing supported/unsupported behavior or test scope, consult:
   - `docs/adapter_contract.md`
@@ -50,7 +50,7 @@
 - Memory-stability tests should watch real adapter structures for unintended growth across repeated cycles.
 - Organize tests clearly by purpose whenever practical, and prefer reusable fixtures and parametrization over copy-pasted cases.
 
-## 5) Documentation and examples
+## Documentation and examples
 - Examples must reflect the real public API exactly.
 - README, metadata, configs, factories, exports, and examples must stay mutually consistent.
 - Keep docs concise, direct, and easy to maintain.
@@ -65,7 +65,7 @@
   - `docs/terminal_access_contract.md`
 - When a supported execution or data behavior is implemented or validated live, update the corresponding row in the capability matrix: `Deterministic coverage` if a Tier 1 test was added, `Live coverage` if a Tier 2 test or **Tier 1.5 homologation** scenario passed (`res/proximos testes adaptador.md`).
 
-## 6) PR rules for coding agents
+## PR rules for coding agents
 - Stay inside the requested scope.
 - Do not declare the work done if core acceptance criteria are still open.
 - Do not mix unrelated cleanups into a focused task.
@@ -79,7 +79,7 @@
 - If a test reveals a production bug, fix the bug and mention it explicitly.
 - If coverage is still partial, say so clearly instead of implying the task is fully complete.
 
-## 7) Source of Truth
+## Source of Truth
 For adapter development and testing protocols, you **must** strictly adhere to the official Nautilus Trader developer guidelines:
 
 * **Core Adapter Architecture:** [https://nautilustrader.io/docs/latest/developer_guide/adapters/](https://nautilustrader.io/docs/latest/developer_guide/adapters/)
@@ -88,7 +88,7 @@ For adapter development and testing protocols, you **must** strictly adhere to t
 
 > **Instruction:** Do not hallucinate class structures or test suites. Align the integration design exactly with the specifications detailed in these official documents.
 
-## 8) Running python
+## Running python
 To run python you must set the necessary enviroment variables and use the correct python enviroment with the proper packages installed for example set "MT5_HOST=127.0.0.1" && set "MT5_PORT=18812" && E:\miniconda\envs\trading\python.exe 
 
 
@@ -96,7 +96,7 @@ Aqui está uma versão aprimorada para o seu `agents.md`. Ela corrige os erros o
 
 ---
 
-## 8) Python Execution Environment
+## Python Execution Environment
 
 To execute any Python script in this project, you **must** explicitly configure the required environment variables and target the dedicated Conda interpreter to avoid global dependency conflicts.
 
@@ -111,14 +111,50 @@ set MT5_HOST=127.0.0.1 && set MT5_PORT=18812 && E:\miniconda\envs\trading\python
 
 > **Instruction:** Never invoke a generic `python` command. You must explicitly pass the environment variables inline or verify their state before running any script.
 
-## 9) Code Style and Annotations
+## ADR (Architecture Decision Record)
+ADRs preserve the context and rationale of significant architectural decisions that cannot be expressed completely by the resulting code.
+
+Agents MUST create an ADR only when explicitly instructed.
+
+ADRs MUST be stored in `docs/ADR/`. Filenames MUST follow `NNNN-short-decision-title.md`, using the next available four-digit sequential number and a short lowercase `kebab-case` title. Never reuse or renumber ADR IDs.
+
+When an applicable ADR exists, agents MUST:
+
+* Read and follow it before modifying affected code.
+* Add `[ADR] NNNN: Decision Title` directly above the principal code block that implements or enforces the decision.
+* Add the anchor only at principal implementation points, not in indirectly related files.
+* Never implement changes that contradict an accepted ADR.
+* Report any inconsistency between the ADR and the code instead of silently modifying or choosing either one.
+
+Use the exact source-code comment format:
+
+```text
+# [ADR] NNNN: Short Decision Title
+```
+
+For JavaScript and TypeScript:
+
+```text
+// [ADR] NNNN: Short Decision Title
+```
+
+## Code Style and Annotations
+
 STRICT REQUIREMENT: All generated code comments, annotations, and docstrings MUST strictly adhere to the following language and framework-specific constraints. No generic placeholders or narrative comments are allowed.
 
 **Preserve Existing Documentation:** Never delete, strip, or overwrite existing comments within the codebase unless they are strictly deprecated, obsolete, or directly impacted/invalidated by the new code changes or refactoring.
 
 ### **Python:** 
- - MANDATORY: Use native type hints for all public functions, methods, and service/model boundaries.
- - REQUIRED: Write concise Google Style docstrings for trading rules, side effects, non-obvious core logic, Application Service API boundaries, Provider SPI / Transport SPI boundaries, Integration Adapter boundaries, and other public boundary objects. When necessary add comments with architectural Notes.
+  1. **MANDATORY:** Use native type hints for all modules, public functions, methods, and service/model boundaries.
+    1.1. Write concise Google Style docstrings for trading rules, side effects, non-obvious core logic, Application Service API boundaries, Provider SPI / Transport SPI boundaries, Integration Adapter boundaries, and other public boundary objects. When necessary add comments with architectural Notes.
+
+    1.2. (Module-Level):** Every generated file or module MUST start with a concise module-level docstring containing exactly:
+     - **Purpose/Single Responsibility:** The core "why" of the module and its role in the system.
+     - **Data Flow & Dependencies:** Which modules consume its output, and where its input data originates.
+     - **Premises & Limitations:** Implicit business rules, concurrency constraints, performance boundaries (e.g., latency limits), or usage restrictions. 
+     *Note: Avoid redundant, obvious, or auto-generated boilerplate comments.*
+
+
 ### **MQL5 Code**  
  - **Document the "Why", Not the "What":** Avoid trivial or redundant comments (e.g., do not write `// loops through the array`). Instead, explicitly document the mathematical, quantitative, or networking intent (e.g., `// Reverses the array topology so index [0] strictly represents the forming candle`).
   - **Network & Execution Critical Paths:** Every native socket operation (`SocketCreate`, `SocketReceive`) and structural trade submission (`OrderSend`) must feature brief inline comments detailing buffer allocations, state expectations, or specific error-handling reasons.
