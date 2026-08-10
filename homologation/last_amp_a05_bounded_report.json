@@ -1,0 +1,89 @@
+{
+  "gateway": "127.0.0.1:18814",
+  "profile": "amp-us",
+  "symbol": "ENQU26",
+  "provider_calls": [
+    {
+      "symbol": "ENQU26",
+      "from": 1786389002,
+      "to": 1786390803,
+      "flags": 2
+    },
+    {
+      "symbol": "ENQU26",
+      "from": 1786390801,
+      "to": 1786390803,
+      "flags": 2
+    },
+    {
+      "symbol": "ENQU26",
+      "from": 1788982802,
+      "to": 1788982863,
+      "flags": 2
+    }
+  ],
+  "results": [
+    {
+      "label": "recent_30m",
+      "ok": true,
+      "error": null,
+      "n_ticks": 9212,
+      "response_calls": [
+        {
+          "correlation_id": "040440d0-7de3-4eac-bbac-0c1a69b4595f",
+          "n": 9212,
+          "start": "2026-08-10 19:10:02.067923+00:00",
+          "end": "2026-08-10 19:40:02.067923+00:00",
+          "params": {
+            "a05_probe": "recent_30m"
+          }
+        }
+      ],
+      "request_id": "040440d0-7de3-4eac-bbac-0c1a69b4595f",
+      "sample": {
+        "ts_event": 1786389002439000000,
+        "price": 29786.25,
+        "size": 1.0,
+        "aggressor": "2"
+      }
+    },
+    {
+      "label": "last_1s",
+      "ok": true,
+      "error": null,
+      "n_ticks": 0,
+      "response_calls": [
+        {
+          "correlation_id": "b1caf91a-ad9d-4212-b404-acb32118cf6a",
+          "n": 0,
+          "start": "2026-08-10 19:40:01.067923+00:00",
+          "end": "2026-08-10 19:40:02.067923+00:00",
+          "params": {
+            "a05_probe": "last_1s"
+          }
+        }
+      ],
+      "request_id": "b1caf91a-ad9d-4212-b404-acb32118cf6a",
+      "sample": null
+    },
+    {
+      "label": "future_empty",
+      "ok": true,
+      "error": null,
+      "n_ticks": 0,
+      "response_calls": [
+        {
+          "correlation_id": "c09a4b7e-d285-48b1-80e8-852eb9a4ed06",
+          "n": 0,
+          "start": "2026-09-09 19:40:02.067923+00:00",
+          "end": "2026-09-09 19:41:02.067923+00:00",
+          "params": {
+            "a05_probe": "future_empty"
+          }
+        }
+      ],
+      "request_id": "c09a4b7e-d285-48b1-80e8-852eb9a4ed06",
+      "sample": null
+    }
+  ]
+}

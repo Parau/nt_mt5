@@ -440,7 +440,7 @@ async def run_trade_tick_request_rejected(cfg: HomologationConfig, report: Homol
     iid = _instrument_id(cfg.symbol)
     delivered: list = []
 
-    def _capture_trades(instrument_id, ticks, correlation_id):
+    def _capture_trades(instrument_id, ticks, correlation_id, start=None, end=None, params=None):
         delivered.extend(ticks)
 
     try:

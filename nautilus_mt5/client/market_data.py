@@ -1,12 +1,16 @@
 
 import asyncio
 import functools
+import math
+import operator
 from collections.abc import Callable
+from datetime import datetime
 from decimal import Decimal
 from inspect import iscoroutinefunction
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import numpy as np
 import pandas as pd
 import pytz
 
@@ -21,11 +25,15 @@ from nautilus_trader.model.data import TradeTick
 from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TradeId
+from nautilus_trader.model.instruments.base import Instrument
 
 
+from nautilus_mt5.client.errors import MT5HistoricalDataError
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.client.tick_poll import is_quote_tick_subscription
 from nautilus_mt5.common import Subscription
+from nautilus_mt5.feed.converter import wire_tick_to_trade_tick
+from nautilus_mt5.feed.messages import WireTick
 from nautilus_mt5.parsing.data import what_to_show
 from nautilus_mt5.parsing.instruments import mt5_symbol_to_instrument_id
 from nautilus_mt5.parsing.tick_volume import resolve_trade_tick_size
@@ -36,6 +44,61 @@ from nautilus_mt5.parsing.rates import (
     timestamp_to_utc_datetime,
 )
 from nautilus_mt5.tick_routing import resolve_trade_aggressor
+from nautilus_mt5.tick_routing import route_wire_tick
+
+_NS_PER_SECOND = 1_000_000_000
+_REQUIRED_TRADE_FIELDS = frozenset(
+    {
+        "time_msc",
+        "bid",
+        "ask",
+        "last",
+        "volume",
+        "volume_real",
+        "flags",
+    },
+)
+
+
+def _resolve_mt5_constant(mt5: Any, name: str) -> Any:
+    """Resolve a named MT5 constant from attribute or ``get_constant`` fallback."""
+    value = getattr(mt5, name, None)
+    if value is not None:
+        return value
+
+    get_constant = getattr(mt5, "get_constant", None)
+    if callable(get_constant):
+        try:
+            value = get_constant(name)
+        except Exception as exc:
+            raise MT5HistoricalDataError(
+                f"MT5 get_constant({name!r}) failed",
+            ) from exc
+        if value is not None:
+            return value
+
+    raise MT5HistoricalDataError(
+        f"MT5 terminal surface does not expose required constant {name}",
+    )
+
+
+def _best_effort_mt5_last_error(mt5: Any) -> Any:
+    """Best-effort ``last_error()``; never hides the original failure."""
+    last_error = getattr(mt5, "last_error", None)
+    if not callable(last_error):
+        return None
+    try:
+        return last_error()
+    except Exception as exc:  # noqa: BLE001 — diagnostics must not mask provider failure
+        return f"<last_error failed: {exc!r}>"
+
+
+def _historical_utc_timestamp(value: datetime | pd.Timestamp) -> pd.Timestamp:
+    """Normalize a timezone-aware bound to UTC; reject naive values."""
+    ts = pd.Timestamp(value)
+    if ts.tzinfo is None:
+        raise MT5HistoricalDataError("historical bound must be timezone-aware")
+    return ts.tz_convert("UTC")
 
 
 class MarketDataTypeEnum:
@@ -578,6 +641,151 @@ class MetaTrader5ClientMarketDataMixin:
         if number_of_ticks > 0 and len(ticks_out) > number_of_ticks:
             ticks_out = ticks_out[-number_of_ticks:]
         return ticks_out
+
+    async def get_historical_trade_ticks_range(
+        self,
+        *,
+        symbol: MT5Symbol,
+        instrument: Instrument,
+        start_date_time: datetime | pd.Timestamp,
+        end_date_time: datetime | pd.Timestamp,
+        map_tick_flags_to_aggressor: bool,
+    ) -> list[TradeTick]:
+        """
+        Return TradeTicks for one bounded logical interval (A05).
+
+        Uses ``copy_ticks_range`` + ``COPY_TICKS_TRADE``, exact local ndarray
+        materialization, live-equivalent routing/conversion, and inclusive
+        ``ts_event`` filtering. Empty local ndarray is success ``[]``; ``None``
+        and materialization/structural failures raise ``MT5HistoricalDataError``.
+        """
+        start_ts = _historical_utc_timestamp(start_date_time)
+        end_ts = _historical_utc_timestamp(end_date_time)
+        start_ns = int(start_ts.value)
+        end_ns = int(end_ts.value)
+        if start_ns > end_ns:
+            raise MT5HistoricalDataError("historical start was after end")
+
+        fetch_start_seconds = start_ns // _NS_PER_SECOND
+        fetch_end_seconds = (end_ns + _NS_PER_SECOND - 1) // _NS_PER_SECOND
+        if fetch_end_seconds <= fetch_start_seconds:
+            fetch_end_seconds = fetch_start_seconds + 1
+
+        mt5 = self._mt5_client["mt5"]
+        flags = _resolve_mt5_constant(mt5, "COPY_TICKS_TRADE")
+
+        try:
+            raw = await asyncio.to_thread(
+                mt5.copy_ticks_range,
+                symbol.symbol,
+                fetch_start_seconds,
+                fetch_end_seconds,
+                flags,
+            )
+        except Exception as exc:
+            raise MT5HistoricalDataError(
+                f"copy_ticks_range failed for {symbol.symbol}",
+            ) from exc
+
+        if raw is None:
+            diagnostics = _best_effort_mt5_last_error(mt5)
+            raise MT5HistoricalDataError(
+                f"copy_ticks_range returned None for {symbol.symbol}; "
+                f"last_error={diagnostics!r}",
+            )
+
+        # Exact local production identity — remote ndarray netrefs are failures.
+        if type(raw) is not np.ndarray:
+            raise MT5HistoricalDataError(
+                "copy_ticks_range result is not an exact local numpy.ndarray",
+            )
+        if raw.dtype.names is None:
+            raise MT5HistoricalDataError(
+                "copy_ticks_range returned an unstructured numpy.ndarray",
+            )
+
+        names = frozenset(raw.dtype.names)
+        missing = _REQUIRED_TRADE_FIELDS - names
+        if missing:
+            raise MT5HistoricalDataError(
+                f"copy_ticks_range missing required fields: {sorted(missing)}",
+            )
+
+        if len(raw) == 0:
+            return []
+
+        batch_ts_init = self._clock.timestamp_ns()
+        ticks: list[TradeTick] = []
+
+        for index, row in enumerate(raw):
+            try:
+                time_msc = operator.index(row["time_msc"])
+                volume = operator.index(row["volume"])
+                flags_i = operator.index(row["flags"])
+                bid = float(row["bid"])
+                ask = float(row["ask"])
+                last = float(row["last"])
+                volume_real = float(row["volume_real"])
+            except (KeyError, TypeError, ValueError, OverflowError) as exc:
+                raise MT5HistoricalDataError(
+                    f"Malformed MT5 historical trade row at index={index}",
+                ) from exc
+
+            if time_msc <= 0:
+                raise MT5HistoricalDataError(
+                    f"Invalid time_msc at index={index}: {time_msc}",
+                )
+            if volume < 0 or flags_i < 0:
+                raise MT5HistoricalDataError(
+                    f"Invalid volume/flags at index={index}",
+                )
+            if (
+                not math.isfinite(bid)
+                or not math.isfinite(ask)
+                or not math.isfinite(last)
+                or not math.isfinite(volume_real)
+                or volume_real < 0
+            ):
+                raise MT5HistoricalDataError(
+                    f"Non-finite/invalid MT5 trade row at index={index}",
+                )
+
+            wire = WireTick(
+                time_msc=time_msc,
+                bid=bid,
+                ask=ask,
+                last=last,
+                volume=volume,
+                volume_real=volume_real,
+                flags=flags_i,
+            )
+
+            decision = route_wire_tick(instrument, wire)
+            if not decision.emit_trade:
+                continue
+
+            try:
+                trade = wire_tick_to_trade_tick(
+                    instrument,
+                    wire,
+                    batch_ts_init,
+                    map_tick_flags_to_aggressor=map_tick_flags_to_aggressor,
+                )
+            except Exception as exc:
+                raise MT5HistoricalDataError(
+                    f"Failed converting MT5 historical trade row at index={index}",
+                ) from exc
+
+            if trade is not None:
+                ticks.append(trade)
+
+        ticks = [
+            tick
+            for tick in ticks
+            if start_ns <= tick.ts_event <= end_ns
+        ]
+        ticks.sort(key=lambda tick: tick.ts_event)
+        return ticks
 
     #
     # misc.

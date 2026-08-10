@@ -165,7 +165,7 @@ async def run_request_quote_ticks_symbols(
         delivered: list = []
         data_client = None
 
-        def _capture(instrument_id, ticks, correlation_id):
+        def _capture(instrument_id, ticks, correlation_id, start=None, end=None, params=None):
             delivered.extend(ticks)
 
         try:
@@ -242,7 +242,7 @@ async def run_request_trade_ticks_symbols(
         delivered: list = []
         data_client = None
 
-        def _capture(instrument_id, ticks, correlation_id):
+        def _capture(instrument_id, ticks, correlation_id, start=None, end=None, params=None):
             delivered.extend(ticks)
 
         try:

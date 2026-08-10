@@ -68,7 +68,7 @@ async def _fetch_historical_trade_ticks(
     delivered: list = []
     data_client = None
 
-    def _capture(_instrument_id, ticks, _correlation_id):
+    def _capture(_instrument_id, ticks, _correlation_id, start=None, end=None, params=None):
         delivered.extend(ticks)
 
     reset_mt5_client_cache()

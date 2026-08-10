@@ -1,6 +1,28 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Optional
 
+import numpy as np
+
+
+# Canonical MT5 tick structured-array shape (official MetaTrader5 copy_ticks_*).
+MT5_TICK_DTYPE = np.dtype(
+    [
+        ("time", "<i8"),
+        ("bid", "<f8"),
+        ("ask", "<f8"),
+        ("last", "<f8"),
+        ("volume", "<u8"),
+        ("time_msc", "<i8"),
+        ("flags", "<u4"),
+        ("volume_real", "<f8"),
+    ],
+)
+
+
+def _make_tick_array(rows: List[Tuple[Any, ...]]) -> np.ndarray:
+    """Build an exact local structured ndarray matching official MT5 tick layout."""
+    return np.array(rows, dtype=MT5_TICK_DTYPE)
+
 
 @dataclass(frozen=True)
 class FakeMT5RPyCCall:
@@ -24,10 +46,13 @@ class FakeMT5RPyCRoot:
             "TIMEFRAME_M1": 1,
             "TIMEFRAME_M5": 5,
             "COPY_TICKS_ALL": 0,
+            "COPY_TICKS_TRADE": 2,
         }
         self._calls: List[FakeMT5RPyCCall] = []
         # MT5 ACCOUNT_MARGIN_MODE: 0=netting, 2=retail hedging (default hedging for XP/Tickmill fakes).
         self._margin_mode: int = 2
+        # Optional override for bounded A05 tests (None → default fixtures).
+        self._copy_ticks_range_override: Any = None
 
     @property
     def calls(self) -> List[FakeMT5RPyCCall]:
@@ -493,37 +518,38 @@ class FakeMT5RPyCRoot:
         )
         return self.exposed_copy_rates_from_pos(symbol, timeframe, 0, 10)
 
-    def exposed_copy_ticks_range(self, symbol: str, date_from: Any, date_to: Any, flags: int) -> List[Dict[str, Any]]:
+    def exposed_copy_ticks_range(self, symbol: str, date_from: Any, date_to: Any, flags: int) -> np.ndarray:
         self._record_call("copy_ticks_range", (symbol, date_from, date_to, flags), {})
+        if self._copy_ticks_range_override is not None:
+            return self._copy_ticks_range_override
+        # time, bid, ask, last, volume, time_msc, flags, volume_real
         if symbol == "USTEC":
-            return [
-                {
-                    "time": 1700000000,
-                    "bid": 18500.00,
-                    "ask": 18500.50,
-                    "last": 18500.25,
-                    "flags": 0,
-                }
-            ]
+            return _make_tick_array(
+                [(1700000000, 18500.00, 18500.50, 18500.25, 1, 1700000000000, 0, 1.0)],
+            )
         if symbol == "BTCUSD":
-            return [
-                {
-                    "time": 1700000000,
-                    "bid": 78000.00,
-                    "ask": 78001.00,
-                    "last": 78000.50,
-                    "flags": 0,
-                }
-            ]
-        return [
-            {
-                "time": 1700000000,
-                "bid": 1.10000,
-                "ask": 1.10020,
-                "last": 1.10010,
-                "flags": 0,
-            }
-        ]
+            return _make_tick_array(
+                [(1700000000, 78000.00, 78001.00, 78000.50, 1, 1700000000000, 0, 1.0)],
+            )
+        if symbol == "WIN$":
+            return _make_tick_array(
+                [(1700000000, 0.0, 0.0, 176290.0, 10, 1700000000000, 1336, 10.0)],
+            )
+        if symbol in ("WDOQ26", "WDON26"):
+            return _make_tick_array(
+                [(1700000000, 5178.5, 5179.0, 5178.5, 3, 1700000000000, 1368, 3.0)],
+            )
+        if symbol == "MESU26":
+            return _make_tick_array(
+                [(1700000000, 7529.50, 7529.75, 7529.50, 4, 1700000000000, 1368, 4.0)],
+            )
+        if symbol == "WINQ26":
+            return _make_tick_array(
+                [(1700000000, 192490.0, 157495.0, 176290.0, 5, 1700000000000, 1336, 5.0)],
+            )
+        return _make_tick_array(
+            [(1700000000, 1.10000, 1.10020, 1.10010, 1, 1700000000000, 0, 1.0)],
+        )
 
     def exposed_copy_ticks_from(self, symbol: str, date_from: Any, count: int, flags: int) -> List[Dict[str, Any]]:
         self._record_call("copy_ticks_from", (symbol, date_from, count, flags), {})

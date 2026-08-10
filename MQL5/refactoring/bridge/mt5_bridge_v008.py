@@ -250,7 +250,13 @@ if __name__ == "__main__":
     server = ThreadedServer(
         MT5Service,
         port=rpyc_port,
-        protocol_config={"allow_public_attrs": True, "allow_all_attrs": True},
+        protocol_config={
+            "allow_public_attrs": True,
+            "allow_all_attrs": True,
+            # Required so copy_ticks_*/copy_rates_* numpy results can be
+            # rpyc.classic.obtain()'d into exact local ndarrays (A05).
+            "allow_pickle": True,
+        },
     )
     try:
         server.start()

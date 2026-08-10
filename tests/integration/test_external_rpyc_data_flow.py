@@ -170,7 +170,8 @@ async def test_external_rpyc_market_data_flow(
         fake_root.reset_calls()
         ticks_range = mt5_client._mt5_client['mt5'].copy_ticks_range(symbol_name, 1700000000, 1700000060, 0)
         assert len(ticks_range) == 1
-        assert ticks_range[0]['bid'] == 1.10000
+        assert float(ticks_range[0]['bid']) == 1.10000
+        assert type(ticks_range) is __import__("numpy").ndarray
 
         range_calls = [c for c in fake_root.calls if c.method == "copy_ticks_range"]
         assert len(range_calls) == 1

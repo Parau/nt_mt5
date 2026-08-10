@@ -159,6 +159,16 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - **`MAP_TIME_IN_FORCE`** must be applied on submit (`type_time`); do not hardcode GTC for all pending orders (required for **DAY** limit homologation **E06e**).
 - Homologation evidence: **E05b** fill reports, **E43** cancel rejection (10013), **E06de** FOK/DAY, **E07b** stop amend, **E81** open-on-start reconcile — see `res/proximos testes adaptador.md`.
 
+### 23. A05 bounded historical TradeTicks (warmup primitive)
+- Bounded `RequestTradeTicks(start, end, limit=0)` uses dedicated
+  `get_historical_trade_ticks_range` → `copy_ticks_range` + `COPY_TICKS_TRADE`.
+- Empty exact local ndarray → successful `DataResponse([])`; provider `None` /
+  materialization / structural failures → `MT5HistoricalDataError` (no response).
+- Rows reuse live `route_wire_tick` / `wire_tick_to_trade_tick`; filter by inclusive
+  `ts_event`. Legacy count-based / QuoteTick fetch paths unchanged.
+- Successful TradeTick responses use Nautilus 1.227 six-arg `_handle_trade_ticks`
+  with `request.id`.
+
 ## How to use this file
 
 When changing the adapter, ask:
