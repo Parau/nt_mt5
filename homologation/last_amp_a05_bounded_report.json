@@ -5,20 +5,20 @@
   "provider_calls": [
     {
       "symbol": "ENQU26",
-      "from": 1786392777,
-      "to": 1786394578,
+      "from": 1786400647,
+      "to": 1786402448,
       "flags": 2
     },
     {
       "symbol": "ENQU26",
-      "from": 1786394576,
-      "to": 1786394578,
+      "from": 1786402446,
+      "to": 1786402448,
       "flags": 2
     },
     {
       "symbol": "ENQU26",
-      "from": 1788986577,
-      "to": 1788986638,
+      "from": 1788994447,
+      "to": 1788994508,
       "flags": 2
     }
   ],
@@ -27,22 +27,22 @@
       "label": "recent_30m",
       "ok": true,
       "error": null,
-      "n_ticks": 2666,
+      "n_ticks": 1507,
       "response_calls": [
         {
-          "correlation_id": "ae2e535e-f982-475f-b0c1-427a9a318165",
-          "n": 2666,
-          "start": "2026-08-10 20:12:57.693354+00:00",
-          "end": "2026-08-10 20:42:57.693354+00:00",
+          "correlation_id": "8c603253-58df-4cca-9c04-caca80b49b48",
+          "n": 1507,
+          "start": "2026-08-10 22:24:07.326413+00:00",
+          "end": "2026-08-10 22:54:07.326413+00:00",
           "params": {
             "a05_probe": "recent_30m"
           }
         }
       ],
-      "request_id": "ae2e535e-f982-475f-b0c1-427a9a318165",
+      "request_id": "8c603253-58df-4cca-9c04-caca80b49b48",
       "sample": {
-        "ts_event": 1786392779319000000,
-        "price": 29747.0,
+        "ts_event": 1786400647912000000,
+        "price": 29738.25,
         "size": 1.0,
         "aggressor": "2"
       }
@@ -54,16 +54,16 @@
       "n_ticks": 0,
       "response_calls": [
         {
-          "correlation_id": "471b2c3d-012b-4d32-828d-c8a041ec72a8",
+          "correlation_id": "71f1b9aa-e6be-43c0-8675-5550a890f99e",
           "n": 0,
-          "start": "2026-08-10 20:42:56.693354+00:00",
-          "end": "2026-08-10 20:42:57.693354+00:00",
+          "start": "2026-08-10 22:54:06.326413+00:00",
+          "end": "2026-08-10 22:54:07.326413+00:00",
           "params": {
             "a05_probe": "last_1s"
           }
         }
       ],
-      "request_id": "471b2c3d-012b-4d32-828d-c8a041ec72a8",
+      "request_id": "71f1b9aa-e6be-43c0-8675-5550a890f99e",
       "sample": null
     },
     {
@@ -73,16 +73,16 @@
       "n_ticks": 0,
       "response_calls": [
         {
-          "correlation_id": "5fdff66c-d99c-41c9-b53e-e5fd08ba9280",
+          "correlation_id": "ec927e46-ca6b-4ee6-b279-e1ddd5620e23",
           "n": 0,
-          "start": "2026-09-09 20:42:57.693354+00:00",
-          "end": "2026-09-09 20:43:57.693354+00:00",
+          "start": "2026-09-09 22:54:07.326413+00:00",
+          "end": "2026-09-09 22:55:07.326413+00:00",
           "params": {
             "a05_probe": "future_empty"
           }
         }
       ],
-      "request_id": "5fdff66c-d99c-41c9-b53e-e5fd08ba9280",
+      "request_id": "ec927e46-ca6b-4ee6-b279-e1ddd5620e23",
       "sample": null
     }
   ]

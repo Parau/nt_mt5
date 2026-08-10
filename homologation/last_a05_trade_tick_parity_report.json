@@ -1,0 +1,322 @@
+{
+  "result": "FAIL",
+  "adapter_commit": "b2531338b4dc42790bb81103282de2e6d3bb39c2",
+  "metatrader5_package_version": "5.0.5200",
+  "terminal_build": 6067,
+  "broker_server": "AMPGlobalUSA-Demo",
+  "account_login": 1594578,
+  "venue_profile": "amp-us",
+  "instrument": "ENQU26",
+  "gateway": "127.0.0.1:18814",
+  "feed": "ws://0.0.0.0:18767/mt5-feed",
+  "capture_start": "2026-08-10 22:55:45.364000+00:00",
+  "capture_end": "2026-08-10 22:56:29.746000+00:00",
+  "capture_wall_start": 1786402587.6320121,
+  "capture_wall_end": 1786402632.6427603,
+  "live_count": 62,
+  "historical_count": 10,
+  "provider_raw": {
+    "fetch_start_seconds": 1786402545,
+    "fetch_end_seconds": 1786402590,
+    "COPY_TICKS_TRADE": 2,
+    "COPY_TICKS_ALL": -1,
+    "raw_trade": {
+      "is_none": false,
+      "exact_local_ndarray": true,
+      "len": 10,
+      "dtype_names": [
+        "time",
+        "bid",
+        "ask",
+        "last",
+        "volume",
+        "time_msc",
+        "flags",
+        "volume_real"
+      ]
+    },
+    "raw_all": {
+      "is_none": false,
+      "exact_local_ndarray": true,
+      "len": 62,
+      "dtype_names": [
+        "time",
+        "bid",
+        "ask",
+        "last",
+        "volume",
+        "time_msc",
+        "flags",
+        "volume_real"
+      ]
+    },
+    "raw_trade_in_bound_ns": 10,
+    "raw_all_in_bound_ns": 62,
+    "last_error": [
+      1,
+      "Success"
+    ]
+  },
+  "ts_overlap": {
+    "live_ts_stats": {
+      "unique_ts": 50,
+      "rows": 62,
+      "max_multiplicity": 5,
+      "equal_ts_groups": 8
+    },
+    "hist_ts_stats": {
+      "unique_ts": 6,
+      "rows": 10,
+      "max_multiplicity": 4,
+      "equal_ts_groups": 2
+    },
+    "ts_in_both": 6,
+    "ts_only_live": 44,
+    "ts_only_hist": 0,
+    "only_live_ts_head": [
+      1786402545364000000,
+      1786402545885000000,
+      1786402546268000000,
+      1786402546329000000,
+      1786402546520000000,
+      1786402547010000000,
+      1786402547033000000,
+      1786402547859000000,
+      1786402549406000000,
+      1786402549458000000,
+      1786402550426000000,
+      1786402551703000000,
+      1786402552399000000,
+      1786402553349000000,
+      1786402553521000000,
+      1786402560481000000,
+      1786402562087000000,
+      1786402562449000000,
+      1786402562552000000,
+      1786402562912000000
+    ],
+    "only_hist_ts_head": [],
+    "live_first_last": [
+      1786402545364000000,
+      1786402589746000000
+    ],
+    "hist_first_last": [
+      1786402546519000000,
+      1786402574865000000
+    ]
+  },
+  "interpretation": {
+    "a05_emitted_vs_raw_trade_in_bound": {
+      "raw_trade_in_bound": 10,
+      "a05_emitted": 10,
+      "dropped_by_routing_or_conversion": 0
+    },
+    "live_vs_raw_trade_in_bound": {
+      "live_emitted": 62,
+      "raw_trade_in_bound": 10,
+      "live_minus_raw_trade": 52
+    },
+    "hypothesis": "provider_returns_fewer_TRADE_rows_than_live_feed"
+  },
+  "live_sample_head": [
+    {
+      "ts_event": 1786402545364000000,
+      "price": 29731.25,
+      "price_raw": 29731250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "0"
+    },
+    {
+      "ts_event": 1786402545885000000,
+      "price": 29731.25,
+      "price_raw": 29731250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "0"
+    },
+    {
+      "ts_event": 1786402546268000000,
+      "price": 29731.25,
+      "price_raw": 29731250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "0"
+    },
+    {
+      "ts_event": 1786402546329000000,
+      "price": 29731.25,
+      "price_raw": 29731250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "0"
+    },
+    {
+      "ts_event": 1786402546519000000,
+      "price": 29731.25,
+      "price_raw": 29731250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    }
+  ],
+  "live_sample_tail": [
+    {
+      "ts_event": 1786402588164000000,
+      "price": 29732.75,
+      "price_raw": 29732750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "0"
+    },
+    {
+      "ts_event": 1786402588454000000,
+      "price": 29732.75,
+      "price_raw": 29732750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "0"
+    },
+    {
+      "ts_event": 1786402588610000000,
+      "price": 29732.75,
+      "price_raw": 29732750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "0"
+    },
+    {
+      "ts_event": 1786402589123000000,
+      "price": 29732.75,
+      "price_raw": 29732750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "0"
+    },
+    {
+      "ts_event": 1786402589746000000,
+      "price": 29732.75,
+      "price_raw": 29732750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "0"
+    }
+  ],
+  "hist_sample_head": [
+    {
+      "ts_event": 1786402546519000000,
+      "price": 29731.25,
+      "price_raw": 29731250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786402561475000000,
+      "price": 29731.25,
+      "price_raw": 29731250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786402561478000000,
+      "price": 29731.25,
+      "price_raw": 29731250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786402561478000000,
+      "price": 29731.5,
+      "price_raw": 29731500000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786402571469000000,
+      "price": 29732.25,
+      "price_raw": 29732250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    }
+  ],
+  "hist_sample_tail": [
+    {
+      "ts_event": 1786402573151000000,
+      "price": 29732.5,
+      "price_raw": 29732500000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786402573151000000,
+      "price": 29732.5,
+      "price_raw": 29732500000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786402573151000000,
+      "price": 29732.5,
+      "price_raw": 29732500000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786402573151000000,
+      "price": 29732.75,
+      "price_raw": 29732750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786402574865000000,
+      "price": 29732.75,
+      "price_raw": 29732750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    }
+  ],
+  "streams_file": "homologation/last_a05_trade_tick_parity_report_20260810T225737Z_streams.json",
+  "first_mismatch": "accepted event count live=62 historical=10",
+  "mismatch_count": 27,
+  "mismatches_head": [
+    "accepted event count live=62 historical=10",
+    "index=0 ts_event: live=1786402545364000000 historical=1786402546519000000",
+    "index=0 aggressor_side: live=<AggressorSide.NO_AGGRESSOR: 0> historical=<AggressorSide.BUYER: 1>",
+    "index=1 ts_event: live=1786402545885000000 historical=1786402561475000000",
+    "index=1 aggressor_side: live=<AggressorSide.NO_AGGRESSOR: 0> historical=<AggressorSide.BUYER: 1>",
+    "index=2 ts_event: live=1786402546268000000 historical=1786402561478000000",
+    "index=2 aggressor_side: live=<AggressorSide.NO_AGGRESSOR: 0> historical=<AggressorSide.BUYER: 1>",
+    "index=3 ts_event: live=1786402546329000000 historical=1786402561478000000",
+    "index=3 price.raw: live=29731250000000 historical=29731500000000",
+    "index=3 aggressor_side: live=<AggressorSide.NO_AGGRESSOR: 0> historical=<AggressorSide.BUYER: 1>",
+    "index=4 ts_event: live=1786402546519000000 historical=1786402571469000000",
+    "index=4 price.raw: live=29731250000000 historical=29732250000000",
+    "index=5 ts_event: live=1786402546519000000 historical=1786402573151000000",
+    "index=5 price.raw: live=29731250000000 historical=29732500000000",
+    "index=5 aggressor_side: live=<AggressorSide.NO_AGGRESSOR: 0> historical=<AggressorSide.BUYER: 1>",
+    "index=6 ts_event: live=1786402546520000000 historical=1786402573151000000",
+    "index=6 price.raw: live=29731250000000 historical=29732500000000",
+    "index=6 aggressor_side: live=<AggressorSide.NO_AGGRESSOR: 0> historical=<AggressorSide.BUYER: 1>",
+    "index=7 ts_event: live=1786402546520000000 historical=1786402573151000000",
+    "index=7 price.raw: live=29731250000000 historical=29732500000000",
+    "index=7 aggressor_side: live=<AggressorSide.NO_AGGRESSOR: 0> historical=<AggressorSide.BUYER: 1>",
+    "index=8 ts_event: live=1786402547010000000 historical=1786402573151000000",
+    "index=8 price.raw: live=29731250000000 historical=29732750000000",
+    "index=8 aggressor_side: live=<AggressorSide.NO_AGGRESSOR: 0> historical=<AggressorSide.BUYER: 1>",
+    "index=9 ts_event: live=1786402547033000000 historical=1786402574865000000",
+    "index=9 price.raw: live=29731250000000 historical=29732750000000",
+    "index=9 aggressor_side: live=<AggressorSide.NO_AGGRESSOR: 0> historical=<AggressorSide.BUYER: 1>"
+  ],
+  "generated_at": "2026-08-10T22:57:37.435109+00:00"
+}
