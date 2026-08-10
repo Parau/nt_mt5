@@ -112,10 +112,18 @@ def test_fake_bridge_symbols_and_market_data():
     assert "close" in rates[0]
 
     ticks_range = root.exposed_copy_ticks_range("EURUSD", 1700000000, 1700000060, 0)
-    assert type(ticks_range) is __import__("numpy").ndarray
-    assert len(ticks_range) > 0
-    assert "bid" in ticks_range.dtype.names
-    assert float(ticks_range[0]["bid"]) == 1.10000
+    assert isinstance(ticks_range, tuple)
+    assert ticks_range[0] == "MT5_TICKS_V1"
+    assert ticks_range[1] == 1
+    assert isinstance(ticks_range[2], (bytes, bytearray))
+
+    from nautilus_mt5.metatrader5.tick_transport import decode_mt5_ticks_frame
+
+    decoded = decode_mt5_ticks_frame(ticks_range)
+    assert type(decoded) is __import__("numpy").ndarray
+    assert len(decoded) > 0
+    assert "bid" in decoded.dtype.names
+    assert float(decoded[0]["bid"]) == 1.10000
 
     assert root.exposed_get_constant("COPY_TICKS_TRADE") == 2
 

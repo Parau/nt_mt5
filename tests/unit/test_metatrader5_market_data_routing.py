@@ -94,13 +94,20 @@ def test_copy_ticks_range_routing(mock_rpyc_connect):
     mock_connect, mock_conn = mock_rpyc_connect
     mt5 = MetaTrader5()
 
-    expected_return = "ticks_data_range"
-    mock_conn.root.exposed_copy_ticks_range.return_value = expected_return
+    from nautilus_mt5.metatrader5.tick_transport import encode_mt5_ticks_frame
+    from tests.support.fake_mt5_rpyc_bridge import _make_tick_array
+
+    raw = _make_tick_array(
+        [(1700000000, 1.10000, 1.10020, 1.10010, 1, 1700000000000, 0, 1.0)],
+    )
+    mock_conn.root.exposed_copy_ticks_range.return_value = encode_mt5_ticks_frame(raw)
 
     result = mt5.copy_ticks_range("EURUSD", 1000, 2000, 0)
 
     mock_conn.root.exposed_copy_ticks_range.assert_called_once_with("EURUSD", 1000, 2000, 0)
-    assert result == expected_return
+    assert type(result) is __import__("numpy").ndarray
+    assert len(result) == 1
+    assert float(result[0]["bid"]) == 1.10000
     mock_conn.root.exposed_positions_get.assert_not_called()
 
 def test_copy_ticks_from_routing(mock_rpyc_connect):

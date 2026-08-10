@@ -16,15 +16,17 @@ TC coverage:
   TC-D10  Order book subscription — Unsupported; logs warning, no raise
   TC-D20  Subscribe QuoteTicks — subscription reaches MT5Client.subscribe_ticks()
   TC-D21  Historical QuoteTicks — wiring + end-to-end: QuoteTick objects reach _handle_quote_ticks
-  TC-D30  TradeTick — explicit capability decision documented
+  TC-D30  TradeTick subscribe — VenueProfile gate (Tickmill reject; XP_B3 / AMP_US pass)
+  TC-D31  TradeTick request — VenueProfile gate + XP/AMP delivery; A05 bounded
+          ``start/end + limit=0`` via ``copy_ticks_range(COPY_TICKS_TRADE)``
   TC-D40  Request historical bars — wiring + end-to-end: Bar objects reach _handle_bars
   TC-D41  Subscribe bars — WS feed subscribe_bars (feed.enabled) + unsupported 5s warning
   TC-D70  Unsubscribe on stop — feed unsubscribe_bars / quote WS routes
   TC-D71  Custom subscribe params — explicitly not supported; documented
   TC-D72  Custom request params — explicitly not supported; documented
 
-TC NOT covered (documented explicitly):
-  TC-D30/D31  TradeTick — Partial/Undecided; copy_ticks_* maps to QuoteTick, not TradeTick
+Actor→DataEngine→adapter→DataResponse→Actor for A05 bounded requests:
+  see ``test_a05_actor_data_engine_bounded.py`` (no ``_handle_trade_ticks`` spy).
 
 Markers: @pytest.mark.data_tester
 """

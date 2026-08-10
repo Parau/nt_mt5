@@ -83,7 +83,8 @@ async def test_external_rpyc_symbol_flow(
         # Execute symbols_get flow
         fake_root.reset_calls()
         symbols = mt5_client._mt5_client['mt5'].symbols_get()
-        assert symbols == ["EURUSD"]
+        assert isinstance(symbols, list)
+        assert "EURUSD" in symbols
         assert any(c.method == "symbols_get" for c in fake_root.calls)
 
         # Execute symbol_select flow

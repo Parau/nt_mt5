@@ -2777,11 +2777,19 @@ Display dataframe with ticks
     `CopyRates`, `copy_rates_from_pos`, `copy_rates_range`, `copy_ticks_from`, `copy_ticks_range`
         '''
         try:
-            return normalize_rpyc_return(self.__conn.root.exposed_copy_ticks_range(*args, **kwargs))
+            wire = normalize_rpyc_return(self.__conn.root.exposed_copy_ticks_range(*args, **kwargs))
         except AttributeError as exc:
             raise RuntimeError(
                 f"external_rpyc gateway does not expose required method: copy_ticks_range"
             ) from exc
+        from nautilus_mt5.metatrader5.tick_transport import decode_mt5_ticks_frame
+
+        try:
+            return decode_mt5_ticks_frame(wire)
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError("failed decoding copy_ticks_range wire frame") from exc
 
     def orders_total(self,*args,**kwargs):
         r'''

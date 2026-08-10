@@ -760,11 +760,11 @@ class MetaTrader5ClientMarketDataMixin:
                 flags=flags_i,
             )
 
-            decision = route_wire_tick(instrument, wire)
-            if not decision.emit_trade:
-                continue
-
             try:
+                decision = route_wire_tick(instrument, wire)
+                if not decision.emit_trade:
+                    continue
+
                 trade = wire_tick_to_trade_tick(
                     instrument,
                     wire,
@@ -773,7 +773,7 @@ class MetaTrader5ClientMarketDataMixin:
                 )
             except Exception as exc:
                 raise MT5HistoricalDataError(
-                    f"Failed converting MT5 historical trade row at index={index}",
+                    f"Failed routing/converting MT5 historical trade row at index={index}",
                 ) from exc
 
             if trade is not None:

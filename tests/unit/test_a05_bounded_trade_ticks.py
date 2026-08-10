@@ -340,6 +340,30 @@ def test_parity_helper_detects_count_mismatch() -> None:
     assert any("accepted event count" in m for m in mismatches)
 
 
+@pytest.mark.asyncio
+async def test_malformed_routing_metadata_raises_historical_error() -> None:
+    """route_wire_tick failures must surface as MT5HistoricalDataError (x04 §5)."""
+    raw = _make_tick_array(
+        [(1700000000, 0.0, 0.0, 176290.0, 10, 1700000000000, 1336, 10.0)],
+    )
+    mt5 = SimpleNamespace(COPY_TICKS_TRADE=2, copy_ticks_range=MagicMock(return_value=raw))
+    host = _BoundedHelperHost(mt5)
+    instrument = _win_dollar_instrument()
+    # Non-integral trade_mode makes instrument_trade_mode()/route_wire_tick raise.
+    instrument.info["trade_mode"] = "not-an-int"
+
+    start = pd.Timestamp("2023-11-14 22:13:20", tz="UTC")
+    end = pd.Timestamp("2023-11-14 22:13:21", tz="UTC")
+    with pytest.raises(MT5HistoricalDataError, match="routing/converting"):
+        await host.get_historical_trade_ticks_range(
+            symbol=MT5Symbol(symbol="WIN$"),
+            instrument=instrument,
+            start_date_time=start,
+            end_date_time=end,
+            map_tick_flags_to_aggressor=True,
+        )
+
+
 def test_live_equivalent_conversion_matches_wire_path() -> None:
     instrument = _win_dollar_instrument()
     wire = WireTick(

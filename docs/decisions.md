@@ -168,6 +168,12 @@ This file records only local decisions needed to implement `nt_mt5` consistently
   `ts_event`. Legacy count-based / QuoteTick fetch paths unchanged.
 - Successful TradeTick responses use Nautilus 1.227 six-arg `_handle_trade_ticks`
   with `request.id`.
+- EXTERNAL_RPYC transports ticks as brine-safe `MT5_TICKS_V1` frames
+  `(tag, row_count, bytes)` reconstructed to an exact local ndarray; RPyC
+  `allow_pickle` must remain disabled. LOCAL_PYTHON still returns the official
+  local ndarray directly.
+- Full historical↔live stream parity is **PENDING** and mandatory before B07
+  warmup certification; the comparator helper is not a completed homologation gate.
 
 ## How to use this file
 
