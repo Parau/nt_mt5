@@ -105,6 +105,37 @@ def test_route_wire_tick_trade_only() -> None:
     assert trade is not None
 
 
+def test_volume_only_flag_creates_nautilus_trade_tick() -> None:
+    """VOLUME without LAST must still become a TradeTick (same-price fill)."""
+    from nautilus_mt5.tick_routing import TICK_FLAG_LAST, TICK_FLAG_VOLUME
+
+    instrument = _btcusd_instrument()
+    tick = WireTick(
+        time_msc=2_000,
+        bid=60468.0,
+        ask=60478.0,
+        last=60470.0,
+        volume=3,
+        volume_real=3.0,
+        flags=TICK_FLAG_VOLUME,
+    )
+    assert tick.flags == TICK_FLAG_VOLUME
+    assert (tick.flags & TICK_FLAG_LAST) == 0
+    quote, trade = route_wire_tick_to_nautilus(
+        instrument,
+        tick,
+        ts_init=9_000_000_000,
+        map_tick_flags_to_aggressor=True,
+    )
+    assert trade is not None
+    assert float(trade.price) == 60470.0
+    assert float(trade.size) == float(resolve_trade_tick_size(3, 3.0))
+    assert trade.ts_event == 2_000 * 1_000_000
+    assert trade.aggressor_side == AggressorSide.NO_AGGRESSOR
+    # Bid/Ask present → quote may also emit; trade must not disappear.
+    assert quote is not None
+
+
 def test_wire_bar_to_nautilus_bar() -> None:
     instrument = _btcusd_instrument()
     bar_type = BarType(

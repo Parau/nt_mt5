@@ -364,6 +364,38 @@ async def test_malformed_routing_metadata_raises_historical_error() -> None:
         )
 
 
+@pytest.mark.asyncio
+async def test_a05_bounded_preserves_volume_only_trade_row() -> None:
+    """COPY_TICKS_TRADE may include VOLUME-only rows (same last price, new volume)."""
+    from nautilus_mt5.tick_routing import TICK_FLAG_VOLUME
+
+    # time, bid, ask, last, volume, time_msc, flags, volume_real
+    raw = _make_tick_array(
+        [
+            (1700000000, 0.0, 0.0, 176290.0, 10, 1700000000000, TICK_FLAG_VOLUME, 10.0),
+            # Bid-only residual last must not become a historical TradeTick.
+            (1700000000, 176280.0, 176300.0, 176290.0, 10, 1700000000100, 2, 10.0),
+        ],
+    )
+    mt5 = SimpleNamespace(COPY_TICKS_TRADE=2, copy_ticks_range=MagicMock(return_value=raw))
+    host = _BoundedHelperHost(mt5)
+    instrument = _win_dollar_instrument()
+    start = pd.Timestamp("2023-11-14 22:13:20", tz="UTC")
+    end = pd.Timestamp("2023-11-14 22:13:21", tz="UTC")
+
+    ticks = await host.get_historical_trade_ticks_range(
+        symbol=MT5Symbol(symbol="WIN$"),
+        instrument=instrument,
+        start_date_time=start,
+        end_date_time=end,
+        map_tick_flags_to_aggressor=True,
+    )
+    assert len(ticks) == 1
+    assert float(ticks[0].price) == 176290.0
+    assert float(ticks[0].size) == 10.0
+    assert ticks[0].ts_event == 1700000000000_000_000
+
+
 def test_live_equivalent_conversion_matches_wire_path() -> None:
     instrument = _win_dollar_instrument()
     wire = WireTick(

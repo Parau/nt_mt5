@@ -139,6 +139,42 @@ def test_ask_only_update_with_stale_last_does_not_emit_trade() -> None:
     assert decision.emit_trade is False
 
 
+def test_volume_only_change_emits_trade() -> None:
+    """Same-price fill: volume changed, last price unchanged — still a TradeTick."""
+    inst = _instrument_from_fixture("symbol_info_wdon26.json")
+    wire = WireTick(
+        time_msc=1,
+        bid=100.0,
+        ask=101.0,
+        last=100.5,
+        volume=2,
+        volume_real=2.0,
+        flags=TICK_FLAG_VOLUME,
+    )
+    assert wire.flags == TICK_FLAG_VOLUME
+    assert (wire.flags & TICK_FLAG_LAST) == 0
+    decision = route_wire_tick(inst, wire)
+    assert decision.emit_trade is True
+    assert decision.emit_quote is True
+
+
+def test_last_only_change_emits_trade() -> None:
+    inst = _instrument_from_fixture("symbol_info_wdon26.json")
+    decision = route_wire_tick(
+        inst,
+        WireTick(
+            time_msc=1,
+            bid=100.0,
+            ask=101.0,
+            last=100.5,
+            volume=2,
+            volume_real=2.0,
+            flags=TICK_FLAG_LAST,
+        ),
+    )
+    assert decision.emit_trade is True
+
+
 def test_continuous_symbol_also_requires_trade_flags() -> None:
     """WIN$ must not fall back to last>0 — probes show real trades carry LAST/VOLUME."""
     inst = _instrument_from_fixture("symbol_info_win_dollar.json")
@@ -159,3 +195,21 @@ def test_continuous_symbol_also_requires_trade_flags() -> None:
         ),
     )
     assert real.emit_trade is True
+
+
+def test_continuous_volume_only_emits_trade() -> None:
+    inst = _instrument_from_fixture("symbol_info_win_dollar.json")
+    decision = route_wire_tick(
+        inst,
+        WireTick(
+            time_msc=1,
+            bid=0.0,
+            ask=0.0,
+            last=176290.0,
+            volume=10,
+            volume_real=10.0,
+            flags=TICK_FLAG_VOLUME,
+        ),
+    )
+    assert decision.emit_trade is True
+    assert decision.emit_quote is False
