@@ -1,103 +1,5 @@
 {
-  "result": "PASS",
-  "adapter_commit": "b60d0ebfaf4b23fe52f11d70d8fa64b4c0a7fef5",
-  "metatrader5_package_version": "5.0.5200",
-  "terminal_build": 6067,
-  "broker_server": "AMPGlobalUSA-Demo",
-  "account_login": 1594578,
-  "venue_profile": "amp-us",
-  "instrument": "ENQU26",
-  "gateway": "127.0.0.1:18814",
-  "feed": "ws://0.0.0.0:18767/mt5-feed",
-  "capture_start": "2026-08-10 23:13:34.127000+00:00",
-  "capture_end": "2026-08-10 23:14:04.769000+00:00",
-  "capture_wall_start": 1786403652.8451202,
-  "capture_wall_end": 1786403697.859466,
-  "live_count": 15,
-  "historical_count": 15,
-  "provider_raw": {
-    "fetch_start_seconds": 1786403614,
-    "fetch_end_seconds": 1786403645,
-    "COPY_TICKS_TRADE": 2,
-    "COPY_TICKS_ALL": -1,
-    "raw_trade": {
-      "is_none": false,
-      "exact_local_ndarray": true,
-      "len": 15,
-      "dtype_names": [
-        "time",
-        "bid",
-        "ask",
-        "last",
-        "volume",
-        "time_msc",
-        "flags",
-        "volume_real"
-      ]
-    },
-    "raw_all": {
-      "is_none": false,
-      "exact_local_ndarray": true,
-      "len": 65,
-      "dtype_names": [
-        "time",
-        "bid",
-        "ask",
-        "last",
-        "volume",
-        "time_msc",
-        "flags",
-        "volume_real"
-      ]
-    },
-    "raw_trade_in_bound_ns": 15,
-    "raw_all_in_bound_ns": 64,
-    "last_error": [
-      1,
-      "Success"
-    ]
-  },
-  "ts_overlap": {
-    "live_ts_stats": {
-      "unique_ts": 12,
-      "rows": 15,
-      "max_multiplicity": 2,
-      "equal_ts_groups": 3
-    },
-    "hist_ts_stats": {
-      "unique_ts": 12,
-      "rows": 15,
-      "max_multiplicity": 2,
-      "equal_ts_groups": 3
-    },
-    "ts_in_both": 12,
-    "ts_only_live": 0,
-    "ts_only_hist": 0,
-    "only_live_ts_head": [],
-    "only_hist_ts_head": [],
-    "live_first_last": [
-      1786403614127000000,
-      1786403644769000000
-    ],
-    "hist_first_last": [
-      1786403614127000000,
-      1786403644769000000
-    ]
-  },
-  "interpretation": {
-    "a05_emitted_vs_raw_trade_in_bound": {
-      "raw_trade_in_bound": 15,
-      "a05_emitted": 15,
-      "dropped_by_routing_or_conversion": 0
-    },
-    "live_vs_raw_trade_in_bound": {
-      "live_emitted": 15,
-      "raw_trade_in_bound": 15,
-      "live_minus_raw_trade": 0
-    },
-    "hypothesis": "streams_aligned_or_inconclusive"
-  },
-  "live_sample_head": [
+  "live_ticks": [
     {
       "ts_event": 1786403614127000000,
       "price": 29730.25,
@@ -137,9 +39,47 @@
       "size": 1.0,
       "size_raw": 1000000000,
       "aggressor_side": "2"
-    }
-  ],
-  "live_sample_tail": [
+    },
+    {
+      "ts_event": 1786403619554000000,
+      "price": 29729.75,
+      "price_raw": 29729750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403619669000000,
+      "price": 29729.0,
+      "price_raw": 29729000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403619669000000,
+      "price": 29728.75,
+      "price_raw": 29728750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403622360000000,
+      "price": 29730.0,
+      "price_raw": 29730000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403625280000000,
+      "price": 29728.75,
+      "price_raw": 29728750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
     {
       "ts_event": 1786403626841000000,
       "price": 29728.75,
@@ -181,7 +121,7 @@
       "aggressor_side": "1"
     }
   ],
-  "hist_sample_head": [
+  "historical_ticks": [
     {
       "ts_event": 1786403614127000000,
       "price": 29730.25,
@@ -221,9 +161,47 @@
       "size": 1.0,
       "size_raw": 1000000000,
       "aggressor_side": "2"
-    }
-  ],
-  "hist_sample_tail": [
+    },
+    {
+      "ts_event": 1786403619554000000,
+      "price": 29729.75,
+      "price_raw": 29729750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403619669000000,
+      "price": 29729.0,
+      "price_raw": 29729000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403619669000000,
+      "price": 29728.75,
+      "price_raw": 29728750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403622360000000,
+      "price": 29730.0,
+      "price_raw": 29730000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403625280000000,
+      "price": 29728.75,
+      "price_raw": 29728750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
     {
       "ts_event": 1786403626841000000,
       "price": 29728.75,
@@ -264,10 +242,5 @@
       "size_raw": 1000000000,
       "aggressor_side": "1"
     }
-  ],
-  "streams_file": "homologation/last_a05_trade_tick_parity_report_20260810T231522Z_streams.json",
-  "first_mismatch": null,
-  "mismatch_count": 0,
-  "mismatches_head": [],
-  "generated_at": "2026-08-10T23:15:22.643703+00:00"
+  ]
 }

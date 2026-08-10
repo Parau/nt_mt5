@@ -172,8 +172,11 @@ This file records only local decisions needed to implement `nt_mt5` consistently
   `(tag, row_count, bytes)` reconstructed to an exact local ndarray; RPyC
   `allow_pickle` must remain disabled. LOCAL_PYTHON still returns the official
   local ndarray directly.
-- Full historical↔live stream parity is **PENDING** and mandatory before B07
-  warmup certification; the comparator helper is not a completed homologation gate.
+- Live trade emission must follow MT5 change flags (`TICK_FLAG_LAST` /
+  `TICK_FLAG_VOLUME`), not stale `last > 0`. That aligns live with
+  `COPY_TICKS_TRADE` and prevents Bid/Ask-only updates from inventing trades.
+- Full historical↔live stream parity on AMP ENQU26: **PASS** after the flags-based
+  live routing fix (`homologation/run_a05_trade_tick_parity.py`).
 
 ## How to use this file
 

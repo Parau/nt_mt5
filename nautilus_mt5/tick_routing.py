@@ -87,6 +87,10 @@ def route_wire_tick(instrument: Instrument, tick: WireTick | TickLike) -> TickRo
     """
     Decide whether a WS/poll tick should produce QuoteTick, TradeTick, or both.
 
+    Trade emission follows MT5 change flags (``TICK_FLAG_LAST`` / ``TICK_FLAG_VOLUME``),
+    matching ``COPY_TICKS_TRADE`` selection. A stale ``last > 0`` carried on Bid/Ask-only
+    updates must not invent TradeTicks — MT5 leaves unchanged fields populated.
+
     Continuous/disabled symbols never emit quotes. Off-hours WINQ26-style garbage
     bid/ask is filtered by the sanity gate when ``last > 0``.
     """
@@ -96,21 +100,19 @@ def route_wire_tick(instrument: Instrument, tick: WireTick | TickLike) -> TickRo
     has_bid_ask = tick.bid > 0 and tick.ask > 0 and tick.ask > tick.bid
     has_last = tick.last > 0
     flags = int(getattr(tick, "flags", 0) or 0)
-    last_flag = bool(flags & TICK_FLAG_LAST) or has_last
+    # MT5 CopyTicks: TRADE rows are those where Last and/or Volume changed.
+    trade_changed = bool(flags & (TICK_FLAG_LAST | TICK_FLAG_VOLUME))
+    emit_trade = trade_changed
 
     if trade_mode == SYMBOL_TRADE_MODE_DISABLED or is_continuous_data_symbol(symbol):
-        if has_last or last_flag:
-            return TickRoutingDecision(emit_quote=False, emit_trade=True)
-        return TickRoutingDecision(emit_quote=False, emit_trade=False)
+        return TickRoutingDecision(emit_quote=False, emit_trade=emit_trade)
 
-    emit_trade = has_last and (last_flag or not has_bid_ask)
     emit_quote = has_bid_ask
 
     if emit_quote and has_last and not quote_passes_sanity_gate(tick.bid, tick.ask, tick.last, instrument):
-        emit_quote = False
         return TickRoutingDecision(
             emit_quote=False,
-            emit_trade=emit_trade or has_last,
+            emit_trade=emit_trade,
             quote_reject_reason="bid/ask failed sanity gate vs last",
         )
 

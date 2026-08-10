@@ -1,0 +1,16 @@
+{
+  "purpose": "Confirm COPY_TICKS_TRADE == ALL rows with TICK_FLAG_LAST|VOLUME before live routing fix",
+  "instrument": "ENQU26",
+  "interval_ns": [1786402545364000000, 1786402589746000000],
+  "all_in_bound": 62,
+  "trade_in_bound": 10,
+  "all_with_LAST_or_VOLUME": 10,
+  "categories": {
+    "BID_ASK_only": 52,
+    "LAST_or_VOLUME": 10,
+    "with_BUY_or_SELL": 10
+  },
+  "exact_multiset_match_trade_vs_flagged_all": true,
+  "bid_ask_only_with_stale_last_gt0": 52,
+  "conclusion": "Live over-emitted TradeTicks because route_wire_tick treated last>0 as trade; A05 COPY_TICKS_TRADE is correct."
+}
