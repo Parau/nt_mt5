@@ -4,18 +4,20 @@ QuoteTick semantics homologation after flag-based routing fix (Tier 1.5).
 Purpose/Single Responsibility:
     Verify that ``emit_quote = has_bid_ask and quote_changed`` (BID|ASK flags)
     eliminates false QuoteTicks on trade-only residual bid/ask rows, while
-    preserving ``COPY_TICKS_INFO == ALL[BID|ASK]`` and TradeTick LAST|VOLUME.
+    preserving ``COPY_TICKS_INFO == ALL[BID|ASK]``, historical QuoteTick INFO
+    conversion parity, and TradeTick LAST|VOLUME.
 
 Data Flow & Dependencies:
     1) RPyC: ``COPY_TICKS_ALL`` vs ``COPY_TICKS_INFO`` + eligible vs actual quotes.
-    2) Live TradingNode: WireTicks → route → QuoteTick/TradeTick counts.
+    2) Same INFO snapshot → adapter conversion via ``route_wire_tick_to_nautilus``.
+    3) Live TradingNode: WireTicks → route → QuoteTick/TradeTick counts.
     Writes ``homologation/last_quote_tick_semantics_report.json``.
 
 Premises & Limitations:
-    Does not change subscription gating, handler, or TradeTick rules.
+    Does not change subscription gating or TradeTick LAST|VOLUME rules.
     Requires AMP open market, RPyC bridge, and NT5TickFeedService → host feed.
-    Compare actual route quotes to eligible rows (flags + valid bid/ask + sanity),
-    not raw INFO count.
+    Compare actual route/historical quotes to eligible rows
+    (flags + valid bid/ask + sanity), not raw INFO count.
 
 Usage (Windows CMD)::
 
@@ -603,14 +605,15 @@ def _subscription_characterization() -> dict[str, Any]:
             "_feed_quote_symbols / _feed_trade_symbols track intent but "
             "_handle_feed_ticks does not consult them before route_wire_tick_to_nautilus",
             "_handle_feed_ticks publishes both QuoteTick and TradeTick when routing emits them",
-            "InboundFeedHandler.dedup_ticks drops bid<=0 or ask<=0 before routing",
-            "Live trade_only: strategy saw QuoteTicks=0 while wire routing still "
-            "produced false-quote candidates (adapter emitted; actor not subscribed)",
-            "Live quote_only: strategy saw TradeTicks=0 while wires still routed trades",
+            "InboundFeedHandler.dedup_ticks is type-neutral (cursor/dedup only); "
+            "invalid BBO rows are preserved for routing to accept/reject",
+            "Live trade_only: strategy QuoteTicks=0 while adapter may still route "
+            "eligible quotes on the wire (actor subscription gates callbacks)",
+            "Live quote_only: strategy TradeTicks=0 while wires still route trades",
         ],
         "implication": (
-            "Fixing QuoteTick over-emission must happen in route_wire_tick (flags), "
-            "not by relying on SubscribeTradeTicks vs SubscribeQuoteTicks alone."
+            "QuoteTick emission correctness is enforced in route_wire_tick (BID|ASK), "
+            "not by SubscribeTradeTicks vs SubscribeQuoteTicks or by handler BBO filters."
         ),
     }
 
@@ -637,6 +640,9 @@ def _conclusion(hist: dict[str, Any], live_both: dict[str, Any], live_trade_only
     false_live = int(live_both.get("route_false_quotes_from_wires") or 0)
     eligible_match = bool(hist.get("eligible_vs_actual_multiset_match"))
     eligible_decision_match = bool(hist.get("eligible_vs_decision_multiset_match"))
+    hist_adapter = hist.get("historical_quote_ticks_via_adapter") or {}
+    hist_adapter_match = bool(hist_adapter.get("eligible_vs_adapter_conversion_multiset_match"))
+    false_hist_adapter = int(hist_adapter.get("false_historical_quote_count") or 0)
     live_ok = bool(live_both.get("ok"))
 
     if (
@@ -644,10 +650,12 @@ def _conclusion(hist: dict[str, Any], live_both: dict[str, Any], live_trade_only
         and false_hist == 0
         and eligible_match
         and eligible_decision_match
+        and hist_adapter_match
+        and false_hist_adapter == 0
         and (not live_ok or false_live == 0)
     ):
         return "QUOTE ROUTING FIX VERIFIED"
-    if false_hist > 0 or (live_ok and false_live > 0):
+    if false_hist > 0 or false_hist_adapter > 0 or (live_ok and false_live > 0):
         return "QUOTE ROUTING BUG STILL PRESENT"
     return "INCONCLUSIVE"
 
@@ -670,7 +678,7 @@ async def main() -> int:
     )
 
     print("=" * 72)
-    print("  QuoteTick semantics pre-correction probe")
+    print("  QuoteTick semantics homologation (live + historical INFO)")
     print(f"  RPyC    : {cfg.host}:{cfg.port}")
     print(f"  Feed    : ws://{cfg.feed_host}:{cfg.feed_port}{cfg.feed_path}")
     print(f"  Symbol  : {symbol}")
@@ -846,20 +854,33 @@ async def main() -> int:
             "false_quote_count_is_zero": int(hist.get("false_quote_candidate_count") or 0) == 0,
             "eligible_equals_actual_route_quotes": bool(hist.get("eligible_vs_actual_multiset_match")),
             "eligible_equals_decision_emit_quote": bool(hist.get("eligible_vs_decision_multiset_match")),
+            "historical_quote_eligible_equals_adapter_conversion": bool(
+                (hist.get("historical_quote_ticks_via_adapter") or {}).get(
+                    "eligible_vs_adapter_conversion_multiset_match",
+                ),
+            ),
+            "false_historical_quote_count_is_zero": int(
+                (hist.get("historical_quote_ticks_via_adapter") or {}).get(
+                    "false_historical_quote_count",
+                )
+                or 0,
+            )
+            == 0,
             "live_false_quotes_zero": (
                 not bool(live_both.get("ok"))
                 or int(live_both.get("route_false_quotes_from_wires") or 0) == 0
             ),
             "routing_measured_against_flags": True,
             "live_quotes_compared_to_wire_BID_ASK": True,
-            "handler_checked_for_trade_drops": True,
+            "handler_preserves_invalid_bbo_for_routing": True,
             "subscriptions_characterized": True,
             "homologation_script_versioned": True,
         },
         "note": (
-            "Post-correction: emit_quote requires BID|ASK flags. "
-            "TradeTick LAST|VOLUME, subscription gating, InboundFeedHandler, "
-            "and locked-market ask>bid are unchanged."
+            "Post-correction: emit_quote requires BID|ASK flags; historical BID_ASK "
+            "uses COPY_TICKS_INFO + the same conversion. InboundFeedHandler stays "
+            "type-neutral (no bid/ask discard). TradeTick LAST|VOLUME, subscription "
+            "gating, and locked-market ask>bid are unchanged."
         ),
         "pre_correction_reference": {
             "commit": "371ba681f77a219d387d646ce541ab57835f40f2",
