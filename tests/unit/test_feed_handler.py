@@ -58,11 +58,75 @@ def test_hello_updates_subscription_state() -> None:
     assert handler.subscription_state.service_symbols == frozenset({"BTCUSD"})
 
 
-def test_invalid_bid_ask_filtered() -> None:
+def test_invalid_bid_ask_not_filtered_by_handler() -> None:
+    """Handler stays type-neutral; routing decides Quote vs Trade."""
     handler = InboundFeedHandler()
-    bad = WireTick(time_msc=100, bid=0.0, ask=60478.0, flags=6)
-    out = handler.handle_message(_batch("BTCUSD", 100, [bad]))
-    assert out is None
+    bad_quote = WireTick(time_msc=100, bid=0.0, ask=60478.0, flags=6)
+    out = handler.handle_message(_batch("BTCUSD", 100, [bad_quote]))
+    assert isinstance(out, TickBatchMessage)
+    assert len(out.ticks) == 1
+    assert out.ticks[0].bid == 0.0
+
+
+def test_trade_only_zero_bbo_preserved_for_routing() -> None:
+    from nautilus_mt5.feed.converter import route_wire_tick_to_nautilus
+    from nautilus_mt5.tick_routing import TICK_FLAG_LAST, TICK_FLAG_VOLUME
+    import json
+    import pathlib
+
+    from nautilus_mt5 import XP_B3_PROFILE
+    from nautilus_mt5.data_types import MT5Symbol, MT5SymbolDetails
+    from nautilus_mt5.parsing.instruments import parse_instrument
+
+    handler = InboundFeedHandler()
+    trade = WireTick(
+        time_msc=100,
+        bid=0.0,
+        ask=0.0,
+        last=176290.0,
+        volume=10,
+        volume_real=10.0,
+        flags=TICK_FLAG_LAST | TICK_FLAG_VOLUME,
+    )
+    out = handler.handle_message(_batch("WIN$", 100, [trade]))
+    assert isinstance(out, TickBatchMessage)
+    assert len(out.ticks) == 1
+
+    data = json.loads(
+        (pathlib.Path(__file__).parent.parent / "test_data" / "symbol_info_win_dollar.json").read_text(),
+    )
+    data.pop("_comment", None)
+    data["symbol"] = MT5Symbol(**data["symbol"])
+    inst = parse_instrument(MT5SymbolDetails(**data), venue_profile=XP_B3_PROFILE)
+    quote, trade_tick = route_wire_tick_to_nautilus(inst, out.ticks[0], ts_init=1)
+    assert quote is None
+    assert trade_tick is not None
+
+
+def test_quote_flag_with_invalid_bbo_preserved_but_routing_rejects() -> None:
+    from nautilus_mt5.feed.converter import route_wire_tick_to_nautilus
+    from nautilus_mt5.tick_routing import TICK_FLAG_BID
+    import json
+    import pathlib
+
+    from nautilus_mt5 import XP_B3_PROFILE
+    from nautilus_mt5.data_types import MT5Symbol, MT5SymbolDetails
+    from nautilus_mt5.parsing.instruments import parse_instrument
+
+    handler = InboundFeedHandler()
+    wire = WireTick(time_msc=100, bid=0.0, ask=0.0, last=100.5, volume=1, flags=TICK_FLAG_BID)
+    out = handler.handle_message(_batch("WDON26", 100, [wire]))
+    assert isinstance(out, TickBatchMessage)
+
+    data = json.loads(
+        (pathlib.Path(__file__).parent.parent / "test_data" / "symbol_info_wdon26.json").read_text(),
+    )
+    data.pop("_comment", None)
+    data["symbol"] = MT5Symbol(**data["symbol"])
+    inst = parse_instrument(MT5SymbolDetails(**data), venue_profile=XP_B3_PROFILE)
+    quote, trade = route_wire_tick_to_nautilus(inst, out.ticks[0], ts_init=1)
+    assert quote is None
+    assert trade is None
 
 
 def test_bar_dedup_emits_once_per_close_time() -> None:

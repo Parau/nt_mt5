@@ -44,6 +44,7 @@ class FakeMT5RPyCRoot:
             "TIMEFRAME_M1": 1,
             "TIMEFRAME_M5": 5,
             "COPY_TICKS_ALL": 0,
+            "COPY_TICKS_INFO": 1,
             "COPY_TICKS_TRADE": 2,
         }
         self._calls: List[FakeMT5RPyCCall] = []

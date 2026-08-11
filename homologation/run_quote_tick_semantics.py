@@ -43,6 +43,7 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
+import pandas as pd
 from nautilus_trader.config import StrategyConfig
 from nautilus_trader.model.data import QuoteTick, TradeTick
 from nautilus_trader.trading.strategy import Strategy
@@ -336,6 +337,86 @@ def _analyze_historical(
         "handler_drop_from_ALL": handler_drop,
         "handler_drop_from_TRADE": handler_drop_trade_copy,
         "instrument_id": str(instrument.id),
+        "_mt5_surface": mt5,
+        "_start_i": start_i,
+        "_end_i": end_i,
+        "_info_list": info_list,
+    }
+
+
+async def _measure_adapter_historical_quotes(
+    cfg: HomologationConfig,
+    symbol: str,
+    instrument: Any,
+    *,
+    mt5_surface: Any,
+    start_i: int,
+    end_i: int,
+    info_list: list[Any],
+) -> dict[str, Any]:
+    """
+    Prove historical QuoteTick conversion on the same INFO snapshot.
+
+    Primary check converts the already-fetched ``COPY_TICKS_INFO`` rows with the
+    same ``route_wire_tick_to_nautilus`` path used by ``get_historical_ticks``.
+    A second provider fetch is recorded only as observational (may diverge).
+    """
+    from collections import Counter
+    from unittest.mock import MagicMock
+
+    from nautilus_mt5.client.market_data import MetaTrader5ClientMarketDataMixin
+    from nautilus_mt5.data_types import MT5Symbol
+
+    eligible_samples: list[tuple[int, float, float]] = []
+    converted_samples: list[tuple[int, float, float]] = []
+    for row in info_list:
+        wire = _row_to_wire(row)
+        if is_eligible_quote_row(
+            flags=wire.flags,
+            bid=wire.bid,
+            ask=wire.ask,
+            last=wire.last,
+            instrument=instrument,
+        ):
+            eligible_samples.append(wire_quote_sample(wire))
+        quote_tick, _trade = route_wire_tick_to_nautilus(instrument, wire, ts_init=0)
+        if quote_tick is not None:
+            converted_samples.append(quote_sample_from_nautilus(quote_tick))
+
+    eligible_c = Counter(eligible_samples)
+    converted_c = Counter(converted_samples)
+
+    class _Host(MetaTrader5ClientMarketDataMixin):
+        def __init__(self) -> None:
+            self._mt5_client = {"mt5": mt5_surface}
+            self._clock = MagicMock()
+            self._clock.timestamp_ns.return_value = 1_700_000_000_000_000_000
+            self._log = MagicMock()
+            self._cache = MagicMock()
+            self._cache.instrument.return_value = instrument
+
+    host = _Host()
+    refetch = await host.get_historical_ticks(
+        symbol=MT5Symbol(symbol=symbol, broker=cfg.broker),
+        tick_type="BID_ASK",
+        start_date_time=pd.Timestamp(start_i, unit="s", tz="UTC"),
+        end_date_time=pd.Timestamp(end_i, unit="s", tz="UTC"),
+        number_of_ticks=0,
+    )
+    if refetch is None:
+        refetch = []
+
+    return {
+        "info_rows": len(info_list),
+        "eligible_info_count": len(eligible_samples),
+        "adapter_conversion_count": len(converted_samples),
+        "eligible_vs_adapter_conversion_multiset_match": eligible_c == converted_c,
+        "false_historical_quote_count": int(sum((converted_c - eligible_c).values())),
+        "refetch_get_historical_ticks_count": len(refetch),
+        "refetch_note": (
+            "Secondary provider re-fetch; count may differ from the INFO snapshot "
+            "used for the primary conversion check."
+        ),
     }
 
 
@@ -620,6 +701,24 @@ async def main() -> int:
         f"  provenance commit={provenance['adapter_commit'][:12]} "
         f"dirty={provenance['git_dirty']}",
     )
+
+    hist_quote_adapter = await _measure_adapter_historical_quotes(
+        cfg,
+        symbol,
+        instrument,
+        mt5_surface=hist.pop("_mt5_surface"),
+        start_i=hist.pop("_start_i"),
+        end_i=hist.pop("_end_i"),
+        info_list=hist.pop("_info_list"),
+    )
+    hist["historical_quote_ticks_via_adapter"] = hist_quote_adapter
+    print(
+        f"  hist QuoteTick convert={hist_quote_adapter['adapter_conversion_count']} "
+        f"eligible_INFO={hist_quote_adapter['eligible_info_count']} "
+        f"match={hist_quote_adapter['eligible_vs_adapter_conversion_multiset_match']} "
+        f"false={hist_quote_adapter['false_historical_quote_count']} "
+        f"refetch={hist_quote_adapter['refetch_get_historical_ticks_count']}",
+    )
     divergences = hist.get("compare_info_vs_flagged_all", {}).get("divergences_head") or []
     if divergences:
         print(f"  INFO vs flagged-ALL divergences (head): {len(divergences)}")
@@ -720,6 +819,7 @@ async def main() -> int:
         "actual_route_quotes": hist.get("actual_route_quotes"),
         "eligible_vs_actual_multiset_match": hist.get("eligible_vs_actual_multiset_match"),
         "eligible_vs_decision_multiset_match": hist.get("eligible_vs_decision_multiset_match"),
+        "historical_quote_ticks_via_adapter": hist.get("historical_quote_ticks_via_adapter"),
         "current_route_emit_quote_count": hist.get("route_emit_quote_count"),
         "false_quote_candidate_count": hist.get("false_quote_candidate_count"),
         "false_quote_candidate_pct": hist.get("false_quote_candidate_pct"),

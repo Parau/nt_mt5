@@ -476,7 +476,12 @@ class MetaTrader5ClientMarketDataMixin:
     ) -> list[QuoteTick | TradeTick] | None:
         """
         Request and retrieve historical tick data for a specified symbol and tick
-        type via MT5-native ``copy_ticks_from``.
+        type via MT5-native ``copy_ticks_from`` / ``copy_ticks_range``.
+
+        QuoteTick requests (``BID_ASK``) use ``COPY_TICKS_INFO`` and live-equivalent
+        ``route_wire_tick_to_nautilus`` so residual Bid/Ask on trade rows do not
+        invent quotes. Legacy TradeTick requests keep ``COPY_TICKS_ALL``; bounded
+        A05 trades use ``get_historical_trade_ticks_range`` instead.
         """
         import time as _time
 
@@ -497,7 +502,12 @@ class MetaTrader5ClientMarketDataMixin:
         else:
             from_ts = None
 
-        flags = getattr(mt5, "COPY_TICKS_ALL", 0)
+        # Quote history uses INFO (Bid/Ask changes); legacy trade path keeps ALL.
+        # A05 bounded trades use get_historical_trade_ticks_range + COPY_TICKS_TRADE.
+        if tick_type in ("TRADES", "AllLast"):
+            flags = getattr(mt5, "COPY_TICKS_ALL", 0)
+        else:
+            flags = _resolve_mt5_constant(mt5, "COPY_TICKS_INFO")
         try:
             # Prefer copy_ticks_from with a count cap — copy_ticks_range pulls the entire window
             # (e.g. 800k+ ticks over 7 days on WDON26) and is only for uncapped requests.
@@ -625,17 +635,28 @@ class MetaTrader5ClientMarketDataMixin:
                     ts_init=max(self._clock.timestamp_ns(), ts_event),
                 ))
             else:
-                if bid <= 0 or ask <= 0:
-                    continue
-                ticks_out.append(QuoteTick(
-                    instrument_id=instrument_id,
-                    bid_price=instrument.make_price(bid),
-                    ask_price=instrument.make_price(ask),
-                    bid_size=instrument.make_qty(0),
-                    ask_size=instrument.make_qty(0),
-                    ts_event=ts_event,
+                # Align with live QuoteTick semantics: BID|ASK flags + valid BBO + sanity.
+                from nautilus_mt5.feed.converter import route_wire_tick_to_nautilus
+                from nautilus_mt5.feed.messages import WireTick
+
+                wire_msc = int(time_msc) if time_msc else int(time_sec) * 1000
+                wire = WireTick(
+                    time_msc=wire_msc,
+                    bid=bid,
+                    ask=ask,
+                    last=last,
+                    volume=int(volume) if volume else 0,
+                    volume_real=float(volume_real or 0.0),
+                    flags=tick_flags,
+                )
+                quote_tick, _trade = route_wire_tick_to_nautilus(
+                    instrument,
+                    wire,
                     ts_init=max(self._clock.timestamp_ns(), ts_event),
-                ))
+                    map_tick_flags_to_aggressor=map_tick_flags_to_aggressor,
+                )
+                if quote_tick is not None:
+                    ticks_out.append(quote_tick)
 
         ticks_out.sort(key=lambda t: t.ts_init)
         if number_of_ticks > 0 and len(ticks_out) > number_of_ticks:

@@ -1,103 +1,5 @@
 {
-  "result": "PASS",
-  "adapter_commit": "525967a25cae9d128037205a3a8f0479c6f1ab38",
-  "metatrader5_package_version": "5.0.5200",
-  "terminal_build": 6067,
-  "broker_server": "AMPGlobalUSA-Demo",
-  "account_login": 1594578,
-  "venue_profile": "amp-us",
-  "instrument": "ENQU26",
-  "gateway": "127.0.0.1:18814",
-  "feed": "ws://0.0.0.0:18767/mt5-feed",
-  "capture_start": "2026-08-11 02:49:18.709000+00:00",
-  "capture_end": "2026-08-11 02:49:38.845000+00:00",
-  "capture_wall_start": 1786416591.5171118,
-  "capture_wall_end": 1786416626.534002,
-  "live_count": 11,
-  "historical_count": 11,
-  "provider_raw": {
-    "fetch_start_seconds": 1786416558,
-    "fetch_end_seconds": 1786416579,
-    "COPY_TICKS_TRADE": 2,
-    "COPY_TICKS_ALL": -1,
-    "raw_trade": {
-      "is_none": false,
-      "exact_local_ndarray": true,
-      "len": 11,
-      "dtype_names": [
-        "time",
-        "bid",
-        "ask",
-        "last",
-        "volume",
-        "time_msc",
-        "flags",
-        "volume_real"
-      ]
-    },
-    "raw_all": {
-      "is_none": false,
-      "exact_local_ndarray": true,
-      "len": 98,
-      "dtype_names": [
-        "time",
-        "bid",
-        "ask",
-        "last",
-        "volume",
-        "time_msc",
-        "flags",
-        "volume_real"
-      ]
-    },
-    "raw_trade_in_bound_ns": 11,
-    "raw_all_in_bound_ns": 93,
-    "last_error": [
-      1,
-      "Success"
-    ]
-  },
-  "ts_overlap": {
-    "live_ts_stats": {
-      "unique_ts": 10,
-      "rows": 11,
-      "max_multiplicity": 2,
-      "equal_ts_groups": 1
-    },
-    "hist_ts_stats": {
-      "unique_ts": 10,
-      "rows": 11,
-      "max_multiplicity": 2,
-      "equal_ts_groups": 1
-    },
-    "ts_in_both": 10,
-    "ts_only_live": 0,
-    "ts_only_hist": 0,
-    "only_live_ts_head": [],
-    "only_hist_ts_head": [],
-    "live_first_last": [
-      1786416558709000000,
-      1786416578845000000
-    ],
-    "hist_first_last": [
-      1786416558709000000,
-      1786416578845000000
-    ]
-  },
-  "interpretation": {
-    "a05_emitted_vs_raw_trade_in_bound": {
-      "raw_trade_in_bound": 11,
-      "a05_emitted": 11,
-      "dropped_by_routing_or_conversion": 0
-    },
-    "live_vs_raw_trade_in_bound": {
-      "live_emitted": 11,
-      "raw_trade_in_bound": 11,
-      "live_minus_raw_trade": 0
-    },
-    "hypothesis": "streams_aligned_or_inconclusive"
-  },
-  "live_sample_head": [
+  "live_ticks": [
     {
       "ts_event": 1786416558709000000,
       "price": 29833.25,
@@ -137,9 +39,15 @@
       "size": 1.0,
       "size_raw": 1000000000,
       "aggressor_side": "1"
-    }
-  ],
-  "live_sample_tail": [
+    },
+    {
+      "ts_event": 1786416576779000000,
+      "price": 29835.0,
+      "price_raw": 29835000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
     {
       "ts_event": 1786416576852000000,
       "price": 29835.5,
@@ -181,7 +89,7 @@
       "aggressor_side": "2"
     }
   ],
-  "hist_sample_head": [
+  "historical_ticks": [
     {
       "ts_event": 1786416558709000000,
       "price": 29833.25,
@@ -221,9 +129,15 @@
       "size": 1.0,
       "size_raw": 1000000000,
       "aggressor_side": "1"
-    }
-  ],
-  "hist_sample_tail": [
+    },
+    {
+      "ts_event": 1786416576779000000,
+      "price": 29835.0,
+      "price_raw": 29835000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
     {
       "ts_event": 1786416576852000000,
       "price": 29835.5,
@@ -264,10 +178,5 @@
       "size_raw": 1000000000,
       "aggressor_side": "2"
     }
-  ],
-  "streams_file": "homologation/last_a05_trade_tick_parity_report_20260811T025049Z_streams.json",
-  "first_mismatch": null,
-  "mismatch_count": 0,
-  "mismatches_head": [],
-  "generated_at": "2026-08-11T02:50:49.101260+00:00"
+  ]
 }

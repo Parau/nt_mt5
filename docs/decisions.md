@@ -175,8 +175,19 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - Live trade emission must follow MT5 change flags (`TICK_FLAG_LAST` /
   `TICK_FLAG_VOLUME`), not stale `last > 0`. That aligns live with
   `COPY_TICKS_TRADE` and prevents Bid/Ask-only updates from inventing trades.
+- Live quote emission must follow `TICK_FLAG_BID` / `TICK_FLAG_ASK` (aligned with
+  `COPY_TICKS_INFO`); residual Bid/Ask on trade-only rows must not invent quotes.
+- Historical QuoteTick (`get_historical_ticks` / BID_ASK) uses `COPY_TICKS_INFO`
+  and the same live routing/conversion for QuoteTick emission. A05 TradeTick
+  bounded path remains separate (`COPY_TICKS_TRADE`).
 - Full historical↔live stream parity on AMP ENQU26: **PASS** after the flags-based
   live routing fix (`homologation/run_a05_trade_tick_parity.py`).
+- **Warmup certification runtime:** A05 warmup is certified for **EXTERNAL_RPYC**
+  on homologated profiles/providers only. `LOCAL_PYTHON` remains
+  *implementation-compatible* (shared A05 helper + native ndarray path) but is
+  **not warmup-certified** until it completes the same real-provider bounded
+  request and live↔historical parity homologation. Do not enable LOCAL_PYTHON
+  for production warmup until that certification exists.
 
 ## How to use this file
 
