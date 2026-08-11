@@ -1,20 +1,10 @@
 {
   "result_verdict": "QUOTE ROUTING FIX VERIFIED",
-  "adapter_commit": "525967a25cae9d128037205a3a8f0479c6f1ab38",
-  "git_dirty": true,
-  "git_tree": "2a21362c8ba3d234cd58be19f97364128b8f33f8",
-  "dirty_paths_head": [
-    "docs/data_capability_matrix.md",
-    "docs/decisions.md",
-    "homologation/last_quote_tick_semantics_report.json",
-    "homologation/run_quote_tick_semantics.py",
-    "nautilus_mt5/client/market_data.py",
-    "nautilus_mt5/feed/handler.py",
-    "tests/support/fake_mt5_rpyc_bridge.py",
-    "tests/unit/test_feed_handler.py",
-    "tests/unit/test_historical_quote_ticks.py"
-  ],
-  "dirty_diff_stat": "docs/data_capability_matrix.md                     |   2 +-\n docs/decisions.md                                  |  11 +\n homologation/last_quote_tick_semantics_report.json | 499 +++++++++++----------\n homologation/run_quote_tick_semantics.py           | 100 +++++\n nautilus_mt5/client/market_data.py                 |  45 +-\n nautilus_mt5/feed/handler.py                       |   7 +-\n tests/support/fake_mt5_rpyc_bridge.py              |   1 +\n tests/unit/test_feed_handler.py                    |  72 ++-\n 8 files changed, 476 insertions(+), 261 deletions(-)",
+  "adapter_commit": "29cee296ad20a8b7150361350d6fd8a783d53e85",
+  "git_dirty": false,
+  "git_tree": "d29d8ea694bdbd5cc2a4cb7250672717dde0521e",
+  "dirty_paths_head": [],
+  "dirty_diff_stat": "",
   "probe": "homologation/run_quote_tick_semantics.py",
   "metatrader5_package_version": "5.0.5200",
   "terminal_build": 6067,
@@ -23,52 +13,52 @@
   "gateway": "127.0.0.1:18814",
   "feed": "ws://0.0.0.0:18767/mt5-feed",
   "interval_utc": [
-    "2026-08-11T02:44:24.702904+00:00",
-    "2026-08-11T02:47:24.702904+00:00"
+    "2026-08-11T03:01:19.238138+00:00",
+    "2026-08-11T03:04:19.238138+00:00"
   ],
-  "COPY_TICKS_ALL_count": 922,
-  "COPY_TICKS_INFO_count": 727,
-  "ALL_with_BID_ASK_count": 727,
+  "COPY_TICKS_ALL_count": 889,
+  "COPY_TICKS_INFO_count": 776,
+  "ALL_with_BID_ASK_count": 776,
   "exact_INFO_vs_flagged_ALL_match": true,
   "flag_categories_all": {
-    "BID|ASK": 259,
-    "BID-only": 241,
-    "ASK-only": 227,
-    "LAST/VOLUME sem BID/ASK": 195
+    "ASK-only": 191,
+    "BID|ASK": 395,
+    "BID-only": 190,
+    "LAST/VOLUME sem BID/ASK": 113
   },
-  "BID_only_count": 241,
-  "ASK_only_count": 227,
-  "BID_ASK_count": 259,
+  "BID_only_count": 190,
+  "ASK_only_count": 191,
+  "BID_ASK_count": 395,
   "BID_ASK_plus_trade_count": 0,
-  "trade_only_count": 195,
-  "trade_only_with_valid_residual_bid_ask_count": 195,
-  "semantic_quote_rows": 727,
-  "eligible_quote_rows": 727,
-  "actual_route_quotes": 727,
+  "trade_only_count": 113,
+  "trade_only_with_valid_residual_bid_ask_count": 113,
+  "semantic_quote_rows": 776,
+  "eligible_quote_rows": 758,
+  "actual_route_quotes": 758,
   "eligible_vs_actual_multiset_match": true,
   "eligible_vs_decision_multiset_match": true,
   "historical_quote_ticks_via_adapter": {
-    "info_rows": 727,
-    "eligible_info_count": 727,
-    "adapter_conversion_count": 727,
+    "info_rows": 776,
+    "eligible_info_count": 758,
+    "adapter_conversion_count": 758,
     "eligible_vs_adapter_conversion_multiset_match": true,
     "false_historical_quote_count": 0,
-    "refetch_get_historical_ticks_count": 730,
+    "refetch_get_historical_ticks_count": 763,
     "refetch_note": "Secondary provider re-fetch; count may differ from the INFO snapshot used for the primary conversion check."
   },
-  "current_route_emit_quote_count": 727,
+  "current_route_emit_quote_count": 758,
   "false_quote_candidate_count": 0,
   "false_quote_candidate_pct": 0.0,
   "false_quote_samples": [],
   "handler_dropped_trade_candidates": {
-    "trade_rows_total": 195,
+    "trade_rows_total": 113,
     "trade_rows_bid_le0": 0,
     "trade_rows_ask_le0": 0,
     "trade_rows_any_side_invalid": 0,
     "samples": []
   },
   "handler_dropped_trade_candidates_from_TRADE_copy": {
-    "trade_rows_total": 195,
+    "trade_rows_total": 113,
     "trade_rows_bid_le0": 0,
     "trade_rows_ask_le0": 0,
     "trade_rows_any_side_invalid": 0,
@@ -76,147 +66,147 @@
   },
   "live_both": {
     "ok": true,
-    "detail": "mode=both quotes=227 trades=47 wires=2574",
-    "wire_rows_received": 2659,
-    "wire_rows_bid_ask_flags": 2253,
-    "route_quote_ticks_from_wires": 2253,
+    "detail": "mode=both quotes=2453 trades=404 wires=5076",
+    "wire_rows_received": 5118,
+    "wire_rows_bid_ask_flags": 4335,
+    "route_quote_ticks_from_wires": 4316,
     "route_false_quotes_from_wires": 0,
-    "nautilus_quote_ticks": 227,
-    "nautilus_trade_ticks": 47,
+    "nautilus_quote_ticks": 2453,
+    "nautilus_trade_ticks": 404,
     "quote_vs_semantic_multiset_equal": false,
     "false_quote_wire_samples": [],
     "nautilus_quote_samples_head": [
       {
-        "ts_event": 1786416396589000000,
-        "bid": 29840.75,
-        "ask": 29841.5
+        "ts_event": 1786416999684000000,
+        "bid": 29821.75,
+        "ask": 29822.5
       },
       {
-        "ts_event": 1786416396639000000,
-        "bid": 29840.75,
-        "ask": 29841.75
+        "ts_event": 1786417000442000000,
+        "bid": 29821.5,
+        "ask": 29822.5
       },
       {
-        "ts_event": 1786416396957000000,
-        "bid": 29841.0,
-        "ask": 29841.75
+        "ts_event": 1786417001389000000,
+        "bid": 29821.75,
+        "ask": 29822.5
       },
       {
-        "ts_event": 1786416396957000000,
-        "bid": 29841.0,
-        "ask": 29842.0
+        "ts_event": 1786417001400000000,
+        "bid": 29822.0,
+        "ask": 29822.5
       },
       {
-        "ts_event": 1786416397644000000,
-        "bid": 29841.25,
-        "ask": 29842.25
+        "ts_event": 1786417001429000000,
+        "bid": 29822.0,
+        "ask": 29823.25
       },
       {
-        "ts_event": 1786416397754000000,
-        "bid": 29841.25,
-        "ask": 29842.0
+        "ts_event": 1786417001437000000,
+        "bid": 29822.0,
+        "ask": 29823.0
       },
       {
-        "ts_event": 1786416397808000000,
-        "bid": 29841.25,
-        "ask": 29842.25
+        "ts_event": 1786417001523000000,
+        "bid": 29821.75,
+        "ask": 29822.75
       },
       {
-        "ts_event": 1786416398118000000,
-        "bid": 29841.5,
-        "ask": 29842.75
+        "ts_event": 1786417001563000000,
+        "bid": 29822.0,
+        "ask": 29823.0
       },
       {
-        "ts_event": 1786416398127000000,
-        "bid": 29841.75,
-        "ask": 29842.75
+        "ts_event": 1786417001706000000,
+        "bid": 29821.75,
+        "ask": 29822.75
       },
       {
-        "ts_event": 1786416398138000000,
-        "bid": 29842.0,
-        "ask": 29843.25
+        "ts_event": 1786417001794000000,
+        "bid": 29822.0,
+        "ask": 29823.0
       }
     ]
   },
   "live_trade_only": {
     "ok": true,
-    "detail": "mode=trade_only quotes=0 trades=9 wires=128",
-    "wire_rows_received": 167,
-    "wire_rows_bid_ask_flags": 149,
-    "route_quote_ticks_from_wires": 149,
+    "detail": "mode=trade_only quotes=0 trades=67 wires=267",
+    "wire_rows_received": 352,
+    "wire_rows_bid_ask_flags": 261,
+    "route_quote_ticks_from_wires": 261,
     "route_false_quotes_from_wires": 0,
     "nautilus_quote_ticks": 0,
-    "nautilus_trade_ticks": 9,
+    "nautilus_trade_ticks": 67,
     "quote_vs_semantic_multiset_equal": false,
     "false_quote_wire_samples": [],
     "nautilus_quote_samples_head": []
   },
   "live_quote_only": {
     "ok": true,
-    "detail": "mode=quote_only quotes=85 trades=0 wires=109",
-    "wire_rows_received": 162,
-    "wire_rows_bid_ask_flags": 142,
-    "route_quote_ticks_from_wires": 142,
+    "detail": "mode=quote_only quotes=115 trades=0 wires=206",
+    "wire_rows_received": 241,
+    "wire_rows_bid_ask_flags": 187,
+    "route_quote_ticks_from_wires": 187,
     "route_false_quotes_from_wires": 0,
-    "nautilus_quote_ticks": 85,
+    "nautilus_quote_ticks": 115,
     "nautilus_trade_ticks": 0,
     "quote_vs_semantic_multiset_equal": false,
     "false_quote_wire_samples": [],
     "nautilus_quote_samples_head": [
       {
-        "ts_event": 1786416494014000000,
-        "bid": 29838.0,
-        "ask": 29839.0
+        "ts_event": 1786417505839000000,
+        "bid": 29828.5,
+        "ask": 29829.5
       },
       {
-        "ts_event": 1786416494275000000,
-        "bid": 29837.75,
-        "ask": 29838.75
+        "ts_event": 1786417505884000000,
+        "bid": 29828.75,
+        "ask": 29829.75
       },
       {
-        "ts_event": 1786416494411000000,
-        "bid": 29838.0,
-        "ask": 29839.0
+        "ts_event": 1786417506246000000,
+        "bid": 29829.25,
+        "ask": 29829.75
       },
       {
-        "ts_event": 1786416494737000000,
-        "bid": 29838.25,
-        "ask": 29839.25
+        "ts_event": 1786417506246000000,
+        "bid": 29829.0,
+        "ask": 29829.75
       },
       {
-        "ts_event": 1786416494789000000,
-        "bid": 29838.0,
-        "ask": 29839.25
+        "ts_event": 1786417508092000000,
+        "bid": 29829.5,
+        "ask": 29830.5
       },
       {
-        "ts_event": 1786416494789000000,
-        "bid": 29838.25,
-        "ask": 29839.5
+        "ts_event": 1786417508126000000,
+        "bid": 29829.25,
+        "ask": 29830.0
       },
       {
-        "ts_event": 1786416494789000000,
-        "bid": 29838.25,
-        "ask": 29839.25
+        "ts_event": 1786417508176000000,
+        "bid": 29829.0,
+        "ask": 29830.0
       },
       {
-        "ts_event": 1786416495338000000,
-        "bid": 29838.5,
-        "ask": 29839.75
+        "ts_event": 1786417509468000000,
+        "bid": 29829.0,
+        "ask": 29829.75
       },
       {
-        "ts_event": 1786416495342000000,
-        "bid": 29838.75,
-        "ask": 29840.25
+        "ts_event": 1786417509518000000,
+        "bid": 29828.75,
+        "ask": 29829.75
       },
       {
-        "ts_event": 1786416495349000000,
-        "bid": 29838.75,
-        "ask": 29840.0
+        "ts_event": 1786417509554000000,
+        "bid": 29829.0,
+        "ask": 29829.75
       }
     ]
   },
-  "live_emitted_QuoteTick_count": 227,
-  "live_semantic_BID_ASK_event_count": 2253,
+  "live_emitted_QuoteTick_count": 2453,
+  "live_semantic_BID_ASK_event_count": 4335,
   "live_false_quote_count": 0,
   "subscription_characterization": {
     "conclusion": "subscription type is currently used only to subscribe the symbol at the MQL5 feed gateway; it does not gate adapter emission inside _handle_feed_ticks. Nautilus Strategy subscribe_* still gates which actor callbacks receive QuoteTick vs TradeTick.",
@@ -224,44 +214,33 @@
       "_subscribe_quote_ticks / _subscribe_trade_ticks only call _subscribe_feed_symbol(..., quote/trade=True) when feed.enabled",
       "_feed_quote_symbols / _feed_trade_symbols track intent but _handle_feed_ticks does not consult them before route_wire_tick_to_nautilus",
       "_handle_feed_ticks publishes both QuoteTick and TradeTick when routing emits them",
-      "InboundFeedHandler.dedup_ticks drops bid<=0 or ask<=0 before routing",
-      "Live trade_only: strategy saw QuoteTicks=0 while wire routing still produced false-quote candidates (adapter emitted; actor not subscribed)",
-      "Live quote_only: strategy saw TradeTicks=0 while wires still routed trades"
+      "InboundFeedHandler.dedup_ticks is type-neutral (cursor/dedup only); invalid BBO rows are preserved for routing to accept/reject",
+      "Live trade_only: strategy QuoteTicks=0 while adapter may still route eligible quotes on the wire (actor subscription gates callbacks)",
+      "Live quote_only: strategy TradeTicks=0 while wires still route trades"
     ],
-    "implication": "Fixing QuoteTick over-emission must happen in route_wire_tick (flags), not by relying on SubscribeTradeTicks vs SubscribeQuoteTicks alone."
+    "implication": "QuoteTick emission correctness is enforced in route_wire_tick (BID|ASK), not by SubscribeTradeTicks vs SubscribeQuoteTicks or by handler BBO filters."
   },
   "historical_detail": {
     "compare_info_vs_flagged_all": {
-      "all_count": 922,
-      "info_count": 727,
-      "all_with_bid_ask_flags": 727,
+      "all_count": 889,
+      "info_count": 776,
+      "all_with_bid_ask_flags": 776,
       "exact_multiset_match": true,
       "divergence_count": 0,
       "divergences_head": [],
       "flag_categories_all": {
-        "BID|ASK": 259,
-        "BID-only": 241,
-        "ASK-only": 227,
-        "LAST/VOLUME sem BID/ASK": 195
+        "ASK-only": 191,
+        "BID|ASK": 395,
+        "BID-only": 190,
+        "LAST/VOLUME sem BID/ASK": 113
       }
     },
     "residual_samples": [
       {
-        "time_msc": 1786416266270,
-        "bid": 29834.0,
-        "ask": 29834.75,
-        "last": 29834.75,
-        "volume": 1,
-        "volume_real": 1.0,
-        "flags": 56,
-        "category": "LAST/VOLUME sem BID/ASK",
-        "has_trade_flag": true
-      },
-      {
-        "time_msc": 1786416268820,
-        "bid": 29833.75,
-        "ask": 29834.5,
-        "last": 29833.75,
+        "time_msc": 1786417282438,
+        "bid": 29819.25,
+        "ask": 29820.5,
+        "last": 29820.0,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 88,
@@ -269,10 +248,65 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416268820,
-        "bid": 29833.75,
-        "ask": 29834.5,
-        "last": 29833.5,
+        "time_msc": 1786417283316,
+        "bid": 29820.0,
+        "ask": 29820.75,
+        "last": 29820.75,
+        "volume": 1,
+        "volume_real": 1.0,
+        "flags": 56,
+        "category": "LAST/VOLUME sem BID/ASK",
+        "has_trade_flag": true
+      },
+      {
+        "time_msc": 1786417283319,
+        "bid": 29820.25,
+        "ask": 29821.25,
+        "last": 29821.0,
+        "volume": 1,
+        "volume_real": 1.0,
+        "flags": 56,
+        "category": "LAST/VOLUME sem BID/ASK",
+        "has_trade_flag": true
+      },
+      {
+        "time_msc": 1786417283319,
+        "bid": 29820.25,
+        "ask": 29821.25,
+        "last": 29821.25,
+        "volume": 1,
+        "volume_real": 1.0,
+        "flags": 56,
+        "category": "LAST/VOLUME sem BID/ASK",
+        "has_trade_flag": true
+      },
+      {
+        "time_msc": 1786417283319,
+        "bid": 29820.25,
+        "ask": 29821.25,
+        "last": 29821.25,
+        "volume": 1,
+        "volume_real": 1.0,
+        "flags": 56,
+        "category": "LAST/VOLUME sem BID/ASK",
+        "has_trade_flag": true
+      },
+      {
+        "time_msc": 1786417283322,
+        "bid": 29820.5,
+        "ask": 29821.25,
+        "last": 29821.0,
+        "volume": 1,
+        "volume_real": 1.0,
+        "flags": 56,
+        "category": "LAST/VOLUME sem BID/ASK",
+        "has_trade_flag": true
+      },
+      {
+        "time_msc": 1786417283322,
+        "bid": 29820.5,
+        "ask": 29821.25,
+        "last": 29820.5,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 88,
@@ -280,10 +314,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416269929,
-        "bid": 29833.0,
-        "ask": 29834.0,
-        "last": 29834.0,
+        "time_msc": 1786417283415,
+        "bid": 29819.5,
+        "ask": 29820.5,
+        "last": 29820.75,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 56,
@@ -291,10 +325,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416270591,
-        "bid": 29833.5,
-        "ask": 29834.5,
-        "last": 29834.5,
+        "time_msc": 1786417286720,
+        "bid": 29819.5,
+        "ask": 29820.5,
+        "last": 29820.5,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 56,
@@ -302,10 +336,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416270591,
-        "bid": 29833.5,
-        "ask": 29834.5,
-        "last": 29834.75,
+        "time_msc": 1786417286720,
+        "bid": 29819.5,
+        "ask": 29820.5,
+        "last": 29820.5,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 56,
@@ -313,10 +347,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416270593,
-        "bid": 29834.0,
-        "ask": 29834.75,
-        "last": 29834.75,
+        "time_msc": 1786417289669,
+        "bid": 29819.75,
+        "ask": 29820.5,
+        "last": 29820.0,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 56,
@@ -324,32 +358,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416270593,
-        "bid": 29834.75,
-        "ask": 29835.0,
-        "last": 29835.0,
-        "volume": 1,
-        "volume_real": 1.0,
-        "flags": 56,
-        "category": "LAST/VOLUME sem BID/ASK",
-        "has_trade_flag": true
-      },
-      {
-        "time_msc": 1786416272994,
-        "bid": 29835.5,
-        "ask": 29836.75,
-        "last": 29836.0,
-        "volume": 1,
-        "volume_real": 1.0,
-        "flags": 56,
-        "category": "LAST/VOLUME sem BID/ASK",
-        "has_trade_flag": true
-      },
-      {
-        "time_msc": 1786416275315,
-        "bid": 29836.25,
-        "ask": 29837.0,
-        "last": 29836.25,
+        "time_msc": 1786417289669,
+        "bid": 29819.75,
+        "ask": 29820.5,
+        "last": 29819.5,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 88,
@@ -357,10 +369,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416275315,
-        "bid": 29836.25,
-        "ask": 29837.0,
-        "last": 29836.25,
+        "time_msc": 1786417290598,
+        "bid": 29819.25,
+        "ask": 29820.25,
+        "last": 29819.25,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 88,
@@ -368,43 +380,21 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416278373,
-        "bid": 29835.75,
-        "ask": 29836.5,
-        "last": 29836.5,
+        "time_msc": 1786417290627,
+        "bid": 29819.25,
+        "ask": 29820.25,
+        "last": 29819.25,
         "volume": 1,
         "volume_real": 1.0,
-        "flags": 56,
+        "flags": 88,
         "category": "LAST/VOLUME sem BID/ASK",
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416289006,
-        "bid": 29837.25,
-        "ask": 29838.25,
-        "last": 29838.25,
-        "volume": 1,
-        "volume_real": 1.0,
-        "flags": 56,
-        "category": "LAST/VOLUME sem BID/ASK",
-        "has_trade_flag": true
-      },
-      {
-        "time_msc": 1786416290054,
-        "bid": 29837.75,
-        "ask": 29838.5,
-        "last": 29838.5,
-        "volume": 1,
-        "volume_real": 1.0,
-        "flags": 56,
-        "category": "LAST/VOLUME sem BID/ASK",
-        "has_trade_flag": true
-      },
-      {
-        "time_msc": 1786416291736,
-        "bid": 29837.5,
-        "ask": 29838.5,
-        "last": 29837.5,
+        "time_msc": 1786417290627,
+        "bid": 29819.25,
+        "ask": 29820.25,
+        "last": 29819.0,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 88,
@@ -414,21 +404,10 @@
     ],
     "trade_residual_samples": [
       {
-        "time_msc": 1786416266270,
-        "bid": 29834.0,
-        "ask": 29834.75,
-        "last": 29834.75,
-        "volume": 1,
-        "volume_real": 1.0,
-        "flags": 56,
-        "category": "LAST/VOLUME sem BID/ASK",
-        "has_trade_flag": true
-      },
-      {
-        "time_msc": 1786416268820,
-        "bid": 29833.75,
-        "ask": 29834.5,
-        "last": 29833.75,
+        "time_msc": 1786417282438,
+        "bid": 29819.25,
+        "ask": 29820.5,
+        "last": 29820.0,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 88,
@@ -436,10 +415,65 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416268820,
-        "bid": 29833.75,
-        "ask": 29834.5,
-        "last": 29833.5,
+        "time_msc": 1786417283316,
+        "bid": 29820.0,
+        "ask": 29820.75,
+        "last": 29820.75,
+        "volume": 1,
+        "volume_real": 1.0,
+        "flags": 56,
+        "category": "LAST/VOLUME sem BID/ASK",
+        "has_trade_flag": true
+      },
+      {
+        "time_msc": 1786417283319,
+        "bid": 29820.25,
+        "ask": 29821.25,
+        "last": 29821.0,
+        "volume": 1,
+        "volume_real": 1.0,
+        "flags": 56,
+        "category": "LAST/VOLUME sem BID/ASK",
+        "has_trade_flag": true
+      },
+      {
+        "time_msc": 1786417283319,
+        "bid": 29820.25,
+        "ask": 29821.25,
+        "last": 29821.25,
+        "volume": 1,
+        "volume_real": 1.0,
+        "flags": 56,
+        "category": "LAST/VOLUME sem BID/ASK",
+        "has_trade_flag": true
+      },
+      {
+        "time_msc": 1786417283319,
+        "bid": 29820.25,
+        "ask": 29821.25,
+        "last": 29821.25,
+        "volume": 1,
+        "volume_real": 1.0,
+        "flags": 56,
+        "category": "LAST/VOLUME sem BID/ASK",
+        "has_trade_flag": true
+      },
+      {
+        "time_msc": 1786417283322,
+        "bid": 29820.5,
+        "ask": 29821.25,
+        "last": 29821.0,
+        "volume": 1,
+        "volume_real": 1.0,
+        "flags": 56,
+        "category": "LAST/VOLUME sem BID/ASK",
+        "has_trade_flag": true
+      },
+      {
+        "time_msc": 1786417283322,
+        "bid": 29820.5,
+        "ask": 29821.25,
+        "last": 29820.5,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 88,
@@ -447,10 +481,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416269929,
-        "bid": 29833.0,
-        "ask": 29834.0,
-        "last": 29834.0,
+        "time_msc": 1786417283415,
+        "bid": 29819.5,
+        "ask": 29820.5,
+        "last": 29820.75,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 56,
@@ -458,10 +492,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416270591,
-        "bid": 29833.5,
-        "ask": 29834.5,
-        "last": 29834.5,
+        "time_msc": 1786417286720,
+        "bid": 29819.5,
+        "ask": 29820.5,
+        "last": 29820.5,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 56,
@@ -469,10 +503,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416270591,
-        "bid": 29833.5,
-        "ask": 29834.5,
-        "last": 29834.75,
+        "time_msc": 1786417286720,
+        "bid": 29819.5,
+        "ask": 29820.5,
+        "last": 29820.5,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 56,
@@ -480,10 +514,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416270593,
-        "bid": 29834.0,
-        "ask": 29834.75,
-        "last": 29834.75,
+        "time_msc": 1786417289669,
+        "bid": 29819.75,
+        "ask": 29820.5,
+        "last": 29820.0,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 56,
@@ -491,32 +525,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416270593,
-        "bid": 29834.75,
-        "ask": 29835.0,
-        "last": 29835.0,
-        "volume": 1,
-        "volume_real": 1.0,
-        "flags": 56,
-        "category": "LAST/VOLUME sem BID/ASK",
-        "has_trade_flag": true
-      },
-      {
-        "time_msc": 1786416272994,
-        "bid": 29835.5,
-        "ask": 29836.75,
-        "last": 29836.0,
-        "volume": 1,
-        "volume_real": 1.0,
-        "flags": 56,
-        "category": "LAST/VOLUME sem BID/ASK",
-        "has_trade_flag": true
-      },
-      {
-        "time_msc": 1786416275315,
-        "bid": 29836.25,
-        "ask": 29837.0,
-        "last": 29836.25,
+        "time_msc": 1786417289669,
+        "bid": 29819.75,
+        "ask": 29820.5,
+        "last": 29819.5,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 88,
@@ -524,10 +536,10 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416275315,
-        "bid": 29836.25,
-        "ask": 29837.0,
-        "last": 29836.25,
+        "time_msc": 1786417290598,
+        "bid": 29819.25,
+        "ask": 29820.25,
+        "last": 29819.25,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 88,
@@ -535,43 +547,21 @@
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416278373,
-        "bid": 29835.75,
-        "ask": 29836.5,
-        "last": 29836.5,
+        "time_msc": 1786417290627,
+        "bid": 29819.25,
+        "ask": 29820.25,
+        "last": 29819.25,
         "volume": 1,
         "volume_real": 1.0,
-        "flags": 56,
+        "flags": 88,
         "category": "LAST/VOLUME sem BID/ASK",
         "has_trade_flag": true
       },
       {
-        "time_msc": 1786416289006,
-        "bid": 29837.25,
-        "ask": 29838.25,
-        "last": 29838.25,
-        "volume": 1,
-        "volume_real": 1.0,
-        "flags": 56,
-        "category": "LAST/VOLUME sem BID/ASK",
-        "has_trade_flag": true
-      },
-      {
-        "time_msc": 1786416290054,
-        "bid": 29837.75,
-        "ask": 29838.5,
-        "last": 29838.5,
-        "volume": 1,
-        "volume_real": 1.0,
-        "flags": 56,
-        "category": "LAST/VOLUME sem BID/ASK",
-        "has_trade_flag": true
-      },
-      {
-        "time_msc": 1786416291736,
-        "bid": 29837.5,
-        "ask": 29838.5,
-        "last": 29837.5,
+        "time_msc": 1786417290627,
+        "bid": 29819.25,
+        "ask": 29820.25,
+        "last": 29819.0,
         "volume": 1,
         "volume_real": 1.0,
         "flags": 88,
@@ -586,14 +576,16 @@
     "false_quote_count_is_zero": true,
     "eligible_equals_actual_route_quotes": true,
     "eligible_equals_decision_emit_quote": true,
+    "historical_quote_eligible_equals_adapter_conversion": true,
+    "false_historical_quote_count_is_zero": true,
     "live_false_quotes_zero": true,
     "routing_measured_against_flags": true,
     "live_quotes_compared_to_wire_BID_ASK": true,
-    "handler_checked_for_trade_drops": true,
+    "handler_preserves_invalid_bbo_for_routing": true,
     "subscriptions_characterized": true,
     "homologation_script_versioned": true
   },
-  "note": "Post-correction: emit_quote requires BID|ASK flags. TradeTick LAST|VOLUME, subscription gating, InboundFeedHandler, and locked-market ask>bid are unchanged.",
+  "note": "Post-correction: emit_quote requires BID|ASK flags; historical BID_ASK uses COPY_TICKS_INFO + the same conversion. InboundFeedHandler stays type-neutral (no bid/ask discard). TradeTick LAST|VOLUME, subscription gating, and locked-market ask>bid are unchanged.",
   "pre_correction_reference": {
     "commit": "371ba681f77a219d387d646ce541ab57835f40f2",
     "false_quote_candidate_count_example": 206,
