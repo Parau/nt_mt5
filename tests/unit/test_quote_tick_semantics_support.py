@@ -68,3 +68,43 @@ def test_handler_drop_candidates_detect_invalid_sides() -> None:
     assert stats["trade_rows_bid_le0"] == 1
     assert stats["trade_rows_ask_le0"] == 1
     assert stats["trade_rows_any_side_invalid"] == 2
+
+
+def test_is_eligible_quote_independent_of_route_wire_tick() -> None:
+    """Eligible uses flags+BBO+sanity only — not route_wire_tick.emit_quote."""
+    import json
+    import pathlib
+
+    from nautilus_mt5 import XP_B3_PROFILE
+    from nautilus_mt5.data_types import MT5Symbol, MT5SymbolDetails
+    from nautilus_mt5.parsing.instruments import parse_instrument
+    from homologation.support.quote_tick_semantics import is_eligible_quote_row
+
+    data = json.loads(
+        (pathlib.Path(__file__).parent.parent / "test_data" / "symbol_info_wdon26.json").read_text(),
+    )
+    data.pop("_comment", None)
+    data["symbol"] = MT5Symbol(**data["symbol"])
+    inst = parse_instrument(MT5SymbolDetails(**data), venue_profile=XP_B3_PROFILE)
+
+    assert is_eligible_quote_row(
+        flags=TICK_FLAG_BID,
+        bid=100.0,
+        ask=101.0,
+        last=100.5,
+        instrument=inst,
+    )
+    assert not is_eligible_quote_row(
+        flags=TICK_FLAG_LAST | TICK_FLAG_VOLUME,
+        bid=100.0,
+        ask=101.0,
+        last=100.5,
+        instrument=inst,
+    )
+    assert not is_eligible_quote_row(
+        flags=TICK_FLAG_BID,
+        bid=0.0,
+        ask=101.0,
+        last=100.5,
+        instrument=inst,
+    )

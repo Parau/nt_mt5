@@ -53,6 +53,29 @@ def has_valid_bid_ask(bid: float, ask: float) -> bool:
     return bid > 0.0 and ask > 0.0 and ask > bid
 
 
+def is_eligible_quote_row(
+    *,
+    flags: int,
+    bid: float,
+    ask: float,
+    last: float,
+    instrument: Any,
+) -> bool:
+    """
+    Independently decide whether a row should become a QuoteTick.
+
+    Mirrors production intent without calling ``route_wire_tick``:
+    BID|ASK flags + valid BBO + existing sanity gate.
+    """
+    from nautilus_mt5.tick_routing import quote_passes_sanity_gate
+
+    if not semantic_quote_changed(flags):
+        return False
+    if not has_valid_bid_ask(bid, ask):
+        return False
+    return bool(quote_passes_sanity_gate(bid, ask, last, instrument))
+
+
 @dataclass(frozen=True, slots=True)
 class QuoteRowKey:
     time_msc: int

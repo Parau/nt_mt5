@@ -54,6 +54,7 @@ from homologation.support.clients import reset_mt5_client_cache
 from homologation.support.quote_tick_semantics import (
     compare_info_vs_flagged_all,
     handler_drop_trade_candidates,
+    is_eligible_quote_row,
     quote_sample_from_nautilus,
     residual_quote_candidates,
     semantic_quote_changed,
@@ -84,6 +85,57 @@ def _git_commit() -> str:
         )
     except Exception:
         return "unknown"
+
+
+def _git_provenance() -> dict[str, Any]:
+    """Record the exact tree under test (commit + dirty state)."""
+    commit = _git_commit()
+    dirty = False
+    dirty_paths: list[str] = []
+    try:
+        porcelain = subprocess.check_output(
+            ["git", "status", "--porcelain"],
+            cwd=_ROOT,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        lines = [ln for ln in porcelain.splitlines() if ln.strip()]
+        dirty = bool(lines)
+        dirty_paths = [ln[3:].strip() for ln in lines[:20]]
+    except Exception:
+        pass
+
+    tree_hash = "unknown"
+    try:
+        # Hash of HEAD tree; when dirty, also note working-tree diff stat for audit.
+        tree_hash = subprocess.check_output(
+            ["git", "rev-parse", "HEAD^{tree}"],
+            cwd=_ROOT,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except Exception:
+        pass
+
+    diff_stat = ""
+    if dirty:
+        try:
+            diff_stat = subprocess.check_output(
+                ["git", "diff", "--stat", "HEAD"],
+                cwd=_ROOT,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+        except Exception:
+            diff_stat = ""
+
+    return {
+        "adapter_commit": commit,
+        "git_dirty": dirty,
+        "git_tree": tree_hash,
+        "dirty_paths_head": dirty_paths,
+        "dirty_diff_stat": diff_stat,
+    }
 
 
 def _as_local_array(frame: Any):
@@ -209,17 +261,34 @@ def _analyze_historical(
     actual_route_quotes = 0
     actual_quote_samples: list[tuple[int, float, float]] = []
     eligible_quote_samples: list[tuple[int, float, float]] = []
+    decision_quote_samples: list[tuple[int, float, float]] = []
 
     for row in all_list:
         wire = _row_to_wire(row)
         if semantic_quote_changed(wire.flags):
             semantic_quote_rows += 1
 
+        # Eligible is computed independently of route_wire_tick / converter.
+        eligible = is_eligible_quote_row(
+            flags=wire.flags,
+            bid=wire.bid,
+            ask=wire.ask,
+            last=wire.last,
+            instrument=instrument,
+        )
+        if eligible:
+            eligible_quote_rows += 1
+            eligible_quote_samples.append(wire_quote_sample(wire))
+
         decision = route_wire_tick(instrument, wire)
         if decision.emit_quote:
             emit_quote += 1
-            eligible_quote_rows += 1
-            eligible_quote_samples.append(wire_quote_sample(wire))
+            decision_quote_samples.append(wire_quote_sample(wire))
+
+        quote_tick, _trade = route_wire_tick_to_nautilus(instrument, wire, ts_init=0)
+        if quote_tick is not None:
+            actual_route_quotes += 1
+            actual_quote_samples.append(quote_sample_from_nautilus(quote_tick))
             if not semantic_quote_changed(wire.flags):
                 false_quote += 1
                 if len(false_samples) < 15:
@@ -235,14 +304,10 @@ def _analyze_historical(
                         },
                     )
 
-        quote_tick, _trade = route_wire_tick_to_nautilus(instrument, wire, ts_init=0)
-        if quote_tick is not None:
-            actual_route_quotes += 1
-            actual_quote_samples.append(quote_sample_from_nautilus(quote_tick))
-
     from collections import Counter
 
     eligible_vs_actual_match = Counter(eligible_quote_samples) == Counter(actual_quote_samples)
+    eligible_vs_decision_match = Counter(eligible_quote_samples) == Counter(decision_quote_samples)
 
     bid_ask_flagged = compare["all_with_bid_ask_flags"]
     return {
@@ -260,10 +325,11 @@ def _analyze_historical(
         "eligible_quote_rows": eligible_quote_rows,
         "actual_route_quotes": actual_route_quotes,
         "eligible_vs_actual_multiset_match": eligible_vs_actual_match,
+        "eligible_vs_decision_multiset_match": eligible_vs_decision_match,
         "route_emit_quote_count": emit_quote,
         "false_quote_candidate_count": false_quote,
         "false_quote_candidate_pct": (
-            round(100.0 * false_quote / emit_quote, 4) if emit_quote else 0.0
+            round(100.0 * false_quote / actual_route_quotes, 4) if actual_route_quotes else 0.0
         ),
         "false_quote_samples": false_samples,
         "all_with_bid_ask_flags": bid_ask_flagged,
@@ -489,12 +555,14 @@ def _conclusion(hist: dict[str, Any], live_both: dict[str, Any], live_trade_only
     false_hist = int(hist.get("false_quote_candidate_count") or 0)
     false_live = int(live_both.get("route_false_quotes_from_wires") or 0)
     eligible_match = bool(hist.get("eligible_vs_actual_multiset_match"))
+    eligible_decision_match = bool(hist.get("eligible_vs_decision_multiset_match"))
     live_ok = bool(live_both.get("ok"))
 
     if (
         info_match
         and false_hist == 0
         and eligible_match
+        and eligible_decision_match
         and (not live_ok or false_live == 0)
     ):
         return "QUOTE ROUTING FIX VERIFIED"
@@ -529,6 +597,7 @@ async def main() -> int:
     print("=" * 72)
 
     meta = _provider_meta(cfg)
+    provenance = _git_provenance()
     instrument = _routing_instrument(symbol)
 
     print("\n[1/4] Historical ALL vs INFO + routing matrix ...")
@@ -544,7 +613,12 @@ async def main() -> int:
         f"semantic={hist['semantic_quote_rows']} "
         f"eligible={hist['eligible_quote_rows']} "
         f"actual={hist['actual_route_quotes']} "
-        f"eligible==actual={hist['eligible_vs_actual_multiset_match']}",
+        f"eligible==actual={hist['eligible_vs_actual_multiset_match']} "
+        f"eligible==decision={hist['eligible_vs_decision_multiset_match']}",
+    )
+    print(
+        f"  provenance commit={provenance['adapter_commit'][:12]} "
+        f"dirty={provenance['git_dirty']}",
     )
     divergences = hist.get("compare_info_vs_flagged_all", {}).get("divergences_head") or []
     if divergences:
@@ -613,7 +687,11 @@ async def main() -> int:
 
     report = {
         "result_verdict": verdict,
-        "adapter_commit": _git_commit(),
+        "adapter_commit": provenance.get("adapter_commit"),
+        "git_dirty": provenance.get("git_dirty"),
+        "git_tree": provenance.get("git_tree"),
+        "dirty_paths_head": provenance.get("dirty_paths_head"),
+        "dirty_diff_stat": provenance.get("dirty_diff_stat"),
         "probe": "homologation/run_quote_tick_semantics.py",
         "metatrader5_package_version": meta.get("metatrader5_package_version"),
         "terminal_build": meta.get("terminal_build"),
@@ -641,6 +719,7 @@ async def main() -> int:
         "eligible_quote_rows": hist.get("eligible_quote_rows"),
         "actual_route_quotes": hist.get("actual_route_quotes"),
         "eligible_vs_actual_multiset_match": hist.get("eligible_vs_actual_multiset_match"),
+        "eligible_vs_decision_multiset_match": hist.get("eligible_vs_decision_multiset_match"),
         "current_route_emit_quote_count": hist.get("route_emit_quote_count"),
         "false_quote_candidate_count": hist.get("false_quote_candidate_count"),
         "false_quote_candidate_pct": hist.get("false_quote_candidate_pct"),
@@ -666,6 +745,7 @@ async def main() -> int:
             "residual_trade_rows_exist": bool(hist.get("trade_only_with_valid_residual_bid_ask_count")),
             "false_quote_count_is_zero": int(hist.get("false_quote_candidate_count") or 0) == 0,
             "eligible_equals_actual_route_quotes": bool(hist.get("eligible_vs_actual_multiset_match")),
+            "eligible_equals_decision_emit_quote": bool(hist.get("eligible_vs_decision_multiset_match")),
             "live_false_quotes_zero": (
                 not bool(live_both.get("ok"))
                 or int(live_both.get("route_false_quotes_from_wires") or 0) == 0
