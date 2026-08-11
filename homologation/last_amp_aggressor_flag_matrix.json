@@ -1,0 +1,95 @@
+{
+  "purpose": "AMP COPY_TICKS_TRADE flag matrix vs LAST-gated aggressor; measure VOLUME|BUY/SELL without LAST discarded as NO_AGGRESSOR",
+  "probe": "homologation/tools/probe_amp_aggressor_flag_matrix.py",
+  "mt5_host": "127.0.0.1",
+  "mt5_port": 18814,
+  "window_utc": [
+    "2026-08-11T16:37:04.638880+00:00",
+    "2026-08-11T18:37:04.638880+00:00"
+  ],
+  "lookback_hours": 2.0,
+  "symbols": [
+    "MNQU26",
+    "ENQU26"
+  ],
+  "adapter_mt5_flags_to_aggressor_changed": false,
+  "symbols_detail": [
+    {
+      "symbol": "MNQU26",
+      "trade_rows": 260460,
+      "buckets": {
+        "LAST+BUY": 127690,
+        "LAST+SELL": 132770,
+        "LAST+VOLUME+BUY": 127690,
+        "LAST+VOLUME+SELL": 132770
+      },
+      "bucket_pct_of_trade_rows": {
+        "LAST+BUY": 49.025,
+        "LAST+SELL": 50.975,
+        "LAST+VOLUME+BUY": 49.025,
+        "LAST+VOLUME+SELL": 50.975
+      },
+      "aggressor_comparison": {
+        "current_sides": {
+          "BUYER": 127690,
+          "SELLER": 132770
+        },
+        "relaxed_sides": {
+          "BUYER": 127690,
+          "SELLER": 132770
+        },
+        "current_NO_AGGRESSOR": 0,
+        "current_NO_AGGRESSOR_pct": 0.0,
+        "current_NO_and_relaxed_known": 0,
+        "current_NO_and_relaxed_known_pct_of_current_NO": 0.0,
+        "current_NO_on_VOLUME_BUY_or_SELL_no_LAST": 0,
+        "VOLUME_BUY_no_LAST": 0,
+        "VOLUME_SELL_no_LAST": 0
+      },
+      "critical_samples": [],
+      "verdict": "NO_MATERIAL_LAST_GATE_LOSS",
+      "provider_trade_count": 260460
+    },
+    {
+      "symbol": "ENQU26",
+      "trade_rows": 64515,
+      "buckets": {
+        "LAST+BUY": 32042,
+        "LAST+SELL": 32472,
+        "LAST+VOLUME+BUY": 32042,
+        "LAST+VOLUME+SELL": 32472,
+        "ambiguous_BUY_and_SELL": 1
+      },
+      "bucket_pct_of_trade_rows": {
+        "LAST+BUY": 49.666,
+        "LAST+SELL": 50.332,
+        "LAST+VOLUME+BUY": 49.666,
+        "LAST+VOLUME+SELL": 50.332,
+        "ambiguous_BUY_and_SELL": 0.002
+      },
+      "aggressor_comparison": {
+        "current_sides": {
+          "BUYER": 32042,
+          "NO_AGGRESSOR": 1,
+          "SELLER": 32472
+        },
+        "relaxed_sides": {
+          "BUYER": 32042,
+          "NO_AGGRESSOR": 1,
+          "SELLER": 32472
+        },
+        "current_NO_AGGRESSOR": 1,
+        "current_NO_AGGRESSOR_pct": 0.002,
+        "current_NO_and_relaxed_known": 0,
+        "current_NO_and_relaxed_known_pct_of_current_NO": 0.0,
+        "current_NO_on_VOLUME_BUY_or_SELL_no_LAST": 0,
+        "VOLUME_BUY_no_LAST": 0,
+        "VOLUME_SELL_no_LAST": 0
+      },
+      "critical_samples": [],
+      "verdict": "LAST_GATE_NOT_CULPRIT_NO_SIDE_ON_MOST_NO_AGGRESSOR",
+      "provider_trade_count": 64515
+    }
+  ],
+  "overall_verdict": "LAST_GATE_NOT_CULPRIT_NO_SIDE_ON_MOST_NO_AGGRESSOR"
+}
