@@ -51,7 +51,14 @@ def test_wdon26_routes_quote_and_trade() -> None:
     inst = _instrument_from_fixture("symbol_info_wdon26.json")
     decision = route_wire_tick(
         inst,
-        WireTick(time_msc=1, bid=5178.5, ask=5179.0, last=5178.5, volume=3, flags=1368),
+        WireTick(
+            time_msc=1,
+            bid=5178.5,
+            ask=5179.0,
+            last=5178.5,
+            volume=3,
+            flags=TICK_FLAG_BID | TICK_FLAG_ASK | TICK_FLAG_LAST | TICK_FLAG_VOLUME,
+        ),
     )
     assert decision.emit_quote is True
     assert decision.emit_trade is True

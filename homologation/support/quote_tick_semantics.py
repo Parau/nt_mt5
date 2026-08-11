@@ -1,18 +1,18 @@
 """
-QuoteTick flag-semantics classifiers for pre-correction evidence.
+QuoteTick flag-semantics classifiers for MT5 tick homologation.
 
 Purpose/Single Responsibility:
     Classify MT5 tick rows by BID/ASK/LAST/VOLUME flags and compare
-    ``COPY_TICKS_INFO`` vs flagged ``COPY_TICKS_ALL`` multisets without changing
-    production routing.
+    ``COPY_TICKS_INFO`` vs flagged ``COPY_TICKS_ALL`` multisets. Also measure
+    eligible vs actual QuoteTick emission after the flag-based routing fix.
 
 Data Flow & Dependencies:
-    Consumed by ``homologation/run_quote_tick_semantics.py`` and unit diagnostic
-    tests. Inputs are structured tick rows or ``WireTick``-like objects.
+    Consumed by ``homologation/run_quote_tick_semantics.py`` and unit tests.
+    Inputs are structured tick rows or ``WireTick``-like objects.
 
 Premises & Limitations:
-    Does not mutate ``route_wire_tick``. ``semantic_quote_changed`` is the
-    candidate flag rule under investigation, not production behavior.
+    ``semantic_quote_changed`` mirrors production ``route_wire_tick`` quote flags.
+    Eligible quotes additionally require valid bid/ask and the existing sanity gate.
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def tick_field(row: Any, name: str, default: Any = 0) -> Any:
 
 
 def semantic_quote_changed(flags: int) -> bool:
-    """Candidate QuoteTick rule: Bid and/or Ask changed per MT5 flags."""
+    """Production QuoteTick flag rule: Bid and/or Ask changed per MT5 flags."""
     return bool(int(flags) & QUOTE_FLAG_MASK)
 
 

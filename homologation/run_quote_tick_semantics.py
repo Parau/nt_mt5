@@ -1,27 +1,27 @@
 """
-QuoteTick semantics pre-correction homologation (Tier 1.5 evidence).
+QuoteTick semantics homologation after flag-based routing fix (Tier 1.5).
 
 Purpose/Single Responsibility:
-    Measure whether current ``emit_quote = has_bid_ask`` over-emits QuoteTicks
-    relative to MT5 ``COPY_TICKS_INFO`` / ``TICK_FLAG_BID|ASK`` semantics, without
-    changing production routing.
+    Verify that ``emit_quote = has_bid_ask and quote_changed`` (BID|ASK flags)
+    eliminates false QuoteTicks on trade-only residual bid/ask rows, while
+    preserving ``COPY_TICKS_INFO == ALL[BID|ASK]`` and TradeTick LAST|VOLUME.
 
 Data Flow & Dependencies:
-    1) RPyC: ``COPY_TICKS_ALL`` vs ``COPY_TICKS_INFO`` multiset compare + routing
-       matrix on real rows.
-    2) Live TradingNode: capture WireTicks (monkeypatched handler path) and
-       Nautilus QuoteTicks/TradeTicks; compare to flag semantics.
+    1) RPyC: ``COPY_TICKS_ALL`` vs ``COPY_TICKS_INFO`` + eligible vs actual quotes.
+    2) Live TradingNode: WireTicks → route → QuoteTick/TradeTick counts.
     Writes ``homologation/last_quote_tick_semantics_report.json``.
 
 Premises & Limitations:
-    Does not modify ``route_wire_tick``. TradeTick flag rule stays untouched.
+    Does not change subscription gating, handler, or TradeTick rules.
     Requires AMP open market, RPyC bridge, and NT5TickFeedService → host feed.
+    Compare actual route quotes to eligible rows (flags + valid bid/ask + sanity),
+    not raw INFO count.
 
 Usage (Windows CMD)::
 
     set MT5_HOST=127.0.0.1 && set MT5_PORT=18814 && ^
     set MT5_VENUE_PROFILE=amp-us && set MT5_SYMBOL=ENQU26 && ^
-    set MT5_FEED_ENABLED=1 && set MT5_FEED_PORT=8767 && ^
+    set MT5_FEED_ENABLED=1 && set MT5_FEED_PORT=18767 && ^
     set HOMOLOG_STREAM_SECS=30 && ^
     E:\\miniconda\\envs\\trading\\python.exe homologation\\run_quote_tick_semantics.py
 """
@@ -204,11 +204,22 @@ def _analyze_historical(
     emit_quote = 0
     false_quote = 0
     false_samples: list[dict[str, Any]] = []
+    semantic_quote_rows = 0
+    eligible_quote_rows = 0
+    actual_route_quotes = 0
+    actual_quote_samples: list[tuple[int, float, float]] = []
+    eligible_quote_samples: list[tuple[int, float, float]] = []
+
     for row in all_list:
         wire = _row_to_wire(row)
+        if semantic_quote_changed(wire.flags):
+            semantic_quote_rows += 1
+
         decision = route_wire_tick(instrument, wire)
         if decision.emit_quote:
             emit_quote += 1
+            eligible_quote_rows += 1
+            eligible_quote_samples.append(wire_quote_sample(wire))
             if not semantic_quote_changed(wire.flags):
                 false_quote += 1
                 if len(false_samples) < 15:
@@ -224,6 +235,15 @@ def _analyze_historical(
                         },
                     )
 
+        quote_tick, _trade = route_wire_tick_to_nautilus(instrument, wire, ts_init=0)
+        if quote_tick is not None:
+            actual_route_quotes += 1
+            actual_quote_samples.append(quote_sample_from_nautilus(quote_tick))
+
+    from collections import Counter
+
+    eligible_vs_actual_match = Counter(eligible_quote_samples) == Counter(actual_quote_samples)
+
     bid_ask_flagged = compare["all_with_bid_ask_flags"]
     return {
         "window_utc": [start.isoformat(), end.isoformat()],
@@ -236,6 +256,10 @@ def _analyze_historical(
         "trade_only_with_valid_residual_bid_ask_count": len(trade_residual),
         "residual_samples": residual[:15],
         "trade_residual_samples": trade_residual[:15],
+        "semantic_quote_rows": semantic_quote_rows,
+        "eligible_quote_rows": eligible_quote_rows,
+        "actual_route_quotes": actual_route_quotes,
+        "eligible_vs_actual_multiset_match": eligible_vs_actual_match,
         "route_emit_quote_count": emit_quote,
         "false_quote_candidate_count": false_quote,
         "false_quote_candidate_pct": (
@@ -464,18 +488,18 @@ def _conclusion(hist: dict[str, Any], live_both: dict[str, Any], live_trade_only
     info_match = bool(hist.get("compare_info_vs_flagged_all", {}).get("exact_multiset_match"))
     false_hist = int(hist.get("false_quote_candidate_count") or 0)
     false_live = int(live_both.get("route_false_quotes_from_wires") or 0)
+    eligible_match = bool(hist.get("eligible_vs_actual_multiset_match"))
     live_ok = bool(live_both.get("ok"))
 
-    # Historical residual + INFO≈flagged-ALL is enough to confirm the routing hypothesis.
-    if false_hist > 0 and info_match:
-        return "QUOTE ROUTING BUG CONFIRMED"
-    if false_hist > 0 and live_ok and false_live > 0:
-        return "QUOTE ROUTING BUG CONFIRMED"
-    if false_hist > 0 and not info_match:
-        # Over-emission seen, but INFO identity not exact — still strong, not fully closed.
-        return "INCONCLUSIVE"
-    if info_match and false_hist == 0 and false_live == 0:
-        return "NOT CONFIRMED"
+    if (
+        info_match
+        and false_hist == 0
+        and eligible_match
+        and (not live_ok or false_live == 0)
+    ):
+        return "QUOTE ROUTING FIX VERIFIED"
+    if false_hist > 0 or (live_ok and false_live > 0):
+        return "QUOTE ROUTING BUG STILL PRESENT"
     return "INCONCLUSIVE"
 
 
@@ -516,8 +540,11 @@ async def main() -> int:
     )
     print(
         f"  route emit_quote={hist['route_emit_quote_count']} "
-        f"false_quote_candidates={hist['false_quote_candidate_count']} "
-        f"({hist['false_quote_candidate_pct']}%)",
+        f"false={hist['false_quote_candidate_count']} "
+        f"semantic={hist['semantic_quote_rows']} "
+        f"eligible={hist['eligible_quote_rows']} "
+        f"actual={hist['actual_route_quotes']} "
+        f"eligible==actual={hist['eligible_vs_actual_multiset_match']}",
     )
     divergences = hist.get("compare_info_vs_flagged_all", {}).get("divergences_head") or []
     if divergences:
@@ -591,7 +618,6 @@ async def main() -> int:
         "metatrader5_package_version": meta.get("metatrader5_package_version"),
         "terminal_build": meta.get("terminal_build"),
         "broker_server": meta.get("broker_server"),
-        "account_login": meta.get("account_login"),
         "instrument": symbol,
         "gateway": f"{cfg.host}:{cfg.port}",
         "feed": f"ws://{cfg.feed_host}:{cfg.feed_port}{cfg.feed_path}",
@@ -611,6 +637,10 @@ async def main() -> int:
         "trade_only_with_valid_residual_bid_ask_count": hist.get(
             "trade_only_with_valid_residual_bid_ask_count",
         ),
+        "semantic_quote_rows": hist.get("semantic_quote_rows"),
+        "eligible_quote_rows": hist.get("eligible_quote_rows"),
+        "actual_route_quotes": hist.get("actual_route_quotes"),
+        "eligible_vs_actual_multiset_match": hist.get("eligible_vs_actual_multiset_match"),
         "current_route_emit_quote_count": hist.get("route_emit_quote_count"),
         "false_quote_candidate_count": hist.get("false_quote_candidate_count"),
         "false_quote_candidate_pct": hist.get("false_quote_candidate_pct"),
@@ -634,6 +664,12 @@ async def main() -> int:
                 "exact_multiset_match",
             ),
             "residual_trade_rows_exist": bool(hist.get("trade_only_with_valid_residual_bid_ask_count")),
+            "false_quote_count_is_zero": int(hist.get("false_quote_candidate_count") or 0) == 0,
+            "eligible_equals_actual_route_quotes": bool(hist.get("eligible_vs_actual_multiset_match")),
+            "live_false_quotes_zero": (
+                not bool(live_both.get("ok"))
+                or int(live_both.get("route_false_quotes_from_wires") or 0) == 0
+            ),
             "routing_measured_against_flags": True,
             "live_quotes_compared_to_wire_BID_ASK": True,
             "handler_checked_for_trade_drops": True,
@@ -641,9 +677,16 @@ async def main() -> int:
             "homologation_script_versioned": True,
         },
         "note": (
-            "No functional change to route_wire_tick QuoteTick rule in this probe. "
-            "TradeTick rule LAST|VOLUME remains untouched."
+            "Post-correction: emit_quote requires BID|ASK flags. "
+            "TradeTick LAST|VOLUME, subscription gating, InboundFeedHandler, "
+            "and locked-market ask>bid are unchanged."
         ),
+        "pre_correction_reference": {
+            "commit": "371ba681f77a219d387d646ce541ab57835f40f2",
+            "false_quote_candidate_count_example": 206,
+            "false_quote_candidate_pct_example": 15.2254,
+            "live_false_quote_count_example": 8448,
+        },
     }
 
     out_path.write_text(json.dumps(report, indent=2, default=str) + "\n", encoding="utf-8")

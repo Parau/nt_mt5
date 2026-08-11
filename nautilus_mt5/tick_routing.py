@@ -91,6 +91,10 @@ def route_wire_tick(instrument: Instrument, tick: WireTick | TickLike) -> TickRo
     matching ``COPY_TICKS_TRADE`` selection. A stale ``last > 0`` carried on Bid/Ask-only
     updates must not invent TradeTicks — MT5 leaves unchanged fields populated.
 
+    Quote emission follows ``TICK_FLAG_BID`` / ``TICK_FLAG_ASK``, matching
+    ``COPY_TICKS_INFO``. Residual bid/ask values on trade-only rows must not invent
+    QuoteTicks.
+
     Continuous/disabled symbols never emit quotes. Off-hours WINQ26-style garbage
     bid/ask is filtered by the sanity gate when ``last > 0``.
     """
@@ -100,14 +104,15 @@ def route_wire_tick(instrument: Instrument, tick: WireTick | TickLike) -> TickRo
     has_bid_ask = tick.bid > 0 and tick.ask > 0 and tick.ask > tick.bid
     has_last = tick.last > 0
     flags = int(getattr(tick, "flags", 0) or 0)
-    # MT5 CopyTicks: TRADE rows are those where Last and/or Volume changed.
+    # MT5 CopyTicks: INFO = Bid/Ask changed; TRADE = Last and/or Volume changed.
+    quote_changed = bool(flags & (TICK_FLAG_BID | TICK_FLAG_ASK))
     trade_changed = bool(flags & (TICK_FLAG_LAST | TICK_FLAG_VOLUME))
     emit_trade = trade_changed
 
     if trade_mode == SYMBOL_TRADE_MODE_DISABLED or is_continuous_data_symbol(symbol):
         return TickRoutingDecision(emit_quote=False, emit_trade=emit_trade)
 
-    emit_quote = has_bid_ask
+    emit_quote = has_bid_ask and quote_changed
 
     if emit_quote and has_last and not quote_passes_sanity_gate(tick.bid, tick.ask, tick.last, instrument):
         return TickRoutingDecision(
