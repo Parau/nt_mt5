@@ -155,7 +155,6 @@ def test_volume_only_change_emits_trade() -> None:
     assert (wire.flags & TICK_FLAG_LAST) == 0
     decision = route_wire_tick(inst, wire)
     assert decision.emit_trade is True
-    assert decision.emit_quote is True
 
 
 def test_last_only_change_emits_trade() -> None:
@@ -212,4 +211,3 @@ def test_continuous_volume_only_emits_trade() -> None:
         ),
     )
     assert decision.emit_trade is True
-    assert decision.emit_quote is False

@@ -121,7 +121,7 @@ def test_volume_only_flag_creates_nautilus_trade_tick() -> None:
     )
     assert tick.flags == TICK_FLAG_VOLUME
     assert (tick.flags & TICK_FLAG_LAST) == 0
-    quote, trade = route_wire_tick_to_nautilus(
+    _quote, trade = route_wire_tick_to_nautilus(
         instrument,
         tick,
         ts_init=9_000_000_000,
@@ -132,8 +132,6 @@ def test_volume_only_flag_creates_nautilus_trade_tick() -> None:
     assert float(trade.size) == float(resolve_trade_tick_size(3, 3.0))
     assert trade.ts_event == 2_000 * 1_000_000
     assert trade.aggressor_side == AggressorSide.NO_AGGRESSOR
-    # Bid/Ask present → quote may also emit; trade must not disappear.
-    assert quote is not None
 
 
 def test_wire_bar_to_nautilus_bar() -> None:

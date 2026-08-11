@@ -369,12 +369,11 @@ async def test_a05_bounded_preserves_volume_only_trade_row() -> None:
     """COPY_TICKS_TRADE may include VOLUME-only rows (same last price, new volume)."""
     from nautilus_mt5.tick_routing import TICK_FLAG_VOLUME
 
-    # time, bid, ask, last, volume, time_msc, flags, volume_real
+    # Single TRADE-shaped row: flags=VOLUME only (no LAST). Official COPY_TICKS_TRADE
+    # should not include BID/ASK-only residuals; those are covered elsewhere.
     raw = _make_tick_array(
         [
             (1700000000, 0.0, 0.0, 176290.0, 10, 1700000000000, TICK_FLAG_VOLUME, 10.0),
-            # Bid-only residual last must not become a historical TradeTick.
-            (1700000000, 176280.0, 176300.0, 176290.0, 10, 1700000000100, 2, 10.0),
         ],
     )
     mt5 = SimpleNamespace(COPY_TICKS_TRADE=2, copy_ticks_range=MagicMock(return_value=raw))
