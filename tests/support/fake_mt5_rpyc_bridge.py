@@ -1,6 +1,26 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple, Optional
 
+import numpy as np
+
+from nautilus_mt5.metatrader5.tick_transport import (
+    MT5_TICK_DTYPE,
+    encode_mt5_ticks_frame,
+)
+
+# Sentinel: override unset vs explicit provider ``None``.
+_COPY_TICKS_RANGE_UNSET: Any = object()
+
+
+def _make_tick_array(rows: List[Tuple[Any, ...]]) -> np.ndarray:
+    """Build an exact local structured ndarray matching official MT5 tick layout."""
+    return np.array(rows, dtype=MT5_TICK_DTYPE)
+
+
+def _make_ticks_frame(rows: List[Tuple[Any, ...]]):
+    """Encode fixture rows as the EXTERNAL_RPyC brine-safe tick frame."""
+    return encode_mt5_ticks_frame(_make_tick_array(rows))
+
 
 @dataclass(frozen=True)
 class FakeMT5RPyCCall:
@@ -24,10 +44,22 @@ class FakeMT5RPyCRoot:
             "TIMEFRAME_M1": 1,
             "TIMEFRAME_M5": 5,
             "COPY_TICKS_ALL": 0,
+            "COPY_TICKS_INFO": 1,
+            "COPY_TICKS_TRADE": 2,
         }
         self._calls: List[FakeMT5RPyCCall] = []
         # MT5 ACCOUNT_MARGIN_MODE: 0=netting, 2=retail hedging (default hedging for XP/Tickmill fakes).
         self._margin_mode: int = 2
+        # Optional override for bounded A05 tests (UNSET → default fixtures).
+        self._copy_ticks_range_override: Any = _COPY_TICKS_RANGE_UNSET
+
+    def set_copy_ticks_range_override(self, value: Any) -> None:
+        """Override ``exposed_copy_ticks_range`` (``None``/ndarray/frame are all valid)."""
+        self._copy_ticks_range_override = value
+
+    def clear_copy_ticks_range_override(self) -> None:
+        """Restore default fixture rows for ``exposed_copy_ticks_range``."""
+        self._copy_ticks_range_override = _COPY_TICKS_RANGE_UNSET
 
     @property
     def calls(self) -> List[FakeMT5RPyCCall]:
@@ -493,37 +525,45 @@ class FakeMT5RPyCRoot:
         )
         return self.exposed_copy_rates_from_pos(symbol, timeframe, 0, 10)
 
-    def exposed_copy_ticks_range(self, symbol: str, date_from: Any, date_to: Any, flags: int) -> List[Dict[str, Any]]:
+    def exposed_copy_ticks_range(self, symbol: str, date_from: Any, date_to: Any, flags: int):
         self._record_call("copy_ticks_range", (symbol, date_from, date_to, flags), {})
+        if self._copy_ticks_range_override is not _COPY_TICKS_RANGE_UNSET:
+            override = self._copy_ticks_range_override
+            if override is None:
+                return None
+            if isinstance(override, tuple) and len(override) == 3:
+                return override
+            if type(override) is np.ndarray:
+                return encode_mt5_ticks_frame(override)
+            return override
+        # time, bid, ask, last, volume, time_msc, flags, volume_real
         if symbol == "USTEC":
-            return [
-                {
-                    "time": 1700000000,
-                    "bid": 18500.00,
-                    "ask": 18500.50,
-                    "last": 18500.25,
-                    "flags": 0,
-                }
-            ]
+            return _make_ticks_frame(
+                [(1700000000, 18500.00, 18500.50, 18500.25, 1, 1700000000000, 0, 1.0)],
+            )
         if symbol == "BTCUSD":
-            return [
-                {
-                    "time": 1700000000,
-                    "bid": 78000.00,
-                    "ask": 78001.00,
-                    "last": 78000.50,
-                    "flags": 0,
-                }
-            ]
-        return [
-            {
-                "time": 1700000000,
-                "bid": 1.10000,
-                "ask": 1.10020,
-                "last": 1.10010,
-                "flags": 0,
-            }
-        ]
+            return _make_ticks_frame(
+                [(1700000000, 78000.00, 78001.00, 78000.50, 1, 1700000000000, 0, 1.0)],
+            )
+        if symbol == "WIN$":
+            return _make_ticks_frame(
+                [(1700000000, 0.0, 0.0, 176290.0, 10, 1700000000000, 1336, 10.0)],
+            )
+        if symbol in ("WDOQ26", "WDON26"):
+            return _make_ticks_frame(
+                [(1700000000, 5178.5, 5179.0, 5178.5, 3, 1700000000000, 1368, 3.0)],
+            )
+        if symbol == "MESU26":
+            return _make_ticks_frame(
+                [(1700000000, 7529.50, 7529.75, 7529.50, 4, 1700000000000, 1368, 4.0)],
+            )
+        if symbol == "WINQ26":
+            return _make_ticks_frame(
+                [(1700000000, 192490.0, 157495.0, 176290.0, 5, 1700000000000, 1336, 5.0)],
+            )
+        return _make_ticks_frame(
+            [(1700000000, 1.10000, 1.10020, 1.10010, 1, 1700000000000, 0, 1.0)],
+        )
 
     def exposed_copy_ticks_from(self, symbol: str, date_from: Any, count: int, flags: int) -> List[Dict[str, Any]]:
         self._record_call("copy_ticks_from", (symbol, date_from, count, flags), {})

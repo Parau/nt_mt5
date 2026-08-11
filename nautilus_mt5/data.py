@@ -14,6 +14,7 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import Symbol
 
 from nautilus_mt5.client.client import MetaTrader5Client
+from nautilus_mt5.client.errors import MT5HistoricalDataError
 from nautilus_mt5.constants import MT5_VENUE
 from nautilus_mt5.data_types import MT5Symbol
 from nautilus_mt5.config import MetaTrader5DataClientConfig
@@ -602,10 +603,16 @@ class MetaTrader5DataClient(LiveMarketDataClient):
     async def _request_trade_ticks(self, request: RequestTradeTicks) -> None:
         instrument_id = request.instrument_id
         limit = request.limit
-        correlation_id = request.correlation_id
         start = request.start
         end = request.end
-        if not (instrument := self._cache.instrument(instrument_id)):
+        bounded = start is not None and end is not None and limit == 0
+
+        instrument = self._cache.instrument(instrument_id)
+        if instrument is None:
+            if bounded:
+                raise MT5HistoricalDataError(
+                    f"Instrument not in cache: {instrument_id}",
+                )
             self._log.error(
                 f"Cannot request TradeTicks for {instrument_id}, Instrument not found.",
             )
@@ -615,14 +622,19 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         try:
             status = self._venue_profile.check_capability(calc_mode, "trade_ticks")
         except ValueError as e:
+            if bounded:
+                raise MT5HistoricalDataError(str(e)) from e
             self._log.error(str(e))
             return
 
         if status == CapabilityStatus.UNSUPPORTED:
-            self._log.warning(
+            msg = (
                 f"TradeTicks for {instrument_id} (trade_calc_mode={calc_mode}) are UNSUPPORTED "
                 f"per VenueProfile '{self._venue_profile.name}'. Request rejected."
             )
+            if bounded:
+                raise MT5HistoricalDataError(msg)
+            self._log.warning(msg)
             return
 
         if status in (CapabilityStatus.ASSUMED, CapabilityStatus.OBSERVED):
@@ -631,6 +643,35 @@ class MetaTrader5DataClient(LiveMarketDataClient):
                 f"capability status is {status.value!r} in VenueProfile "
                 f"'{self._venue_profile.name}' — behavior not yet verified."
             )
+
+        if bounded:
+            try:
+                symbol = MT5Symbol(**instrument.info["symbol"])
+            except Exception as exc:
+                raise MT5HistoricalDataError(
+                    f"Invalid MT5 symbol metadata for {instrument_id}",
+                ) from exc
+
+            await self._client.wait_until_ready()
+            ticks = await self._client.get_historical_trade_ticks_range(
+                symbol=symbol,
+                instrument=instrument,
+                start_date_time=start,
+                end_date_time=end,
+                map_tick_flags_to_aggressor=(
+                    self._venue_profile.map_tick_flags_to_aggressor
+                ),
+            )
+            # Empty bounded interval is a formal success (DataResponse([])).
+            self._handle_trade_ticks(
+                instrument_id,
+                ticks,
+                request.id,
+                request.start,
+                request.end,
+                request.params,
+            )
+            return
 
         ticks = await self._handle_ticks_request(
             MT5Symbol(**instrument.info["symbol"]),
@@ -643,7 +684,14 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             self._log.warning(f"TradeTicks not received for {instrument_id}")
             return
 
-        self._handle_trade_ticks(instrument_id, ticks, correlation_id)
+        self._handle_trade_ticks(
+            instrument_id,
+            ticks,
+            request.id,
+            request.start,
+            request.end,
+            request.params,
+        )
 
     async def _handle_ticks_request(
         self,

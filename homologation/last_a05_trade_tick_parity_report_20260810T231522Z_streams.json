@@ -1,0 +1,246 @@
+{
+  "live_ticks": [
+    {
+      "ts_event": 1786403614127000000,
+      "price": 29730.25,
+      "price_raw": 29730250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403614340000000,
+      "price": 29729.0,
+      "price_raw": 29729000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403615107000000,
+      "price": 29729.25,
+      "price_raw": 29729250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403615107000000,
+      "price": 29729.75,
+      "price_raw": 29729750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403617300000000,
+      "price": 29729.0,
+      "price_raw": 29729000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403619554000000,
+      "price": 29729.75,
+      "price_raw": 29729750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403619669000000,
+      "price": 29729.0,
+      "price_raw": 29729000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403619669000000,
+      "price": 29728.75,
+      "price_raw": 29728750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403622360000000,
+      "price": 29730.0,
+      "price_raw": 29730000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403625280000000,
+      "price": 29728.75,
+      "price_raw": 29728750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403626841000000,
+      "price": 29728.75,
+      "price_raw": 29728750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403626841000000,
+      "price": 29729.25,
+      "price_raw": 29729250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403630181000000,
+      "price": 29730.0,
+      "price_raw": 29730000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403643934000000,
+      "price": 29730.5,
+      "price_raw": 29730500000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403644769000000,
+      "price": 29731.25,
+      "price_raw": 29731250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    }
+  ],
+  "historical_ticks": [
+    {
+      "ts_event": 1786403614127000000,
+      "price": 29730.25,
+      "price_raw": 29730250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403614340000000,
+      "price": 29729.0,
+      "price_raw": 29729000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403615107000000,
+      "price": 29729.25,
+      "price_raw": 29729250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403615107000000,
+      "price": 29729.75,
+      "price_raw": 29729750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403617300000000,
+      "price": 29729.0,
+      "price_raw": 29729000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403619554000000,
+      "price": 29729.75,
+      "price_raw": 29729750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403619669000000,
+      "price": 29729.0,
+      "price_raw": 29729000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403619669000000,
+      "price": 29728.75,
+      "price_raw": 29728750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403622360000000,
+      "price": 29730.0,
+      "price_raw": 29730000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403625280000000,
+      "price": 29728.75,
+      "price_raw": 29728750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403626841000000,
+      "price": 29728.75,
+      "price_raw": 29728750000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "2"
+    },
+    {
+      "ts_event": 1786403626841000000,
+      "price": 29729.25,
+      "price_raw": 29729250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403630181000000,
+      "price": 29730.0,
+      "price_raw": 29730000000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403643934000000,
+      "price": 29730.5,
+      "price_raw": 29730500000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    },
+    {
+      "ts_event": 1786403644769000000,
+      "price": 29731.25,
+      "price_raw": 29731250000000,
+      "size": 1.0,
+      "size_raw": 1000000000,
+      "aggressor_side": "1"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "purpose": "real-provider VOLUME-only observation (TICK_FLAG_VOLUME without TICK_FLAG_LAST)",
+  "probe": "homologation/tools/probe_volume_only_observation.py",
+  "symbol": "ENQU26",
+  "mt5_host": "127.0.0.1",
+  "mt5_port": 18814,
+  "window_utc": [
+    "2026-08-10T17:56:24.020732+00:00",
+    "2026-08-10T23:56:24.020732+00:00"
+  ],
+  "all_count": 213179,
+  "trade_count": 71879,
+  "trade_LAST_VOLUME_cooccurrence": {
+    "LAST=True_VOLUME=True": 71879
+  },
+  "volume_only_in_ALL": 0,
+  "volume_only_in_TRADE": 0,
+  "samples": [],
+  "status": "NOT OBSERVED",
+  "real_provider_VOLUME_only_observation": "NOT OBSERVED"
+}

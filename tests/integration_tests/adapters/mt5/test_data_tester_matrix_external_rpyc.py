@@ -16,15 +16,17 @@ TC coverage:
   TC-D10  Order book subscription — Unsupported; logs warning, no raise
   TC-D20  Subscribe QuoteTicks — subscription reaches MT5Client.subscribe_ticks()
   TC-D21  Historical QuoteTicks — wiring + end-to-end: QuoteTick objects reach _handle_quote_ticks
-  TC-D30  TradeTick — explicit capability decision documented
+  TC-D30  TradeTick subscribe — VenueProfile gate (Tickmill reject; XP_B3 / AMP_US pass)
+  TC-D31  TradeTick request — VenueProfile gate + XP/AMP delivery; A05 bounded
+          ``start/end + limit=0`` via ``copy_ticks_range(COPY_TICKS_TRADE)``
   TC-D40  Request historical bars — wiring + end-to-end: Bar objects reach _handle_bars
   TC-D41  Subscribe bars — WS feed subscribe_bars (feed.enabled) + unsupported 5s warning
   TC-D70  Unsubscribe on stop — feed unsubscribe_bars / quote WS routes
   TC-D71  Custom subscribe params — explicitly not supported; documented
   TC-D72  Custom request params — explicitly not supported; documented
 
-TC NOT covered (documented explicitly):
-  TC-D30/D31  TradeTick — Partial/Undecided; copy_ticks_* maps to QuoteTick, not TradeTick
+Actor→DataEngine→adapter→DataResponse→Actor for A05 bounded requests:
+  see ``test_a05_actor_data_engine_bounded.py`` (no ``_handle_trade_ticks`` spy).
 
 Markers: @pytest.mark.data_tester
 """
@@ -671,8 +673,15 @@ async def test_tc_d31_xp_request_trade_ticks_delivers_trade_tick_objects(
 
     handle_calls: list = []
 
-    def _spy_handle(instrument_id, ticks, correlation_id):
-        handle_calls.append({"instrument_id": instrument_id, "ticks": ticks})
+    def _spy_handle(instrument_id, ticks, correlation_id, start=None, end=None, params=None):
+        handle_calls.append({
+            "instrument_id": instrument_id,
+            "ticks": ticks,
+            "correlation_id": correlation_id,
+            "start": start,
+            "end": end,
+            "params": params,
+        })
 
     data_client._handle_trade_ticks = _spy_handle
 
@@ -693,11 +702,180 @@ async def test_tc_d31_xp_request_trade_ticks_delivers_trade_tick_objects(
     assert len(handle_calls) == 1, (
         "TC-D31 (XP): _handle_trade_ticks not called for WIN$ historical trade request"
     )
+    assert handle_calls[0]["correlation_id"] == req.id
     delivered = handle_calls[0]["ticks"]
     assert len(delivered) >= 1, "TC-D31 (XP): expected at least 1 TradeTick"
     assert isinstance(delivered[0], TradeTick), "TC-D31 (XP): delivered item must be TradeTick"
     assert delivered[0].instrument_id == _WIN_DOLLAR_ID
     assert float(delivered[0].price) > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.data_tester
+async def test_a05_bounded_route_isolation_uses_range_helper(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+):
+    """A05-T01/T04: start/end + limit=0 uses bounded helper, not _handle_ticks_request."""
+    import pandas as pd
+
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_data_config("WIN$", venue_profile=XP_B3_PROFILE),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+    await data_client._connect()
+
+    handle_calls: list = []
+    legacy_calls: list = []
+    range_calls: list = []
+
+    def _spy_handle(instrument_id, ticks, correlation_id, start=None, end=None, params=None):
+        handle_calls.append({
+            "ticks": ticks,
+            "correlation_id": correlation_id,
+            "start": start,
+            "end": end,
+            "params": params,
+        })
+
+    async def _spy_legacy(*args, **kwargs):
+        legacy_calls.append((args, kwargs))
+        return []
+
+    async def _spy_range(**kwargs):
+        range_calls.append(kwargs)
+        return []
+
+    data_client._handle_trade_ticks = _spy_handle
+    data_client._handle_ticks_request = _spy_legacy
+    data_client._client.get_historical_trade_ticks_range = _spy_range
+
+    start = pd.Timestamp("2023-11-14 22:13:20", tz="UTC")
+    end = pd.Timestamp("2023-11-14 22:13:21", tz="UTC")
+    req = RequestTradeTicks(
+        instrument_id=_WIN_DOLLAR_ID,
+        start=start,
+        end=end,
+        limit=0,
+        client_id=data_client.id,
+        venue=_VENUE,
+        callback=None,
+        request_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+        params={"warmup": True},
+    )
+    await data_client._request_trade_ticks(req)
+
+    assert legacy_calls == [], "bounded path must not enter _handle_ticks_request"
+    assert len(range_calls) == 1
+    assert handle_calls[0]["ticks"] == []
+    assert handle_calls[0]["correlation_id"] == req.id
+    assert handle_calls[0]["start"] == start
+    assert handle_calls[0]["end"] == end
+    assert handle_calls[0]["params"] == {"warmup": True}
+
+
+@pytest.mark.asyncio
+@pytest.mark.data_tester
+async def test_a05_bounded_non_empty_and_provider_flags(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+):
+    """A05: bounded request delivers TradeTicks via copy_ticks_range + COPY_TICKS_TRADE."""
+    import pandas as pd
+    from nautilus_trader.model.data import TradeTick
+
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+    fake_conn = nautilus_mt5_harness
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_data_config("WIN$", venue_profile=XP_B3_PROFILE),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+    await data_client._connect()
+
+    handle_calls: list = []
+
+    def _spy_handle(instrument_id, ticks, correlation_id, start=None, end=None, params=None):
+        handle_calls.append({"ticks": ticks, "correlation_id": correlation_id})
+
+    data_client._handle_trade_ticks = _spy_handle
+    fake_conn.root.reset_calls()
+
+    start = pd.Timestamp("2023-11-14 22:13:20", tz="UTC")
+    end = pd.Timestamp("2023-11-14 22:13:21", tz="UTC")
+    req = RequestTradeTicks(
+        instrument_id=_WIN_DOLLAR_ID,
+        start=start,
+        end=end,
+        limit=0,
+        client_id=data_client.id,
+        venue=_VENUE,
+        callback=None,
+        request_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+        params=None,
+    )
+    await data_client._request_trade_ticks(req)
+
+    range_calls = [c for c in fake_conn.root.calls if c.method == "copy_ticks_range"]
+    assert len(range_calls) == 1
+    assert range_calls[0].args[0] == "WIN$"
+    assert range_calls[0].args[3] == 2  # COPY_TICKS_TRADE
+    assert len(handle_calls) == 1
+    assert handle_calls[0]["correlation_id"] == req.id
+    assert len(handle_calls[0]["ticks"]) >= 1
+    assert isinstance(handle_calls[0]["ticks"][0], TradeTick)
+
+
+@pytest.mark.asyncio
+@pytest.mark.data_tester
+async def test_a05_bounded_unsupported_profile_raises(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+):
+    """A05: VenueProfile UNSUPPORTED on bounded path raises MT5HistoricalDataError."""
+    import pandas as pd
+    from nautilus_mt5.client.errors import MT5HistoricalDataError
+
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_data_config("EURUSD", venue_profile=TICKMILL_DEMO_PROFILE),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+    await data_client._connect()
+
+    start = pd.Timestamp("2023-11-14 22:13:20", tz="UTC")
+    end = pd.Timestamp("2023-11-14 22:13:21", tz="UTC")
+    req = RequestTradeTicks(
+        instrument_id=_EURUSD_ID,
+        start=start,
+        end=end,
+        limit=0,
+        client_id=data_client.id,
+        venue=_VENUE,
+        callback=None,
+        request_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+        params=None,
+    )
+    with pytest.raises(MT5HistoricalDataError, match="UNSUPPORTED"):
+        await data_client._request_trade_ticks(req)
 
 
 @pytest.mark.asyncio
@@ -771,8 +949,12 @@ async def test_tc_d31_amp_request_trade_ticks_delivers_trade_tick_objects(
 
     handle_calls: list = []
 
-    def _spy_handle(instrument_id, ticks, correlation_id):
-        handle_calls.append({"instrument_id": instrument_id, "ticks": ticks})
+    def _spy_handle(instrument_id, ticks, correlation_id, start=None, end=None, params=None):
+        handle_calls.append({
+            "instrument_id": instrument_id,
+            "ticks": ticks,
+            "correlation_id": correlation_id,
+        })
 
     data_client._handle_trade_ticks = _spy_handle
 
@@ -793,6 +975,7 @@ async def test_tc_d31_amp_request_trade_ticks_delivers_trade_tick_objects(
     assert len(handle_calls) == 1, (
         "TC-D31 (AMP): _handle_trade_ticks not called for MESU26 historical trade request"
     )
+    assert handle_calls[0]["correlation_id"] == req.id
     delivered = handle_calls[0]["ticks"]
     assert len(delivered) >= 1, "TC-D31 (AMP): expected at least 1 TradeTick"
     assert isinstance(delivered[0], TradeTick), "TC-D31 (AMP): delivered item must be TradeTick"

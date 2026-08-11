@@ -99,6 +99,9 @@ class InboundFeedHandler:
     """
     Parse inbound WS JSON, dedup ticks/bars, track subscriptions.
 
+    Does not decide QuoteTick vs TradeTick emission — that belongs to
+    ``route_wire_tick_to_nautilus``. Invalid Bid/Ask alone must not drop a row.
+
     Spec: res/especificacao_novo_adaptador_nautilus_mt5.md §10.4
     """
 
@@ -133,8 +136,8 @@ class InboundFeedHandler:
                 continue
             if state.last_tick is not None and _tick_key(tick) == _tick_key(state.last_tick):
                 continue
-            if tick.bid <= 0.0 or tick.ask <= 0.0:
-                continue
+            # Do not filter on bid/ask here — Quote vs Trade emission is decided by
+            # route_wire_tick_to_nautilus (flags + BBO / trade conversion).
             out.append(tick)
 
         if out:

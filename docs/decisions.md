@@ -159,6 +159,36 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - **`MAP_TIME_IN_FORCE`** must be applied on submit (`type_time`); do not hardcode GTC for all pending orders (required for **DAY** limit homologation **E06e**).
 - Homologation evidence: **E05b** fill reports, **E43** cancel rejection (10013), **E06de** FOK/DAY, **E07b** stop amend, **E81** open-on-start reconcile — see `res/proximos testes adaptador.md`.
 
+### 23. A05 bounded historical TradeTicks (warmup primitive)
+- Bounded `RequestTradeTicks(start, end, limit=0)` uses dedicated
+  `get_historical_trade_ticks_range` → `copy_ticks_range` + `COPY_TICKS_TRADE`.
+- Empty exact local ndarray → successful `DataResponse([])`; provider `None` /
+  materialization / structural failures → `MT5HistoricalDataError` (no response).
+- Rows reuse live `route_wire_tick` / `wire_tick_to_trade_tick`; filter by inclusive
+  `ts_event`. Legacy count-based / QuoteTick fetch paths unchanged.
+- Successful TradeTick responses use Nautilus 1.227 six-arg `_handle_trade_ticks`
+  with `request.id`.
+- EXTERNAL_RPYC transports ticks as brine-safe `MT5_TICKS_V1` frames
+  `(tag, row_count, bytes)` reconstructed to an exact local ndarray; RPyC
+  `allow_pickle` must remain disabled. LOCAL_PYTHON still returns the official
+  local ndarray directly.
+- Live trade emission must follow MT5 change flags (`TICK_FLAG_LAST` /
+  `TICK_FLAG_VOLUME`), not stale `last > 0`. That aligns live with
+  `COPY_TICKS_TRADE` and prevents Bid/Ask-only updates from inventing trades.
+- Live quote emission must follow `TICK_FLAG_BID` / `TICK_FLAG_ASK` (aligned with
+  `COPY_TICKS_INFO`); residual Bid/Ask on trade-only rows must not invent quotes.
+- Historical QuoteTick (`get_historical_ticks` / BID_ASK) uses `COPY_TICKS_INFO`
+  and the same live routing/conversion for QuoteTick emission. A05 TradeTick
+  bounded path remains separate (`COPY_TICKS_TRADE`).
+- Full historical↔live stream parity on AMP ENQU26: **PASS** after the flags-based
+  live routing fix (`homologation/run_a05_trade_tick_parity.py`).
+- **Warmup certification runtime:** A05 warmup is certified for **EXTERNAL_RPYC**
+  on homologated profiles/providers only. `LOCAL_PYTHON` remains
+  *implementation-compatible* (shared A05 helper + native ndarray path) but is
+  **not warmup-certified** until it completes the same real-provider bounded
+  request and live↔historical parity homologation. Do not enable LOCAL_PYTHON
+  for production warmup until that certification exists.
+
 ## How to use this file
 
 When changing the adapter, ask:

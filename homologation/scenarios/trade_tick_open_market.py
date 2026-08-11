@@ -259,7 +259,7 @@ async def run_request_trade_ticks_open(cfg: HomologationConfig, report: Homologa
         delivered: list = []
         data_client = None
 
-        def _capture(instrument_id, ticks, correlation_id):
+        def _capture(instrument_id, ticks, correlation_id, start=None, end=None, params=None):
             delivered.extend(ticks)
 
         try:
