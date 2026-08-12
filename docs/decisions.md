@@ -132,6 +132,13 @@ This file records only local decisions needed to implement `nt_mt5` consistently
 - Homologation **TC-HOM-D04b** validates on-demand `RequestBars` via `_request_bars` → `copy_rates_from_pos` in `closed_market_suite.py`.
 - After WS disconnect, the MQL5 Service clears **bar** subscription state (`active=false`); quote symbol subs remain until explicit `unsubscribe`. The adapter replays pending quote and bar subs on the next `hello` after reconnect.
 
+### 18a. Live feed subscription lifetime (WS cursor)
+- **Transport reconnect** (same logical subscription): the MQL5 Service keeps the in-memory tick cursor (`last_msc`) across WS disconnect/reconnect. Python `_restart_feed_gateway()` preserves handler/pending ownership and must not reset that cursor.
+- **Explicit symbol unsubscribe** ends the subscription lifetime: Service sets `active=false`, `last_msc=0`, `has_last_sent=false`. A later subscribe seeds from the current market via `NT5SeedCursorFromMarket` — it must not replay the unsubscribed interval.
+- **Clean DataClient disconnect** best-effort unsubscribes owned live symbols and waits for Hello confirmation before closing the gateway. Shutdown Hello handling must not resubscribe (`_feed_suppress_replay`).
+- **Startup orphan reconciliation**: `hello.symbols - _feed_pending_symbols` are unsubscribed and confirmed absent before the DataClient accepts a new subscription lifetime. Tick batches for symbols without local ownership are ignored.
+- Historical recovery outside a live subscription lifetime belongs to the RPyC historical request path (A05 / `RequestTradeTicks`), not to the live WS feed.
+
 ### 19. RPyC bridge open orders (`orders_get`)
 - `EXTERNAL_RPYC` gateways must expose `exposed_orders_get` forwarding to MT5 `orders_get`.
 - Required for homologation **TC-HOM-E07** (modify volume verification) and for `generate_order_status_reports` when open pending orders exist.

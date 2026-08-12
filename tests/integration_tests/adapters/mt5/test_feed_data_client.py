@@ -131,6 +131,7 @@ async def test_feed_handle_ticks_emits_quote_tick(
 
     data_client._handle_data = _capture
 
+    data_client._feed_pending_symbols.add("BTCUSD")
     batch = TickBatchMessage(
         symbol="BTCUSD",
         cursor=1000,
@@ -299,6 +300,7 @@ async def test_feed_handle_trade_tick_xp_aggressor(
 
     data_client._handle_data = _capture
 
+    data_client._feed_pending_symbols.add("WINQ26")
     batch = TickBatchMessage(
         symbol="WINQ26",
         cursor=1000,
@@ -342,6 +344,10 @@ async def test_feed_trade_unsubscribe_keeps_quote_subscription(
     mock_gateway = MagicMock()
     mock_gateway.subscribe = AsyncMock()
     mock_gateway.unsubscribe = AsyncMock()
+    mock_gateway.wait_for_symbols_absent = AsyncMock(
+        return_value=HelloMessage(session="nt5-test", symbols=()),
+    )
+    mock_gateway.is_service_connected = True
     data_client._feed_gateway = mock_gateway
 
     quote_cmd = SubscribeQuoteTicks(
@@ -501,3 +507,401 @@ async def test_feed_handle_bar_emits_bar(
     assert len(delivered) == 1
     assert delivered[0].bar_type == _BTCUSD_M1
     assert float(delivered[0].close) == 60050.0
+
+
+# --- Feed subscription lifecycle (Issue #18 / T-LIFE-*) ---
+
+
+@pytest.mark.asyncio
+async def test_t_life_01_last_owner_sends_wire_unsubscribe(
+    clean_factory_cache,
+    nautilus_components,
+    nautilus_mt5_harness,
+    monkeypatch,
+):
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_feed_data_config("BTCUSD"),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+
+    async def _noop_feed_start(self: MetaTrader5DataClient) -> None:
+        return None
+
+    monkeypatch.setattr(MetaTrader5DataClient, "_start_feed_gateway", _noop_feed_start)
+    await data_client._connect()
+
+    mock_gateway = MagicMock()
+    mock_gateway.subscribe = AsyncMock()
+    mock_gateway.unsubscribe = AsyncMock()
+    mock_gateway.wait_for_symbols_absent = AsyncMock(
+        return_value=HelloMessage(session="nt5", symbols=()),
+    )
+    mock_gateway.is_service_connected = True
+    data_client._feed_gateway = mock_gateway
+
+    # Seed sole trade ownership without relying on venue trade_ticks capability.
+    data_client._feed_trade_symbols.add("BTCUSD")
+    data_client._feed_pending_symbols.add("BTCUSD")
+
+    from nautilus_trader.data.messages import UnsubscribeTradeTicks
+
+    await data_client._unsubscribe_trade_ticks(
+        UnsubscribeTradeTicks(
+            client_id=data_client.id,
+            venue=None,
+            instrument_id=_BTCUSD_ID,
+            command_id=UUID4(),
+            ts_init=clock.timestamp_ns(),
+        ),
+    )
+
+    mock_gateway.unsubscribe.assert_awaited_once_with(["BTCUSD"])
+    mock_gateway.wait_for_symbols_absent.assert_awaited()
+    assert "BTCUSD" not in data_client._feed_trade_symbols
+    assert "BTCUSD" not in data_client._feed_pending_symbols
+
+
+@pytest.mark.asyncio
+async def test_t_life_03_disconnect_unsubscribes_before_stop(
+    clean_factory_cache,
+    nautilus_components,
+    nautilus_mt5_harness,
+    monkeypatch,
+):
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_feed_data_config("BTCUSD"),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+
+    async def _noop_feed_start(self: MetaTrader5DataClient) -> None:
+        return None
+
+    monkeypatch.setattr(MetaTrader5DataClient, "_start_feed_gateway", _noop_feed_start)
+    await data_client._connect()
+
+    order: list[str] = []
+
+    class _FakeGateway:
+        is_service_connected = True
+        handler = MagicMock()
+
+        async def unsubscribe(self, symbols):
+            order.append(f"unsubscribe:{','.join(symbols)}")
+
+        async def wait_for_symbols_absent(self, symbols, timeout_secs=None):
+            order.append(f"wait_absent:{','.join(sorted(symbols))}")
+            return HelloMessage(session="nt5", symbols=())
+
+        async def stop(self):
+            order.append("stop")
+
+    data_client._feed_gateway = _FakeGateway()
+    data_client._feed_pending_symbols = {"ENQU26", "MNQU26"}
+
+    await data_client._disconnect()
+
+    assert order[0].startswith("unsubscribe:")
+    assert set(order[0].split(":", 1)[1].split(",")) == {"ENQU26", "MNQU26"}
+    assert order[1].startswith("wait_absent:")
+    assert order[2] == "stop"
+    assert data_client._feed_gateway is None
+
+
+@pytest.mark.asyncio
+async def test_t_life_04_disconnect_cleanup_failure_still_stops(
+    clean_factory_cache,
+    nautilus_components,
+    nautilus_mt5_harness,
+    monkeypatch,
+):
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_feed_data_config("BTCUSD"),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+
+    async def _noop_feed_start(self: MetaTrader5DataClient) -> None:
+        return None
+
+    monkeypatch.setattr(MetaTrader5DataClient, "_start_feed_gateway", _noop_feed_start)
+    await data_client._connect()
+
+    class _FakeGateway:
+        is_service_connected = True
+        handler = MagicMock()
+        stopped = False
+
+        async def unsubscribe(self, symbols):
+            return None
+
+        async def wait_for_symbols_absent(self, symbols, timeout_secs=None):
+            raise TimeoutError("no ack")
+
+        async def stop(self):
+            self.stopped = True
+
+    fake = _FakeGateway()
+    data_client._feed_gateway = fake
+    data_client._feed_pending_symbols = {"ENQU26"}
+
+    await data_client._disconnect()
+
+    assert fake.stopped is True
+    assert data_client._feed_gateway is None
+
+
+@pytest.mark.asyncio
+async def test_t_life_05_orphan_hello_is_reconciled_on_startup(
+    clean_factory_cache,
+    nautilus_components,
+    nautilus_mt5_harness,
+    monkeypatch,
+):
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_feed_data_config("BTCUSD"),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+
+    calls: list[str] = []
+
+    class _FakeGateway:
+        handler = MagicMock()
+        handler.subscription_state.pending_subscribe = set()
+        handler.subscription_state.pending_bar_subscribe = set()
+        is_service_connected = True
+        last_hello = None
+
+        async def start(self):
+            return None
+
+        async def wait_for_hello(self, timeout_secs=None):
+            return HelloMessage(session="nt5", symbols=("ENQU26",))
+
+        async def unsubscribe(self, symbols):
+            calls.append(f"unsubscribe:{list(symbols)}")
+
+        async def wait_for_symbols_absent(self, symbols, timeout_secs=None):
+            calls.append(f"wait_absent:{sorted(symbols)}")
+            hello = HelloMessage(session="nt5-cleared", symbols=())
+            self.last_hello = hello
+            return hello
+
+        async def subscribe(self, symbols):
+            calls.append(f"subscribe:{list(symbols)}")
+
+        async def subscribe_bars(self, symbols, timeframe):
+            return None
+
+        async def stop(self):
+            return None
+
+    fake = _FakeGateway()
+
+    async def _fake_start(self: MetaTrader5DataClient) -> None:
+        self._feed_gateway = fake
+        self._feed_handler = fake.handler
+        await fake.start()
+        hello = await fake.wait_for_hello()
+        await self._reconcile_orphan_feed_symbols(hello)
+        pending = set(self._feed_pending_symbols)
+        if pending:
+            await fake.subscribe(sorted(pending))
+
+    monkeypatch.setattr(MetaTrader5DataClient, "_start_feed_gateway", _fake_start)
+    data_client._feed_pending_symbols.clear()
+    await data_client._connect()
+
+    assert calls == ["unsubscribe:['ENQU26']", "wait_absent:['ENQU26']"]
+    assert not any(c.startswith("subscribe:") for c in calls)
+
+
+@pytest.mark.asyncio
+async def test_t_life_06_desired_symbol_not_orphaned_on_reconnect(
+    clean_factory_cache,
+    nautilus_components,
+    nautilus_mt5_harness,
+    monkeypatch,
+):
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_feed_data_config("BTCUSD"),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+
+    async def _noop_feed_start(self: MetaTrader5DataClient) -> None:
+        return None
+
+    monkeypatch.setattr(MetaTrader5DataClient, "_start_feed_gateway", _noop_feed_start)
+    await data_client._connect()
+
+    mock_gateway = MagicMock()
+    mock_gateway.unsubscribe = AsyncMock()
+    mock_gateway.wait_for_symbols_absent = AsyncMock()
+    data_client._feed_gateway = mock_gateway
+    data_client._feed_pending_symbols = {"ENQU26"}
+
+    await data_client._reconcile_orphan_feed_symbols(
+        HelloMessage(session="nt5", symbols=("ENQU26",)),
+    )
+
+    mock_gateway.unsubscribe.assert_not_awaited()
+    mock_gateway.wait_for_symbols_absent.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_t_life_07_hello_desired_plus_orphan_unsubscribes_only_orphan(
+    clean_factory_cache,
+    nautilus_components,
+    nautilus_mt5_harness,
+    monkeypatch,
+):
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_feed_data_config("BTCUSD"),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+
+    async def _noop_feed_start(self: MetaTrader5DataClient) -> None:
+        return None
+
+    monkeypatch.setattr(MetaTrader5DataClient, "_start_feed_gateway", _noop_feed_start)
+    await data_client._connect()
+
+    mock_gateway = MagicMock()
+    mock_gateway.unsubscribe = AsyncMock()
+    mock_gateway.wait_for_symbols_absent = AsyncMock(
+        return_value=HelloMessage(session="nt5", symbols=("ENQU26",)),
+    )
+    data_client._feed_gateway = mock_gateway
+    data_client._feed_pending_symbols = {"ENQU26"}
+
+    await data_client._reconcile_orphan_feed_symbols(
+        HelloMessage(session="nt5", symbols=("ENQU26", "MNQU26")),
+    )
+
+    mock_gateway.unsubscribe.assert_awaited_once_with(["MNQU26"])
+    mock_gateway.wait_for_symbols_absent.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_t_life_08_batch_without_local_ownership_is_ignored(
+    clean_factory_cache,
+    nautilus_components,
+    nautilus_mt5_harness,
+    monkeypatch,
+):
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_feed_data_config("BTCUSD"),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+
+    async def _noop_feed_start(self: MetaTrader5DataClient) -> None:
+        return None
+
+    monkeypatch.setattr(MetaTrader5DataClient, "_start_feed_gateway", _noop_feed_start)
+    await data_client._connect()
+
+    delivered: list = []
+    original = data_client._handle_data
+
+    def _spy(data):
+        delivered.append(data)
+        return original(data)
+
+    data_client._handle_data = _spy
+    assert not data_client._feed_pending_symbols
+
+    data_client._handle_feed_ticks(
+        TickBatchMessage(
+            symbol="ENQU26",
+            cursor=1000,
+            ticks=(WireTick(time_msc=1000, bid=1.0, ask=1.1, last=1.05, volume=1, flags=56),),
+        ),
+    )
+
+    assert delivered == []
+
+
+@pytest.mark.asyncio
+async def test_t_life_09_batch_with_local_ownership_emits(
+    clean_factory_cache,
+    nautilus_components,
+    nautilus_mt5_harness,
+    monkeypatch,
+):
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop,
+        name="MT5",
+        config=_feed_data_config("BTCUSD"),
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+    )
+
+    async def _noop_feed_start(self: MetaTrader5DataClient) -> None:
+        return None
+
+    monkeypatch.setattr(MetaTrader5DataClient, "_start_feed_gateway", _noop_feed_start)
+    await data_client._connect()
+
+    delivered: list[QuoteTick] = []
+    original = data_client._handle_data
+
+    def _spy(data):
+        if isinstance(data, QuoteTick):
+            delivered.append(data)
+        return original(data)
+
+    data_client._handle_data = _spy
+    data_client._feed_pending_symbols.add("BTCUSD")
+
+    data_client._handle_feed_ticks(
+        TickBatchMessage(
+            symbol="BTCUSD",
+            cursor=1000,
+            ticks=(WireTick(time_msc=1000, bid=10.0, ask=11.0, flags=6),),
+        ),
+    )
+
+    assert len(delivered) == 1
