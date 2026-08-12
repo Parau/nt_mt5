@@ -126,6 +126,8 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         self._feed_pending_symbols: set[str] = set()
         self._feed_pending_bars: set[tuple[str, str]] = set()
         self._feed_bar_types: dict[tuple[str, str], object] = {}
+        # Suppress Hello-driven resubscribe while tearing down remote ownership.
+        self._feed_suppress_replay: bool = False
 
     async def _subscribe_feed_symbol(
         self,
@@ -159,8 +161,14 @@ class MetaTrader5DataClient(LiveMarketDataClient):
         if mt5_symbol not in self._feed_pending_symbols:
             return
         self._feed_pending_symbols.discard(mt5_symbol)
-        if self._feed_gateway is not None:
-            await self._feed_gateway.unsubscribe([mt5_symbol])
+        if self._feed_gateway is None:
+            return
+        await self._feed_gateway.unsubscribe([mt5_symbol])
+        if self._feed_gateway.is_service_connected:
+            await self._feed_gateway.wait_for_symbols_absent(
+                [mt5_symbol],
+                timeout_secs=self._feed_config.hello_timeout_secs,
+            )
 
     @property
     def feed_gateway(self) -> InboundFeedGateway | None:
@@ -219,12 +227,55 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             f"bars={list(hello.bars)}",
         )
 
+        await self._reconcile_orphan_feed_symbols(hello)
+
         pending = set(self._feed_pending_symbols)
         pending |= self._feed_gateway.handler.subscription_state.pending_subscribe
         if pending:
             await self._feed_gateway.subscribe(sorted(pending))
 
         await self._replay_pending_bar_subscriptions()
+
+    async def _reconcile_orphan_feed_symbols(self, hello: HelloMessage) -> None:
+        """
+        Remove Service-active symbols that this DataClient does not own locally.
+
+        Fails startup when the Service does not confirm removal — connecting while
+        carrying foreign live subscriptions recreates cross-session tick replay.
+        """
+        if self._feed_gateway is None:
+            return
+
+        desired = set(self._feed_pending_symbols)
+        orphaned = set(hello.symbols) - desired
+        if not orphaned:
+            return
+
+        self._log.warning(
+            f"MQL5 feed reconciling orphan symbols={sorted(orphaned)} "
+            f"desired={sorted(desired)} hello_session={hello.session}",
+        )
+        self._feed_suppress_replay = True
+        try:
+            await self._feed_gateway.unsubscribe(sorted(orphaned))
+            try:
+                cleared = await self._feed_gateway.wait_for_symbols_absent(
+                    orphaned,
+                    timeout_secs=self._feed_config.hello_timeout_secs,
+                )
+            except TimeoutError as exc:
+                raise RuntimeError(
+                    "MQL5 feed orphan reconciliation timed out waiting for symbols "
+                    f"absent={sorted(orphaned)} last_hello_symbols="
+                    f"{list(self._feed_gateway.last_hello.symbols) if self._feed_gateway.last_hello else None}",
+                ) from exc
+        finally:
+            self._feed_suppress_replay = False
+
+        self._log.info(
+            f"MQL5 feed orphans cleared session={cleared.session} "
+            f"symbols={list(cleared.symbols)}",
+        )
 
     async def _replay_pending_quote_subscriptions(self) -> None:
         if self._feed_gateway is None:
@@ -263,6 +314,8 @@ class MetaTrader5DataClient(LiveMarketDataClient):
                     f"MQL5 feed reconnected session={event.session} "
                     f"symbols={list(event.symbols)} bars={list(event.bars)}",
                 )
+            if self._feed_suppress_replay:
+                return
             await self._replay_pending_quote_subscriptions()
             await self._replay_pending_bar_subscriptions()
             return
@@ -285,6 +338,12 @@ class MetaTrader5DataClient(LiveMarketDataClient):
             self._log.debug(f"MQL5 feed {event.__class__.__name__}")
 
     def _handle_feed_ticks(self, batch: TickBatchMessage) -> None:
+        if batch.symbol not in self._feed_pending_symbols:
+            self._log.debug(
+                f"Ignoring feed ticks for {batch.symbol}: no local feed ownership",
+            )
+            return
+
         instrument_id = InstrumentId(Symbol(batch.symbol), MT5_VENUE)
         instrument = self._cache.instrument(instrument_id)
         if instrument is None:
@@ -339,9 +398,27 @@ class MetaTrader5DataClient(LiveMarketDataClient):
     async def _disconnect(self):
         self._client.registered_nautilus_clients.discard(self.id)
         if self._feed_gateway is not None:
-            self._feed_handler = self._feed_gateway.handler
-            await self._feed_gateway.stop()
-            self._feed_gateway = None
+            gateway = self._feed_gateway
+            self._feed_handler = gateway.handler
+            owned = sorted(self._feed_pending_symbols)
+            self._feed_suppress_replay = True
+            try:
+                if owned and gateway.is_service_connected:
+                    try:
+                        await gateway.unsubscribe(owned)
+                        await gateway.wait_for_symbols_absent(
+                            owned,
+                            timeout_secs=self._feed_config.hello_timeout_secs,
+                        )
+                    except Exception as exc:
+                        self._log.warning(
+                            f"MQL5 feed disconnect cleanup failed for "
+                            f"symbols={owned}: {exc}",
+                        )
+            finally:
+                await gateway.stop()
+                self._feed_gateway = None
+                self._feed_suppress_replay = False
         if (
             self._client.is_running
             and not self._client.registered_nautilus_clients

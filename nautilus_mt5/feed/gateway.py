@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from typing import Any
 
 import websockets
@@ -77,6 +77,7 @@ class InboundFeedGateway:
         self._server: Any | None = None
         self._service_ws: ServerConnection | None = None
         self._hello_event = asyncio.Event()
+        self._hello_condition = asyncio.Condition()
         self._last_hello: HelloMessage | None = None
         self._connection_lock = asyncio.Lock()
 
@@ -97,8 +98,9 @@ class InboundFeedGateway:
         if self._server is not None:
             return
 
-        self._hello_event.clear()
-        self._last_hello = None
+        async with self._hello_condition:
+            self._hello_event.clear()
+            self._last_hello = None
         self._server = await serve(
             self._connection_handler,
             self._config.host,
@@ -123,8 +125,10 @@ class InboundFeedGateway:
             await self._server.wait_closed()
             self._server = None
 
-        self._hello_event.clear()
-        self._last_hello = None
+        async with self._hello_condition:
+            self._hello_event.clear()
+            self._last_hello = None
+            self._hello_condition.notify_all()
 
     async def wait_for_hello(self, timeout_secs: float | None = None) -> HelloMessage:
         timeout = timeout_secs if timeout_secs is not None else self._config.hello_timeout_secs
@@ -132,6 +136,50 @@ class InboundFeedGateway:
         if self._last_hello is None:
             raise RuntimeError("hello event set but no hello message stored")
         return self._last_hello
+
+    async def wait_for_symbols_absent(
+        self,
+        symbols: Collection[str],
+        timeout_secs: float | None = None,
+    ) -> HelloMessage:
+        """
+        Wait until Service Hello reports none of ``symbols`` as active.
+
+        Returns the satisfying ``HelloMessage``. Raises ``TimeoutError`` when
+        the Service does not confirm within ``timeout_secs``.
+        """
+        wanted = {str(s) for s in symbols if str(s)}
+        if not wanted:
+            hello = self._last_hello
+            if hello is None:
+                raise RuntimeError("no hello available and no symbols requested")
+            return hello
+
+        timeout = timeout_secs if timeout_secs is not None else self._config.hello_timeout_secs
+
+        def _absent(hello: HelloMessage | None) -> bool:
+            if hello is None:
+                return False
+            active = set(hello.symbols)
+            return wanted.isdisjoint(active)
+
+        async with self._hello_condition:
+            if _absent(self._last_hello):
+                assert self._last_hello is not None
+                return self._last_hello
+
+            await asyncio.wait_for(
+                self._hello_condition.wait_for(lambda: _absent(self._last_hello)),
+                timeout=timeout,
+            )
+            assert self._last_hello is not None
+            return self._last_hello
+
+    async def _record_hello(self, hello: HelloMessage) -> None:
+        async with self._hello_condition:
+            self._last_hello = hello
+            self._hello_event.set()
+            self._hello_condition.notify_all()
 
     async def subscribe(self, symbols: list[str] | tuple[str, ...]) -> None:
         if not symbols:
@@ -218,8 +266,7 @@ class InboundFeedGateway:
             return
 
         if isinstance(event, HelloMessage):
-            self._last_hello = event
-            self._hello_event.set()
+            await self._record_hello(event)
 
         if self._on_event is not None:
             result = self._on_event(event)
