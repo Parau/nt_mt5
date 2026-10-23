@@ -52,6 +52,8 @@ class FakeMT5RPyCRoot:
         self._margin_mode: int = 2
         # Optional override for bounded A05 tests (UNSET → default fixtures).
         self._copy_ticks_range_override: Any = _COPY_TICKS_RANGE_UNSET
+        # Optional provider for date-dependent copy_ticks_from pages (None → fixtures).
+        self._copy_ticks_from_provider: Optional[Any] = None
 
     def set_copy_ticks_range_override(self, value: Any) -> None:
         """Override ``exposed_copy_ticks_range`` (``None``/ndarray/frame are all valid)."""
@@ -60,6 +62,14 @@ class FakeMT5RPyCRoot:
     def clear_copy_ticks_range_override(self) -> None:
         """Restore default fixture rows for ``exposed_copy_ticks_range``."""
         self._copy_ticks_range_override = _COPY_TICKS_RANGE_UNSET
+
+    def set_copy_ticks_from_provider(self, provider: Optional[Any]) -> None:
+        """Serve ``exposed_copy_ticks_from`` via ``provider(symbol, date_from, count, flags)``.
+
+        Lets pagination tests return different rows per ``date_from`` the way a real
+        terminal does. ``None`` restores the static per-symbol fixtures.
+        """
+        self._copy_ticks_from_provider = provider
 
     @property
     def calls(self) -> List[FakeMT5RPyCCall]:
@@ -567,6 +577,8 @@ class FakeMT5RPyCRoot:
 
     def exposed_copy_ticks_from(self, symbol: str, date_from: Any, count: int, flags: int) -> List[Dict[str, Any]]:
         self._record_call("copy_ticks_from", (symbol, date_from, count, flags), {})
+        if self._copy_ticks_from_provider is not None:
+            return self._copy_ticks_from_provider(symbol, date_from, count, flags)
         if symbol == "USTEC":
             return [
                 {

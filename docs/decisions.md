@@ -189,6 +189,16 @@ This file records only local decisions needed to implement `nt_mt5` consistently
   bounded path remains separate (`COPY_TICKS_TRADE`).
 - Full historical↔live stream parity on AMP ENQU26: **PASS** after the flags-based
   live routing fix (`homologation/run_a05_trade_tick_parity.py`).
+- **Historical `ts_init` = `ts_event`; live `ts_init` = receipt clock.** All
+  historical tick paths (`get_historical_ticks` QuoteTick/legacy TradeTick and A05
+  `get_historical_trade_ticks_range`) pass `ts_event` as `ts_init` to the shared
+  converter; the live feed (`_handle_feed_ticks`) and legacy poll keep the clock.
+  Supersedes "Resolution H" in `docs/specs/x02`/`x03` §9 and `x01` §16, which copied
+  the live batch clock into history. Reason: Nautilus `DataEngine` bounds request
+  responses (`_check_bounds`) and sorts them by `ts_init`, and the adapter's own
+  `start=None` pagination sorted by fetch clock (older pages after newer). Matches the
+  upstream Interactive Brokers adapter (live `max(clock, ts_event)`, historical
+  `ts_event`). The converter is unchanged. Historical bars are not covered by this rule.
 - **Warmup certification runtime:** A05 warmup is certified for **EXTERNAL_RPYC**
   on homologated profiles/providers only. `LOCAL_PYTHON` remains
   *implementation-compatible* (shared A05 helper + native ndarray path) but is

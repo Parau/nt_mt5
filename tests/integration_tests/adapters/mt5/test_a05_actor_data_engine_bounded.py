@@ -152,6 +152,46 @@ async def test_a05_actor_bounded_non_empty(a05_actor_stack):
 
 @pytest.mark.asyncio
 @pytest.mark.data_tester
+async def test_a05_actor_bounded_ts_init_is_event_time(a05_actor_stack):
+    """DataEngine bounds/sorts responses by ``ts_init``; historical ticks must carry event time."""
+    actor = a05_actor_stack["actor"]
+    data_client = a05_actor_stack["data_client"]
+    fake_conn = a05_actor_stack["fake_conn"]
+
+    fake_conn.root.set_copy_ticks_range_override(
+        np.array(
+            [
+                (1700000000, 0.0, 0.0, 176290.0, 1, 1700000000100, 1336, 1.0),
+                (1700000000, 0.0, 0.0, 176291.0, 1, 1700000000200, 1336, 1.0),
+                (1700000000, 0.0, 0.0, 176292.0, 1, 1700000000300, 1336, 1.0),
+            ],
+            dtype=MT5_TICK_DTYPE,
+        ),
+    )
+
+    start = pd.Timestamp("2023-11-14 22:13:20", tz="UTC")
+    end = pd.Timestamp("2023-11-14 22:13:21", tz="UTC")
+    req_id = actor.request_trade_ticks(
+        instrument_id=_WIN_DOLLAR_ID,
+        start=start,
+        end=end,
+        limit=0,
+        client_id=data_client.id,
+        callback=actor.on_request_complete,
+    )
+
+    assert await _wait_completion(actor, req_id, timeout=2.0)
+    assert [t.ts_event for t in actor.historical] == [
+        1700000000100_000_000,
+        1700000000200_000_000,
+        1700000000300_000_000,
+    ]
+    assert all(t.ts_init == t.ts_event for t in actor.historical)
+    assert all(start.value <= t.ts_init <= end.value for t in actor.historical)
+
+
+@pytest.mark.asyncio
+@pytest.mark.data_tester
 async def test_a05_actor_bounded_empty_success(a05_actor_stack):
     actor = a05_actor_stack["actor"]
     data_client = a05_actor_stack["data_client"]

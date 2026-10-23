@@ -1524,6 +1524,81 @@ async def test_tc_d21_start_none_honors_explicit_limit(
 
 @pytest.mark.asyncio
 @pytest.mark.data_tester
+async def test_tc_d21_start_none_pagination_is_chronological(
+    clean_factory_cache, nautilus_components, nautilus_mt5_harness
+):
+    """
+    TC-D21: start=None paginates backward (newest page first) through the real
+    get_historical_ticks path. The merged result must be chronological and carry
+    ts_init == ts_event; a fetch-clock ts_init would sort older pages after newer.
+    """
+    import time
+
+    from nautilus_mt5.tick_routing import TICK_FLAG_ASK, TICK_FLAG_BID
+
+    msgbus, cache, clock = nautilus_components
+    loop = asyncio.get_running_loop()
+
+    data_client = MT5LiveDataClientFactory.create(
+        loop=loop, name="MT5", config=_data_config("USTEC"),
+        msgbus=msgbus, cache=cache, clock=clock,
+    )
+    await data_client._connect()
+
+    now_s = int(time.time())
+    # Two ticks older than the first 24h page window, two inside it.
+    tick_seconds = [now_s - 88_000, now_s - 87_000, now_s - 3_600, now_s - 1_800]
+    rows = [
+        {
+            "time": s,
+            "time_msc": s * 1000,
+            "bid": 18500.00 + i,
+            "ask": 18500.50 + i,
+            "last": 0.0,
+            "volume": 0,
+            "volume_real": 0.0,
+            "flags": TICK_FLAG_BID | TICK_FLAG_ASK,
+        }
+        for i, s in enumerate(tick_seconds)
+    ]
+
+    def _page(symbol, date_from, count, flags):
+        return [r for r in rows if r["time"] >= int(date_from)][:count]
+
+    nautilus_mt5_harness.root.set_copy_ticks_from_provider(_page)
+
+    handle_calls: list = []
+
+    def _spy_handle(instrument_id, ticks, correlation_id):
+        handle_calls.append(ticks)
+
+    data_client._handle_quote_ticks = _spy_handle
+
+    req = RequestQuoteTicks(
+        instrument_id=_USTEC_ID,
+        start=None,
+        end=None,
+        limit=len(rows),
+        client_id=data_client.id,
+        venue=_VENUE,
+        callback=None,
+        request_id=UUID4(),
+        ts_init=clock.timestamp_ns(),
+        params=None,
+    )
+    await data_client._request_quote_ticks(req)
+
+    copy_calls = [c for c in nautilus_mt5_harness.root.calls if c.method == "copy_ticks_from"]
+    assert len(copy_calls) == 2, "TC-D21: expected two backward pages"
+    assert len(handle_calls) == 1
+    delivered = handle_calls[0]
+    expected_ns = [s * 1_000_000_000 for s in tick_seconds]
+    assert [t.ts_event for t in delivered] == expected_ns
+    assert all(t.ts_init == t.ts_event for t in delivered)
+
+
+@pytest.mark.asyncio
+@pytest.mark.data_tester
 async def test_tc_d21_zero_limit_uses_tick_capacity(
     clean_factory_cache, nautilus_components, nautilus_mt5_harness
 ):

@@ -137,11 +137,15 @@ async def test_feed_handle_ticks_emits_quote_tick(
         cursor=1000,
         ticks=(WireTick(time_msc=1000, bid=60468.0, ask=60478.0, flags=6),),
     )
+    received_after_ns = clock.timestamp_ns()
     data_client._handle_feed_ticks(batch)
 
     assert len(delivered) == 1
     assert delivered[0].instrument_id == _BTCUSD_ID
     assert float(delivered[0].bid_price) == 60468.0
+    # Live keeps receipt time; only historical paths stamp ts_init with ts_event.
+    assert delivered[0].ts_event == 1_000_000_000
+    assert delivered[0].ts_init >= received_after_ns
 
 
 @pytest.mark.asyncio
