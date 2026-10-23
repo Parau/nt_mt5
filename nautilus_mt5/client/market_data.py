@@ -482,6 +482,9 @@ class MetaTrader5ClientMarketDataMixin:
         ``route_wire_tick_to_nautilus`` so residual Bid/Ask on trade rows do not
         invent quotes. Legacy TradeTick requests keep ``COPY_TICKS_ALL``; bounded
         A05 trades use ``get_historical_trade_ticks_range`` instead.
+
+        Historical ticks carry ``ts_init == ts_event``: the DataEngine bounds and
+        orders request responses by ``ts_init``, so the fetch clock must not be used.
         """
         import time as _time
 
@@ -632,7 +635,7 @@ class MetaTrader5ClientMarketDataMixin:
                     ),
                     trade_id=TradeId(str(time_sec)),
                     ts_event=ts_event,
-                    ts_init=max(self._clock.timestamp_ns(), ts_event),
+                    ts_init=ts_event,
                 ))
             else:
                 # Align with live QuoteTick semantics: BID|ASK flags + valid BBO + sanity.
@@ -652,7 +655,7 @@ class MetaTrader5ClientMarketDataMixin:
                 quote_tick, _trade = route_wire_tick_to_nautilus(
                     instrument,
                     wire,
-                    ts_init=max(self._clock.timestamp_ns(), ts_event),
+                    ts_init=ts_event,
                     map_tick_flags_to_aggressor=map_tick_flags_to_aggressor,
                 )
                 if quote_tick is not None:
@@ -679,6 +682,10 @@ class MetaTrader5ClientMarketDataMixin:
         materialization, live-equivalent routing/conversion, and inclusive
         ``ts_event`` filtering. Empty local ndarray is success ``[]``; ``None``
         and materialization/structural failures raise ``MT5HistoricalDataError``.
+
+        Each TradeTick carries ``ts_init == ts_event`` (replay timeline). The live
+        feed keeps the receipt clock; only the value passed to the shared converter
+        differs.
         """
         start_ts = _historical_utc_timestamp(start_date_time)
         end_ts = _historical_utc_timestamp(end_date_time)
@@ -735,7 +742,6 @@ class MetaTrader5ClientMarketDataMixin:
         if len(raw) == 0:
             return []
 
-        batch_ts_init = self._clock.timestamp_ns()
         ticks: list[TradeTick] = []
 
         for index, row in enumerate(raw):
@@ -789,7 +795,7 @@ class MetaTrader5ClientMarketDataMixin:
                 trade = wire_tick_to_trade_tick(
                     instrument,
                     wire,
-                    batch_ts_init,
+                    time_msc * 1_000_000,
                     map_tick_flags_to_aggressor=map_tick_flags_to_aggressor,
                 )
             except Exception as exc:

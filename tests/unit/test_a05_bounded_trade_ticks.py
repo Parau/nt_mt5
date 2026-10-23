@@ -420,6 +420,38 @@ def test_live_equivalent_conversion_matches_wire_path() -> None:
 
 
 @pytest.mark.asyncio
+async def test_bounded_ts_init_equals_ts_event_not_fetch_clock() -> None:
+    """Historical ``ts_init`` is the event time; the DataEngine bounds responses by it."""
+    rows = [
+        (1700000000, 0.0, 0.0, 176290.0, 1, 1700000000100, 1336, 1.0),
+        (1700000000, 0.0, 0.0, 176291.0, 1, 1700000000200, 1336, 1.0),
+        (1700000000, 0.0, 0.0, 176292.0, 1, 1700000000300, 1336, 1.0),
+    ]
+    raw = _make_tick_array(rows)
+    mt5 = SimpleNamespace(COPY_TICKS_TRADE=2, copy_ticks_range=MagicMock(return_value=raw))
+    host = _BoundedHelperHost(mt5)
+    fetch_clock_ns = 1_800_000_000_000_000_000
+    host._clock.timestamp_ns.return_value = fetch_clock_ns
+    instrument = _win_dollar_instrument()
+
+    ticks = await host.get_historical_trade_ticks_range(
+        symbol=MT5Symbol(symbol="WIN$"),
+        instrument=instrument,
+        start_date_time=pd.Timestamp(1700000000000_000_000, unit="ns", tz="UTC"),
+        end_date_time=pd.Timestamp(1700000000999_000_000, unit="ns", tz="UTC"),
+        map_tick_flags_to_aggressor=False,
+    )
+
+    assert [t.ts_event for t in ticks] == [
+        1700000000100_000_000,
+        1700000000200_000_000,
+        1700000000300_000_000,
+    ]
+    assert all(t.ts_init == t.ts_event for t in ticks)
+    assert all(t.ts_init < fetch_clock_ns for t in ticks)
+
+
+@pytest.mark.asyncio
 async def test_uncapped_result_larger_than_typical_capacity() -> None:
     n = 50
     rows = [

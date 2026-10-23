@@ -3,8 +3,9 @@ Historical QuoteTick conversion via ``get_historical_ticks`` (COPY_TICKS_INFO).
 
 Purpose/Single Responsibility:
     Prove QuoteTick history selects ``COPY_TICKS_INFO``, applies BID|ASK flag
-    semantics, preserves multiplicity, and treats empty provider results as
-    success ``[]``. Does not exercise A05 bounded TradeTicks.
+    semantics, preserves multiplicity, treats empty provider results as
+    success ``[]``, and stamps historical ``ts_init`` with ``ts_event`` (not the
+    fetch clock). Does not exercise A05 bounded TradeTicks.
 """
 from __future__ import annotations
 
@@ -180,6 +181,63 @@ async def test_historical_quote_preserves_same_time_msc_multiplicity() -> None:
     assert ticks[0].ts_event == ticks[1].ts_event
     assert float(ticks[0].bid_price) == 5178.5
     assert float(ticks[1].bid_price) == 5178.0
+
+
+_FETCH_CLOCK_NS = 1_800_000_000_000_000_000
+
+
+@pytest.mark.asyncio
+async def test_historical_quote_ts_init_equals_ts_event_not_fetch_clock() -> None:
+    raw = _make_tick_array(
+        [
+            (1700000000, 5178.5, 5179.0, 0.0, 0, 1700000000100, TICK_FLAG_BID, 0.0),
+            (1700000000, 5179.0, 5179.5, 0.0, 0, 1700000000200, TICK_FLAG_ASK, 0.0),
+        ],
+    )
+    mt5 = SimpleNamespace(
+        COPY_TICKS_INFO=1,
+        copy_ticks_from=MagicMock(return_value=raw),
+    )
+    host = _HistTicksHost(mt5, _wdon26_instrument())
+    host._clock.timestamp_ns.return_value = _FETCH_CLOCK_NS
+
+    ticks = await host.get_historical_ticks(
+        symbol=MT5Symbol(symbol="WDON26"),
+        tick_type="BID_ASK",
+        start_date_time=pd.Timestamp("2023-11-14 22:13:20", tz="UTC"),
+        end_date_time=pd.Timestamp("2023-11-14 22:13:21", tz="UTC"),
+        number_of_ticks=10,
+    )
+
+    assert [t.ts_event for t in ticks] == [1700000000100_000_000, 1700000000200_000_000]
+    assert all(t.ts_init == t.ts_event for t in ticks)
+
+
+@pytest.mark.asyncio
+async def test_historical_legacy_trade_ts_init_equals_ts_event_not_fetch_clock() -> None:
+    raw = _make_tick_array(
+        [
+            (1700000000, 0.0, 0.0, 5178.5, 2, 1700000000100, TICK_FLAG_LAST | TICK_FLAG_VOLUME, 2.0),
+            (1700000000, 0.0, 0.0, 5179.0, 3, 1700000000200, TICK_FLAG_LAST | TICK_FLAG_VOLUME, 3.0),
+        ],
+    )
+    mt5 = SimpleNamespace(
+        COPY_TICKS_ALL=0,
+        copy_ticks_from=MagicMock(return_value=raw),
+    )
+    host = _HistTicksHost(mt5, _wdon26_instrument())
+    host._clock.timestamp_ns.return_value = _FETCH_CLOCK_NS
+
+    ticks = await host.get_historical_ticks(
+        symbol=MT5Symbol(symbol="WDON26"),
+        tick_type="TRADES",
+        start_date_time=pd.Timestamp("2023-11-14 22:13:20", tz="UTC"),
+        end_date_time=pd.Timestamp("2023-11-14 22:13:21", tz="UTC"),
+        number_of_ticks=10,
+    )
+
+    assert [t.ts_event for t in ticks] == [1700000000100_000_000, 1700000000200_000_000]
+    assert all(t.ts_init == t.ts_event for t in ticks)
 
 
 @pytest.mark.asyncio
